@@ -4,8 +4,8 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setup(
-    name='yourscript',
-    version='0.1',
+    name='pride-py',
+    version='0.0.1',
     author="Suresh Hewapathirana",
     author_email="hewapathirana@ebi.ac.uk",
     description="Python Client library for PRIDE Rest API",
@@ -14,12 +14,12 @@ setup(
     url="https://github.com/PRIDE-Archive/pride-py",
     keywords="PRIDE python client REST API",
     packages=setuptools.find_packages(),
-    py_modules=['yourscript'],
+    py_modules=['pride-py'],
     install_requires=[
         'Click',
     ],
     entry_points='''
         [console_scripts]
-        yourscript=yourscript:cli
+        pride-py=pride-py:main
     ''',
 )

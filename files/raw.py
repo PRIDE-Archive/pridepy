@@ -10,6 +10,7 @@ This script mainly holds raw files related methods
 
 base_url = "https://www.ebi.ac.uk/pride/ws/archive/v2/"
 
+
 def getProjectPublicFTPPath(project_accession):
     """
     This method returns the project file FTP path which contains all the files in the submission
