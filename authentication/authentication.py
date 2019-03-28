@@ -11,12 +11,12 @@ This script mainly holds authentication related methods
 base_url = "https://www.ebi.ac.uk/pride/ws/archive/v2/"
 
 def getToken(username, password):
-    '''
+    """
     Get AAP token from EBI USI to access resources
     :param username: username (email)
     :param password: password
     :return: If authenticated, a token is returned
-    '''
+    """
     token = ""
 
     # get token to access the api

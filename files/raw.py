@@ -11,7 +11,11 @@ This script mainly holds raw files related methods
 base_url = "https://www.ebi.ac.uk/pride/ws/archive/v2/"
 
 def getProjectPublicFTPPath(project_accession):
-
+    """
+    This method returns the project file FTP path which contains all the files in the submission
+    :param project_accession: Project accession
+    :return: FTP file path for all the files
+    """
     requestURL = base_url + "files/byProject?accession=" + project_accession + ",fileCategory.value==RAW"
     response = requests.get(requestURL, headers={"Accept": "application/JSON"})
 
