@@ -17,6 +17,7 @@ setup(
     py_modules=['pride-py'],
     install_requires=[
         'Click',
+        'plotly'
     ],
     entry_points='''
         [console_scripts]
