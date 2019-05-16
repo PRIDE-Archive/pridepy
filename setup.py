@@ -17,10 +17,12 @@ setup(
     py_modules=['pride-py'],
     install_requires=[
         'Click',
-        'plotly'
+        'plotly',
+        'requests',
+        'ratelimit'
     ],
     entry_points='''
         [console_scripts]
-        pride-py=pride-py:main
+        pridepy=pridepy:main
     ''',
 )

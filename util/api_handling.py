@@ -1,8 +1,9 @@
 #!/usr/bin/env python
+
 import requests
 from ratelimit import limits, sleep_and_retry
 
-class APIUtil:
+class Util:
     """
     This class contains all the utility methods
     """
@@ -15,7 +16,7 @@ class APIUtil:
         :param headers: HTTP headers
         :return: Response
         """
-        response = requests.get(url)
+        response = requests.get(url, headers)
 
         if (not response.ok) or response.status_code != 200:
             raise Exception('PRIDE API response: {}'.format(response.status_code))
