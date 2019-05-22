@@ -1,34 +1,36 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+"""
+This script mainly fetches a access token from the API and
+secondly update the msrun metadata via API endpoint
+"""
 
+import json
 import sys
+
 import requests
 
-"""
-This script mainly holds msrun metadata related methods
-"""
 
-base_url = "https://www.ebi.ac.uk/pride/ws/archive/v2/"
+class MsRun:
+    base_url = "https://www.ebi.ac.uk/pride/ws/archive/v2/"
 
-def updateMsrunMetadata(filename, token):
-    '''
-    This method update the msrun metadata into PRIDE mongoDB by an endpoint
-    :param filename: JSON file with metadata
-    :param token: AAP token for authentication
-    :return:
-    '''
+    def __init__(self):
+        pass
 
-    # get project file accession from the prefix of the file name
-    accession = filename.split('-', 1)[0]
+    def update_msrun_metadata(self, filename, token):
+        # get project file accession from the prefix of the file name (e.g: PXF00000145820)
+        accession = filename.split('-', 1)[0]
 
-    url = base_url + "msruns/" + accession + "/updateMetadata"
-    headers = {'Content-type': 'application/json', 'Accept': 'application/json', 'Authorization': 'Bearer ' + token}
+        url = self.base_url + "msruns/" + accession + "/updateMetadata"
+        headers = {'Content-type': 'application/json', 'Accept': 'application/json', 'Authorization': 'Bearer ' + token}
 
-    with open(filename) as json_file:
-        data = json.load(json_file)
-        response = requests.put(url, data=json.dumps(data), headers=headers)
+        with open(filename) as json_file:
+            data = json.load(json_file)
+            print(json.dumps(data))
+            response = requests.put(url, data=json.dumps(data), headers=headers)
 
-        if (not response.ok) or response.status_code != 200:
-            return response.raise_for_status()
-        else:
-            return response
+            if (not response.ok) or response.status_code != 200:
+                response.raise_for_status()
+                sys.exit()
+            else:
+                print(response)

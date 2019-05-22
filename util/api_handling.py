@@ -3,10 +3,12 @@
 import requests
 from ratelimit import limits, sleep_and_retry
 
+
 class Util:
     """
     This class contains all the utility methods
     """
+
     @staticmethod
     @sleep_and_retry
     @limits(calls=1000, period=50)

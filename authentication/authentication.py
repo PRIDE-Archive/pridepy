@@ -15,7 +15,7 @@ class Authentication:
     def __init__(self):
         pass
 
-    def getToken(self, username, password):
+    def get_token(self, username, password):
         """
         Get AAP token from EBI USI to access resources
         :param username: username (email)
@@ -36,7 +36,7 @@ class Authentication:
             token = response.text
         return token
 
-    def validateToken(self, token):
+    def validate_token(self, token):
         """
         Check if the token is valid and not expired
         :param token: Token

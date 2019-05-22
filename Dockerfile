@@ -15,6 +15,5 @@ RUN apt-get install -y build-essential wget
 
 COPY . /
 RUN cd /
-
 RUN pip install -r requirements.txt
 ENV PATH=$PATH:/

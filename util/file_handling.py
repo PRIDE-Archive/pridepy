@@ -10,7 +10,7 @@ class FileHanding:
     This script mainly holds files handing related methods
     """
 
-    def saveFile(out_filename, content):
+    def save_file(self, out_filename, content):
         '''
         This method writes the content to the output file
         :param out_filename: full path of the output file
@@ -25,16 +25,16 @@ class FileHanding:
         except FileNotFoundError as file_write_error:
             print(file_write_error)
 
-    def wrapWithMSRunMetadata(filename):
+    def wrap_with_ms_run_metadata(self, filename):
         """
         This wraps the JSON object with the MSRunMetadata wrapper to make the JSON object compatible with the PRIDE API
         :param filename:
         :return:
         """
-        line_prepender(filename, '{"MSRunMetadata":')
-        line_postpender(filename, "}")
+        self.line_prepender(filename, '{"MSRunMetadata":')
+        self.line_postpender(filename, "}")
 
-    def line_prepender(filename, prefix):
+    def line_prepender(self, filename, prefix):
         """
         This method adds a prefix to the beginning of the file
         :param filename: Filename
@@ -49,7 +49,7 @@ class FileHanding:
         except FileNotFoundError as file_write_error:
             print(file_write_error)
 
-    def line_postpender(filename, sufix):
+    def line_postpender(self, filename, sufix):
         """
         This method adds a sufix to the end of the file
         :param filename: Filename
