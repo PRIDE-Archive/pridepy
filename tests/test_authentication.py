@@ -4,6 +4,9 @@ import authentication.authentication
 
 
 class TestAuthentication(unittest.TestCase):
+    """
+    A test class to test Authentication related methods.
+    """
 
     def test_get_token(self):
         """

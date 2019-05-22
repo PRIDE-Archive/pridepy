@@ -4,12 +4,12 @@
 import sys
 import requests
 
-"""
-This script mainly holds authentication related methods
-"""
-
 
 class Authentication:
+    """
+    This class holds authentication related methods including issuing and validating access token.
+    """
+
     base_url = "https://www.ebi.ac.uk/pride/ws/archive/v2/"
 
     def __init__(self):

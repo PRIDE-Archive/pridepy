@@ -1,19 +1,30 @@
 from unittest import TestCase
-import re
 
 from files.raw import RawFiles
 
 
 class TestRawFiles(TestCase):
+    """
+    A test class to test files related methods.
+    """
 
     def test_get_all_raw_file_list(self):
+        """
+        A test method to check if it is possible to fetch the list of raw files
+        """
         raw = RawFiles()
+
+        # This project has only two files
         result = raw.get_all_raw_file_list("PXD008644")
+        assert len(result) == 2
 
     def test_get_raw_file_path_prefix(self):
+        """
+        At pride repository, public data is disseminated according to a proper structure.
+        I.e. base/path/ + yyyy/mm/accession/ + submitted/
+        This tests the yyyy/mm/accession path fragment can be correctly extracted from the API by examine the file path
+        of a public file.
+        I.e. ftp://ftp.pride.ebi.ac.uk/pride/data/archive/2018/10/PXD008644/7550GI_Y.raw
+        """
         raw = RawFiles()
         assert raw.get_raw_file_path_prefix("PXD008644") == "2018/10/PXD008644"
-
-    def test_copy_raw_files_from_dir(self):
-        raw = RawFiles()
-        raw.copy_raw_files_from_dir("PXD008644", "/Users/hewapathirana/Downloads/archive")

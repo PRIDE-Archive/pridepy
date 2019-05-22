@@ -1,19 +1,19 @@
 #!/usr/bin/env python
 
-"""
-This script mainly holds raw files related methods
-"""
 import os
 import re
 import glob
 import urllib
 import shutil
+import logging
 import urllib.request
 from util.api_handling import Util
 
 
 class RawFiles:
-    """ This class handles PRIDE submission raw files """
+    """
+    This class handles PRIDE submission raw files.
+    """
 
     api_base_url = "https://www.ebi.ac.uk/pride/ws/archive/v2/"
 
@@ -28,7 +28,7 @@ class RawFiles:
         request_url = self.api_base_url + "files/byProject?accession=" + project_accession + ",fileCategory.value==RAW"
         headers = {"Accept": "application/JSON"}
 
-        response = Util.call_api(request_url, headers)
+        response = Util.get_api_call(request_url, headers)
         return response.json()
 
     def download_raw_files_from_ftp(self, accession, output_folder):
@@ -46,14 +46,22 @@ class RawFiles:
 
         for raw_file in response_body:
             ftp_filepath = raw_file['publicFileLocations'][0]['value']
-            print('ftp_filepath:' + ftp_filepath)
+            logging.debug('ftp_filepath:' + ftp_filepath)
             public_filepath_part = ftp_filepath.rsplit('/', 1)
-            print(raw_file['accession'] + " -> " + public_filepath_part[1])
+            logging.debug(raw_file['accession'] + " -> " + public_filepath_part[1])
             new_file_path = raw_file['accession'] + "-" + public_filepath_part[1]
             urllib.request.urlretrieve(ftp_filepath, output_folder + new_file_path)
 
     def get_raw_file_path_prefix(self, accession):
-
+        """
+        At pride repository, public data is disseminated according to a proper structure.
+        I.e. base/path/ + yyyy/mm/accession/ + submitted/
+        This extracts the yyyy/mm/accession path fragment from the API by examine the file path
+        of a public file.
+        I.e. ftp://ftp.pride.ebi.ac.uk/pride/data/archive/2018/10/PXD008644/7550GI_Y.raw
+        :param accession:
+        :return: path fragment (eg: 2018/10/PXD008644)
+        """
         results = self.get_all_raw_file_list(accession)
         first_file = results[0]['publicFileLocations'][0]['value']
         path_fragment = re.search(r'\d{4}/\d{2}/PXD\d*', first_file).group()
@@ -69,7 +77,7 @@ class RawFiles:
         file_list_from_dir = []
 
         for file in glob.glob(location + "*.raw"):
-            print("found file: " + file)
+            logging.debug("found file: " + file)
             filename = file.rsplit('/', 1)[1]
             file_list_from_dir.append(filename)
         return file_list_from_dir
@@ -91,7 +99,7 @@ class RawFiles:
         complete_source_dir = source_base_directory + "/" + path_fragment + "/submitted/"
 
         if not (os.path.isdir(complete_source_dir)):
-            print("Folder does not exists! " + complete_source_dir)
+            logging.exception("Folder does not exists! " + complete_source_dir)
 
         # get the list of raw files from the given directory
         file_list_from_dir = self.get_raw_files_from_dir(complete_source_dir)
@@ -104,7 +112,6 @@ class RawFiles:
             if file_name_from_ftp in file_list_from_dir:
                 source_file = complete_source_dir + file_name_from_ftp
                 destination_file = raw_file['accession'] + "-" + file_name_from_ftp
-                print(source_file + "-->" + destination_file)
                 shutil.copy2(source_file, destination_file)
             else:
-                print(file_name_from_ftp + " not found in " + complete_source_dir)
+                logging.error(file_name_from_ftp + " not found in " + complete_source_dir)

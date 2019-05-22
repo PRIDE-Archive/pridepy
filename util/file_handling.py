@@ -3,6 +3,7 @@
 
 import sys
 import os
+import logging
 
 
 class FileHanding:
@@ -11,19 +12,19 @@ class FileHanding:
     """
 
     def save_file(self, out_filename, content):
-        '''
+        """
         This method writes the content to the output file
         :param out_filename: full path of the output file
         :param content:
         :return:
-        '''
+        """
 
         try:
             text_file = open(out_filename, "w")
             text_file.write(content)
             text_file.close()
         except FileNotFoundError as file_write_error:
-            print(file_write_error)
+            logging.error(file_write_error)
 
     def wrap_with_ms_run_metadata(self, filename):
         """
@@ -47,7 +48,7 @@ class FileHanding:
                 editing_file.seek(0, 0)
                 editing_file.write(prefix.rstrip('\r\n') + content)
         except FileNotFoundError as file_write_error:
-            print(file_write_error)
+            logging.error(file_write_error)
 
     def line_postpender(self, filename, sufix):
         """
@@ -60,4 +61,4 @@ class FileHanding:
             with open(filename, "a") as editing_file:
                 editing_file.write(sufix)
         except FileNotFoundError as file_write_error:
-            print(file_write_error)
+            logging.error(file_write_error)
