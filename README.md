@@ -17,7 +17,7 @@ Download all the raw files from a dataset(eg: PXD012353).
 Warning: Raw files are generally large in size, so it may take some time to download depending on the number of files and file sizes.
 
 ```python
-$ python3 pridepy.py download -a PXD012353 -o /Users/yourname/Downloads/PXD
+$ python3 pridepy.py download -a PXD012353 -o /Users/yourname/Downloads/foldername/
 ```
 # NOTE
 
