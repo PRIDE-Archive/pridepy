@@ -45,7 +45,10 @@ class RawFiles:
         response_body = self.get_all_raw_file_list(accession)
 
         for raw_file in response_body:
-            ftp_filepath = raw_file['publicFileLocations'][0]['value']
+            if raw_file['publicFileLocations'][0]['name']=='FTP Protocol':
+                ftp_filepath = raw_file['publicFileLocations'][0]['value']
+            else:
+                ftp_filepath = raw_file['publicFileLocations'][1]['value']
             logging.debug('ftp_filepath:' + ftp_filepath)
             public_filepath_part = ftp_filepath.rsplit('/', 1)
             logging.debug(raw_file['accession'] + " -> " + public_filepath_part[1])
