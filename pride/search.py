@@ -19,7 +19,7 @@ class Search:
         :return: project list on JSON format
         """
 
-        request_url = self.api_base_url + "search/pride?keywords=" + keywords + "&"
+        request_url = self.api_base_url + "search/projects?keywords=" + keywords + "&"
 
         if filters:
             request_url = request_url + "filters=" + filters + "&"
@@ -58,12 +58,12 @@ class Search:
                       "&sortConditions=" + sort_conditions
 
         headers = {"Accept": "application/JSON"}
-        print(request_url)
         response = Util.get_api_call(request_url, headers)
         return response.json()
 
-    def spectra(self, usi, project_accession, assay_accession, peptide_sequence, modified_sequence, result_type,
-                page_size, page, sort_direction, sort_conditions):
+    def spectra_evidences(self, usi, project_accession, assay_accession, peptide_sequence, modified_sequence,
+                          result_type,
+                          page_size, page, sort_direction, sort_conditions):
         """
         search spectra from PRIDE api in JSON format
         :return: spectra_evidences on JSON format

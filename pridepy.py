@@ -128,8 +128,8 @@ def search_spectra_evidences(usi, project_accession, assay_accession, peptide_se
     :return:
     """
     search = Search()
-    print(search.spectra(usi, project_accession, assay_accession, peptide_sequence, modified_sequence,
-                         result_type, page_size, page, sort_direction, sort_conditions))
+    print(search.spectra_evidences(usi, project_accession, assay_accession, peptide_sequence, modified_sequence,
+                                   result_type, page_size, page, sort_direction, sort_conditions))
 
 
 if __name__ == '__main__':
