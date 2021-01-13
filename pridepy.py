@@ -63,11 +63,11 @@ def update_metadata(filename, username, password):
 
 
 @main.command()
-@click.option('-k', '--keywords', required=False, help='The entered word will be searched among the fields to fetch '
-                                                       'matching pride. The structure of the keywords is : *:*')
-@click.option('-f', '--filters', required=False, help='Parameters to filter the search results. The structure of the '
-                                                      'filter is: field1==value1, field2==value2. Example '
-                                                      'accession==PRD000001')
+@click.option('-k', '--keyword', required=False, help='The entered word will be searched among the fields to fetch '
+                                                      'matching pride. The structure of the keyword is : *:*')
+@click.option('-f', '--filter', required=False, help='Parameters to filter the search results. The structure of the '
+                                                     'filter is: field1==value1, field2==value2. Example '
+                                                     'accession==PRD000001')
 @click.option('-ps', '--page_size', required=False, default=100, help='Number of results to fetch in a page')
 @click.option('-p', '--page', required=False, default=0, help='Identifies which page of results to fetch')
 @click.option('-dg', '--date_gap', required=False, help='A date range field with possible values of +1MONTH, +1YEAR')
@@ -76,13 +76,13 @@ def update_metadata(filename, username, password):
               help='Field(s) for sorting the results on. Default for this '
                    'request is submission_date. More fields can be separated by '
                    'comma and passed. Example: submission_date,project_title')
-def search_projects(keywords, filters, page_size, page, date_gap, sort_direction, sort_fields):
+def search_projects(keyword, filter, page_size, page, date_gap, sort_direction, sort_fields):
     """
     search public pride with keywords and filters
     :return:
     """
     search = Search()
-    print(search.projects(keywords, filters, page_size, page, date_gap, sort_direction, sort_fields))
+    print(search.projects(keyword, filter, page_size, page, date_gap, sort_direction, sort_fields))
 
 
 @main.command()

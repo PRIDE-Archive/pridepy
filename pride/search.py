@@ -13,16 +13,16 @@ class Search:
     def __init__(self):
         pass
 
-    def projects(self, keywords, filters, page_size, page, date_gap, sort_direction, sort_fields):
+    def projects(self, keyword, filter, page_size, page, date_gap, sort_direction, sort_fields):
         """
         search from PRIDE api in JSON format
         :return: project list on JSON format
         """
 
-        request_url = self.api_base_url + "search/projects?keywords=" + keywords + "&"
+        request_url = self.api_base_url + "search/projects?keyword=" + keyword + "&"
 
-        if filters:
-            request_url = request_url + "filters=" + filters + "&"
+        if filter:
+            request_url = request_url + "filter=" + filter + "&"
 
         request_url = request_url + "pageSize=" + str(page_size) + "&page=" + str(page) + "&"
 

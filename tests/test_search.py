@@ -15,10 +15,10 @@ class TestRawFiles(TestCase):
         """
         search = Search()
 
-        result = search.projects("accession:PXD008644", "", 1, 0, "", "ASC", "submission_date")
+        result = search.projects("accession:PXD008644", "", 100, 0, "", "ASC", "submission_date")
         assert len(result['_embedded']['compactprojects']) == 1
 
-        result = search.projects("", "accession==PXD008644", 1, 0, "", "ASC", "submission_date")
+        result = search.projects("", "accession==PXD008644", 100, 0, "", "ASC", "submission_date")
         assert len(result['_embedded']['compactprojects']) == 1
 
     def test_protein_evidences(self):
