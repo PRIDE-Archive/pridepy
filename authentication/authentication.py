@@ -10,7 +10,7 @@ class Authentication:
     This class holds authentication related methods including issuing and validating access token.
     """
 
-    base_url = "https://www.ebi.ac.uk/pride/ws/archive/v2/"
+    base_url = "https://www.ebi.ac.uk/pride/private/ws/archive/v2/"
 
     def __init__(self):
         pass
@@ -24,10 +24,11 @@ class Authentication:
         """
 
         # get token to access the api
-        url = self.base_url + "getAAPToken?username=" + username + "&password=" + password
+        url = self.base_url + "getAAPToken"
         headers = {'Content-type': 'application/json', 'Accept': 'text/plain'}
+        credentials = "{\"Credentials\":{\"username\":\"" + username + "\", \"password\":\"" + password + "\"}}"
 
-        response = requests.post(url, headers=headers)
+        response = requests.post(url, data=credentials, headers=headers)
 
         if (not response.ok) or response.status_code != 200:
             response.raise_for_status()
