@@ -42,6 +42,11 @@ Search spectra-evidences with keywords and filters
 $ python3 pridepy.py search-spectra-evidences --usi "mzspec:PXD019317:sh_5282_HYK_101018_Mac_D_25mM.mzML:scan:10138:YAAMVTC[UNIMOD:4]MDEAVRNITWALKR/3"
 ```
 
+Use below command to view list of commands available
+```python
+$ python3 pridepy.py --help
+```
+
 # NOTE
 
 Please make sure you are using Python3, not Python 2.7 version.

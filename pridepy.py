@@ -7,7 +7,10 @@ import click
 from authentication.authentication import Authentication
 from files.raw import RawFiles
 from msrun.msrun import MsRun
-from pride.search import Search
+from peptide.peptide import Peptide
+from project.project import Project
+from protein.protein import Protein
+from spectra.spectra import Spectra
 from util.file_handling import FileHanding
 
 
@@ -76,13 +79,109 @@ def update_metadata(filename, username, password):
               help='Field(s) for sorting the results on. Default for this '
                    'request is submission_date. More fields can be separated by '
                    'comma and passed. Example: submission_date,project_title')
-def search_projects(keyword, filter, page_size, page, date_gap, sort_direction, sort_fields):
+def search_projects_by_keywords_and_filters(keyword, filter, page_size, page, date_gap, sort_direction, sort_fields):
     """
     search public pride with keywords and filters
     :return:
     """
-    search = Search()
-    print(search.projects(keyword, filter, page_size, page, date_gap, sort_direction, sort_fields))
+    project = Project()
+    print(project.projects_by_keywords_and_filters(keyword, filter, page_size, page, date_gap, sort_direction,
+                                                   sort_fields))
+
+
+@main.command()
+@click.option('-k', '--keyword', required=False, help='The entered word will be searched among the fields to fetch '
+                                                      'matching pride. The structure of the keyword is : *:*')
+@click.option('-f', '--filter', required=False, help='Parameters to filter the search results. The structure of the '
+                                                     'filter is: field1==value1, field2==value2. Example '
+                                                     'accession==PRD000001')
+@click.option('-ps', '--page_size', required=False, default=100, help='Number of results to fetch in a page')
+@click.option('-p', '--page', required=False, default=0, help='Identifies which page of results to fetch')
+@click.option('-dg', '--date_gap', required=False, help='A date range field with possible values of +1MONTH, +1YEAR')
+@click.option('-sd', '--sort_direction', required=False, default='DESC', help='Sorting direction: ASC or DESC')
+@click.option('-sf', '--sort_fields', required=False, default='submission_date',
+              help='Field(s) for sorting the results on. Default for this '
+                   'request is submission_date. More fields can be separated by '
+                   'comma and passed. Example: submission_date,project_title')
+def search_projects_by_keywords_and_filters(keyword, filter, page_size, page, date_gap, sort_direction, sort_fields):
+    """
+    search public pride with keywords and filters
+    :return:
+    """
+    project = Project()
+    print(project.projects_by_keywords_and_filters(keyword, filter, page_size, page, date_gap, sort_direction,
+                                                   sort_fields))
+
+
+@main.command()
+@click.option('-ps', '--page_size', required=False, default=100, help='Number of results to fetch in a page')
+@click.option('-p', '--page', required=False, default=0, help='Identifies which page of results to fetch')
+@click.option('-sd', '--sort_direction', required=False, default='DESC', help='Sorting direction: ASC or DESC')
+@click.option('-sc', '--sort_conditions', required=False, default='projectAccession',
+              help='Field(s) for sorting the results on. Default for this '
+                   'request is project_accession. More fields can be separated by '
+                   'comma and passed. Example: submission_date,project_title')
+def get_projects(page_size, page, sort_direction, sort_conditions):
+    """
+    get paged projects
+    :return:
+    """
+    project = Project()
+    print(project.get_projects(page_size, page, sort_direction, sort_conditions))
+
+
+@main.command()
+@click.option('-a', '--accession', required=False, help='accession of the project')
+def get_projects_by_accession(accession):
+    """
+    get projects by accession
+    :return:
+    """
+    project = Project()
+    print(project.get_by_accession(accession))
+
+
+@main.command()
+@click.option('-a', '--accession', required=False, help='accession of the project')
+def get_reanalysis_projects_by_accession(accession):
+    """
+    get reanalysis projects by accession
+    :return:
+    """
+    project = Project()
+    print(project.get_reanalysis_projects_by_accession(accession))
+
+
+@main.command()
+@click.option('-a', '--accession', required=False, help='accession of the project')
+def get_similar_projects_by_accession(accession):
+    """
+    get similar projects by accession
+    :return:
+    """
+    project = Project()
+    print(project.get_similar_projects_by_accession(accession))
+
+
+@main.command()
+@click.option('-a', '--accession', required=False, help='accession of the project')
+@click.option('-f', '--filter', required=False, help='Parameters to filter the search results. The structure of the '
+                                                     'filter is: field1==value1, field2==value2. Example '
+                                                     'accession==PRD000001')
+@click.option('-ps', '--page_size', required=False, default=100, help='Number of results to fetch in a page')
+@click.option('-p', '--page', required=False, default=0, help='Identifies which page of results to fetch')
+@click.option('-sd', '--sort_direction', required=False, default='DESC', help='Sorting direction: ASC or DESC')
+@click.option('-sc', '--sort_conditions', required=False, default='projectAccession',
+              help='Field(s) for sorting the results on. Default for this '
+                   'request is project_accession. More fields can be separated by '
+                   'comma and passed. Example: submission_date,project_title')
+def get_files_by_project_accession(accession, filter, page_size, page, sort_direction, sort_conditions):
+    """
+    get files by project accession
+    :return:
+    """
+    project = Project()
+    print(project.get_files_by_accession(accession, filter, page_size, page, sort_direction, sort_conditions))
 
 
 @main.command()
@@ -102,9 +201,9 @@ def search_protein_evidences(project_accession, assay_accession, reported_access
     search public pride protein evidences with keywords and filters
     :return:
     """
-    search = Search()
-    print(search.protein_evidences(project_accession, assay_accession, reported_accession, page_size, page,
-                                   sort_direction, sort_conditions))
+    protein = Protein()
+    print(protein.protein_evidences(project_accession, assay_accession, reported_accession, page_size, page,
+                                    sort_direction, sort_conditions))
 
 
 @main.command()
@@ -127,9 +226,34 @@ def search_spectra_evidences(usi, project_accession, assay_accession, peptide_se
     search public pride spectra with keywords and filters
     :return:
     """
-    search = Search()
-    print(search.spectra_evidences(usi, project_accession, assay_accession, peptide_sequence, modified_sequence,
-                                   result_type, page_size, page, sort_direction, sort_conditions))
+    spectra = Spectra()
+    print(spectra.spectra_evidences(usi, project_accession, assay_accession, peptide_sequence, modified_sequence,
+                                    result_type, page_size, page, sort_direction, sort_conditions))
+
+
+@main.command()
+@click.option('-pa', '--project_accession', required=False, help='projectAccession')
+@click.option('-aa', '--assay_accession', required=False, help='assayAccession')
+@click.option('-aa', '--protein_accession', required=False, help='proteinAccession')
+@click.option('-aa', '--peptide_evidence_accession', required=False, help='peptideEvidenceAccession')
+@click.option('-pepSeq', '--peptide_sequence', required=False, help='peptideSequence')
+@click.option('-ps', '--page_size', required=False, default=100, help='Number of results to fetch in a page')
+@click.option('-p', '--page', required=False, default=0, help='Identifies which page of results to fetch')
+@click.option('-sd', '--sort_direction', required=False, default='DESC', help='Sorting direction: ASC or DESC')
+@click.option('-sc', '--sort_conditions', required=False, default='projectAccession',
+              help='Field(s) for sorting the results on. Default for this '
+                   'request is project_accession. More fields can be separated by '
+                   'comma and passed. Example: submission_date,project_title')
+def search_peptide_evidences(project_accession, assay_accession, protein_accession, peptide_evidence_accession,
+                             peptide_sequence, page_size, page, sort_direction, sort_conditions):
+    """
+    search public pride peptide evidences with keywords and filters
+    :return:
+    """
+    peptide = Peptide()
+    print(peptide.peptide_evidences(project_accession, assay_accession, protein_accession,
+                                    peptide_evidence_accession, peptide_sequence,
+                                    page_size, page, sort_direction, sort_conditions))
 
 
 if __name__ == '__main__':
