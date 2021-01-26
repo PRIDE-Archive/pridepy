@@ -5,7 +5,7 @@ import logging
 import click
 
 from authentication.authentication import Authentication
-from files.raw import RawFiles
+from files.files import Files
 from msrun.msrun import MsRun
 from peptide.peptide import Peptide
 from project.project import Project
@@ -25,12 +25,12 @@ def main():
               help='If enabled, files will be downloaded from FTP, otherwise copy from file system')
 @click.option('-i', '--input_folder', required=False, help='Input folder to copy the raw files')
 @click.option('-o', '--output_folder', required=True, help='output folder to download or copy raw files')
-def download(accession, ftp_download_enabled, input_folder, output_folder):
+def download_all_raw_files(accession, ftp_download_enabled, input_folder, output_folder):
     """
     This script download raw files from FTP or copy from the file system
     """
 
-    raw_files = RawFiles()
+    raw_files = Files()
 
     logging.info("accession: " + accession)
 
@@ -40,6 +40,30 @@ def download(accession, ftp_download_enabled, input_folder, output_folder):
     else:
         logging.info("Data will be copied from file system " + output_folder)
         raw_files.copy_raw_files_from_dir(accession, input_folder)
+
+
+@main.command()
+@click.option('-a', '--accession', required=True, help='PRIDE project accession')
+@click.option('-ftp', '--ftp_download_enabled', type=bool, default='True',
+              help='If enabled, files will be downloaded from FTP, otherwise copy from file system')
+@click.option('-f', '--file_name', required=True, help='fileName to be downloaded')
+@click.option('-i', '--input_folder', required=False, help='Input folder to copy the files')
+@click.option('-o', '--output_folder', required=True, help='output folder to download or copy files')
+def download_files_by_name(accession, file_name, ftp_download_enabled, input_folder, output_folder):
+    """
+    This script download files from FTP or copy from the file system
+    """
+
+    raw_files = Files()
+
+    logging.info("accession: " + accession)
+
+    if ftp_download_enabled:
+        logging.info("Data will be download from ftp")
+        raw_files.download_file_from_ftp_by_name(accession, file_name, output_folder)
+    else:
+        logging.info("Data will be copied from file system " + output_folder)
+        raw_files.copy_file_from_dir_by_name(accession, file_name, input_folder)
 
 
 @main.command()
@@ -254,6 +278,26 @@ def search_peptide_evidences(project_accession, assay_accession, protein_accessi
     print(peptide.peptide_evidences(project_accession, assay_accession, protein_accession,
                                     peptide_evidence_accession, peptide_sequence,
                                     page_size, page, sort_direction, sort_conditions))
+
+
+@main.command()
+@click.option('-f', '--filter', required=False, help='Parameters to filter the search results. The structure of the '
+                                                     'filter is: field1==value1, field2==value2. Example '
+                                                     'fileCategory.value==RAW')
+@click.option('-ps', '--page_size', required=False, default=100, help='Number of results to fetch in a page')
+@click.option('-p', '--page', required=False, default=0, help='Identifies which page of results to fetch')
+@click.option('-sd', '--sort_direction', required=False, default='DESC', help='Sorting direction: ASC or DESC')
+@click.option('-sc', '--sort_conditions', required=False, default='submissionDate',
+              help='Field(s) for sorting the results on. Default for this '
+                   'request is submissionDate. More fields can be separated by '
+                   'comma and passed. Example: submission_date,project_title')
+def get_files_by_filter(filter, page_size, page, sort_direction, sort_conditions):
+    """
+    get paged files
+    :return:
+    """
+    files = Files()
+    print(files.get_all_paged_files(filter, page_size, page, sort_direction, sort_conditions))
 
 
 if __name__ == '__main__':
