@@ -17,7 +17,13 @@ Download all the raw files from a dataset(eg: PXD012353).
 Warning: Raw files are generally large in size, so it may take some time to download depending on the number of files and file sizes.
 
 ```python
-$ python3 pridepy.py download -a PXD012353 -o /Users/yourname/Downloads/foldername/
+$ python3 pridepy.py download-all-raw-files -a PXD022105 -o /Users/yourname/Downloads/foldername/
+```
+
+Download single file by name
+
+```python
+$ python3 pridepy.py download-files-by-name -a PXD022105 -o /Users/yourname/Downloads/foldername/ -f checksum.txt
 ```
 
 Search projects with keywords and filters
@@ -28,6 +34,12 @@ $ python3 pridepy.py search-projects --keyword accession:PXD012353
 
 ```python
 $ python3 pridepy.py search-projects --filters accession==PXD012353
+```
+
+Search files with filters
+
+```python
+$ python3 pridepy.py get-files-by-filter --filter fileCategory.value==RAW
 ```
 
 Search protein-evidences with keywords and filters

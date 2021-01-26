@@ -1,5 +1,6 @@
 from unittest import TestCase
 
+from files.files import Files
 from peptide.peptide import Peptide
 from project.project import Project
 from protein.protein import Protein
@@ -85,3 +86,13 @@ class TestSearch(TestCase):
                                           "gi|215496908-DECOY", "", "QPAYMTMKGSALSFQWIEMSSAHSLERNLAK", 100, 0,
                                           "ASC", "projectAccession")
         assert len(result['_embedded']['peptideevidences']) == 1
+
+    def test_search_files(self):
+        """
+        A test method to search files
+        """
+
+        files = Files()
+
+        result = files.get_all_paged_files("projectAccessions==PXD022105", "100", 0, "ASC", "submissionDate")
+        assert result['page']['totalElements'] == 11

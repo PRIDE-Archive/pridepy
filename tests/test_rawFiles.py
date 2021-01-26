@@ -1,6 +1,6 @@
 from unittest import TestCase
 
-from files.raw import RawFiles
+from files.files import Files
 
 
 class TestRawFiles(TestCase):
@@ -12,7 +12,7 @@ class TestRawFiles(TestCase):
         """
         A test method to check if it is possible to fetch the list of raw files
         """
-        raw = RawFiles()
+        raw = Files()
 
         # This project has only two files
         result = raw.get_all_raw_file_list("PXD008644")
@@ -26,5 +26,5 @@ class TestRawFiles(TestCase):
         of a public file.
         I.e. ftp://ftp.pride.ebi.ac.uk/pride/data/archive/2018/10/PXD008644/7550GI_Y.raw
         """
-        raw = RawFiles()
-        assert raw.get_raw_file_path_prefix("PXD008644") == "2018/10/PXD008644"
+        raw = Files()
+        assert raw.get_submitted_file_path_prefix("PXD008644") == "2018/10/PXD008644"
