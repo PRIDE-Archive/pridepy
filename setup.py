@@ -5,10 +5,10 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setup(
-    name='pride-py',
+    name='pridepy',
     version='0.0.1',
-    author="Suresh Hewapathirana",
-    author_email="hewapathirana@ebi.ac.uk",
+    author="PRIDE Team",
+    author_email="pride-report@ebi.ac.uk",
     description="Python Client library for PRIDE Rest API",
     long_description=long_description,
     long_description_content_type="text/markdown",
