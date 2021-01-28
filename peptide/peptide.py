@@ -4,6 +4,8 @@ from util.api_handling import Util
 
 
 class Peptide:
+    """
+    """
     api_base_url = "https://www.ebi.ac.uk/pride/ws/archive/v2/"
 
     def __init__(self):

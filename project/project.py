@@ -18,9 +18,7 @@ class Project:
             search from PRIDE api in JSON format
             :return: project list on JSON format
         """
-        request_url = self.api_base_url + "projects?" + "pageSize=" + str(page_size) + "&page=" + str(page) + \
-                      "&sortDirection=" + sort_direction + \
-                      "&sortConditions=" + sort_conditions
+        request_url = self.api_base_url + "projects?" + "pageSize=" + str(page_size) + "&page=" + str(page) + "&sortDirection=" + sort_direction + "&sortConditions=" + sort_conditions
         headers = {"Accept": "application/JSON"}
         response = Util.get_api_call(request_url, headers)
         return response.json()
@@ -45,19 +43,17 @@ class Project:
         response = Util.get_api_call(request_url, headers)
         return response.json()
 
-    def get_files_by_accession(self, accession, filter, page_size, page, sort_direction, sort_conditions):
+    def get_files_by_accession(self, accession, query_filter, page_size, page, sort_direction, sort_conditions):
         """
             search PRIDE project's files by accession
             :return: file list on JSON format
         """
         request_url = self.api_base_url + "projects/" + accession + "/files?"
 
-        if filter:
-            request_url = request_url + "filter=" + filter + "&"
+        if query_filter:
+            request_url = request_url + "filter=" + query_filter + "&"
 
-        request_url = request_url + "pageSize=" + str(page_size) + "&page=" + str(page) + \
-                      "&sortDirection=" + sort_direction + \
-                      "&sortConditions=" + sort_conditions
+        request_url = request_url + "pageSize=" + str(page_size) + "&page=" + str(page) + "&sortDirection=" + sort_direction + "&sortConditions=" + sort_conditions
 
         headers = {"Accept": "application/JSON"}
         response = Util.get_api_call(request_url, headers)

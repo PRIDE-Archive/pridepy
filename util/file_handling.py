@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import sys
-import os
 import logging
 
 
@@ -11,7 +9,8 @@ class FileHanding:
     This script mainly holds files handing related methods
     """
 
-    def save_file(self, out_filename, content):
+    @staticmethod
+    def save_file(out_filename, content):
         """
         This method writes the content to the output file
         :param out_filename: full path of the output file
@@ -35,7 +34,8 @@ class FileHanding:
         self.line_prepender(filename, '{"MSRunMetadata":')
         self.line_postpender(filename, "}")
 
-    def line_prepender(self, filename, prefix):
+    @staticmethod
+    def line_prepender(filename, prefix):
         """
         This method adds a prefix to the beginning of the file
         :param filename: Filename
@@ -50,7 +50,8 @@ class FileHanding:
         except FileNotFoundError as file_write_error:
             logging.error(file_write_error)
 
-    def line_postpender(self, filename, sufix):
+    @staticmethod
+    def line_postpender(filename, sufix):
         """
         This method adds a sufix to the end of the file
         :param filename: Filename
