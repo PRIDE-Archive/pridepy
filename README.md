@@ -17,7 +17,7 @@ Download all the raw files from a dataset(eg: PXD012353).
 Warning: Raw files are generally large in size, so it may take some time to download depending on the number of files and file sizes.
 
 ```python
-$ python3 pridepy.py download-all-raw-files -a PXD022105 -o /Users/yourname/Downloads/foldername/
+$ python3 pridepy.py download-all-raw-files -a PXD012353 -o /Users/yourname/Downloads/foldername/
 ```
 
 Download single file by name
@@ -57,6 +57,21 @@ $ python3 pridepy.py search-spectra-evidences --usi "mzspec:PXD019317:sh_5282_HY
 Use below command to view list of commands available
 ```python
 $ python3 pridepy.py --help
+
+  download-all-raw-files          
+  download-files-by-name          
+  get-files-by-filter             
+  get-files-by-project-accession  
+  get-projects                    
+  get-projects-by-accession       
+  get-reanalysis-projects-by-accession
+  get-similar-projects-by-accession
+  search-peptide-evidences        
+  search-projects-by-keywords-and-filters
+  search-protein-evidences       
+  search-spectra-evidences        
+  update-metadata                 
+
 ```
 
 # NOTE
