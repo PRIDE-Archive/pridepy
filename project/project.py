@@ -22,9 +22,7 @@ class Project:
            :param sort_conditions: Field(s) for sorting the results on
            :return: paged peptide_evidences in json format
        """
-        request_url = self.api_base_url + "projects?" + "pageSize=" + str(page_size) + "&page=" + str(page) + \
-                      "&sortDirection=" + sort_direction + \
-                      "&sortConditions=" + sort_conditions
+        request_url = self.api_base_url + "projects?" + "pageSize=" + str(page_size) + "&page=" + str(page) + "&sortDirection=" + sort_direction + "&sortConditions=" + sort_conditions
         headers = {"Accept": "application/JSON"}
         response = Util.get_api_call(request_url, headers)
         return response.json()
@@ -50,11 +48,11 @@ class Project:
         response = Util.get_api_call(request_url, headers)
         return response.json()
 
-    def get_files_by_accession(self, accession, filter, page_size, page, sort_direction, sort_conditions):
+    def get_files_by_accession(self, accession, query_filter, page_size, page, sort_direction, sort_conditions):
         """
         search PRIDE project's files by accession
         :param accession: PRIDE project accession
-        :param filter: Parameters to filter the search results
+        :param query_filter: Parameters to filter the search results
         :param page_size: Number of results to fetch in a page
         :param page: Identifies which page of results to fetch
         :param sort_direction: Sorting direction: ASC or DESC
@@ -63,12 +61,10 @@ class Project:
         """
         request_url = self.api_base_url + "projects/" + accession + "/files?"
 
-        if filter:
-            request_url = request_url + "filter=" + filter + "&"
+        if query_filter:
+            request_url = request_url + "filter=" + query_filter + "&"
 
-        request_url = request_url + "pageSize=" + str(page_size) + "&page=" + str(page) + \
-                      "&sortDirection=" + sort_direction + \
-                      "&sortConditions=" + sort_conditions
+        request_url = request_url + "pageSize=" + str(page_size) + "&page=" + str(page) + "&sortDirection=" + sort_direction + "&sortConditions=" + sort_conditions
 
         headers = {"Accept": "application/JSON"}
         response = Util.get_api_call(request_url, headers)
@@ -89,11 +85,11 @@ class Project:
         response = Util.get_api_call(request_url, headers)
         return response.json()
 
-    def search_by_keywords_and_filters(self, keyword, filter, page_size, page, date_gap, sort_direction, sort_fields):
+    def search_by_keywords_and_filters(self, keyword, query_filter, page_size, page, date_gap, sort_direction, sort_fields):
         """
         search PRIDE API projects by keyword and filters
         :param keyword: keyword to search projects
-        :param filter: Parameters to filter the search results
+        :param query_filter: Parameters to filter the search results
         :param page_size: Number of results to fetch in a page
         :param page: Identifies which page of results to fetch
         :param date_gap: A date range field with possible values of +1MONTH, +1YEAR
@@ -103,8 +99,8 @@ class Project:
         """
         request_url = self.api_base_url + "search/projects?keyword=" + keyword + "&"
 
-        if filter:
-            request_url = request_url + "filter=" + filter + "&"
+        if query_filter:
+            request_url = request_url + "filter=" + query_filter + "&"
 
         request_url = request_url + "pageSize=" + str(page_size) + "&page=" + str(page) + "&"
 

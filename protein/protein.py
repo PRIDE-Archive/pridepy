@@ -38,9 +38,7 @@ class Protein:
         if reported_accession:
             request_url = request_url + "reportedAccession=" + reported_accession + "&"
 
-        request_url = request_url + "pageSize=" + str(page_size) + "&page=" + str(page) + \
-                      "&sortDirection=" + sort_direction + \
-                      "&sortConditions=" + sort_conditions
+        request_url = request_url + "pageSize=" + str(page_size) + "&page=" + str(page) + "&sortDirection=" + sort_direction + "&sortConditions=" + sort_conditions
 
         headers = {"Accept": "application/JSON"}
         response = Util.get_api_call(request_url, headers)

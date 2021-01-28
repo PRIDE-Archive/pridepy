@@ -109,8 +109,8 @@ def search_projects_by_keywords_and_filters(keyword, filter, page_size, page, da
     :return:
     """
     project = Project()
-    print(project.projects_by_keywords_and_filters(keyword, filter, page_size, page, date_gap, sort_direction,
-                                                   sort_fields))
+    print(project.search_by_keywords_and_filters(keyword, filter, page_size, page, date_gap, sort_direction,
+                                                 sort_fields))
 
 
 @main.command()
@@ -133,8 +133,8 @@ def search_projects_by_keywords_and_filters(keyword, filter, page_size, page, da
     :return:
     """
     project = Project()
-    print(project.projects_by_keywords_and_filters(keyword, filter, page_size, page, date_gap, sort_direction,
-                                                   sort_fields))
+    print(project.search_by_keywords_and_filters(keyword, filter, page_size, page, date_gap, sort_direction,
+                                                 sort_fields))
 
 
 @main.command()
