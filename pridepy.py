@@ -199,13 +199,13 @@ def get_similar_projects_by_accession(accession):
               help='Field(s) for sorting the results on. Default for this '
                    'request is project_accession. More fields can be separated by '
                    'comma and passed. Example: submission_date,project_title')
-def get_files_by_project_accession(accession, filter, page_size, page, sort_direction, sort_conditions):
+def get_files_by_project_accession(accession, query_filter, page_size, page, sort_direction, sort_conditions):
     """
     get files by project accession
     :return:
     """
     project = Project()
-    print(project.get_files_by_accession(accession, filter, page_size, page, sort_direction, sort_conditions))
+    print(project.get_files_by_accession(accession, query_filter, page_size, page, sort_direction, sort_conditions))
 
 
 @main.command()

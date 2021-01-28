@@ -51,9 +51,7 @@ class Spectra:
         if result_type:
             request_url = request_url + "resultType=" + result_type + "&"
 
-        request_url = request_url + "pageSize=" + str(page_size) + "&page=" + str(page) + \
-                      "&sortDirection=" + sort_direction + \
-                      "&sortConditions=" + sort_conditions
+        request_url = request_url + "pageSize=" + str(page_size) + "&page=" + str(page) + "&sortDirection=" + sort_direction + "&sortConditions=" + sort_conditions
 
         headers = {"Accept": "application/JSON"}
         response = Util.get_api_call(request_url, headers)

@@ -17,41 +17,41 @@ Download all the raw files from a dataset(eg: PXD012353).
 Warning: Raw files are generally large in size, so it may take some time to download depending on the number of files and file sizes.
 
 ```python
-$ python3 pridepy.py download-all-raw-files -a PXD012353 -o /Users/yourname/Downloads/foldername/
+$ pridepy download-all-raw-files -a PXD012353 -o /Users/yourname/Downloads/foldername/
 ```
 
 Download single file by name
 
 ```python
-$ python3 pridepy.py download-files-by-name -a PXD022105 -o /Users/yourname/Downloads/foldername/ -f checksum.txt
+$ pridepy download-files-by-name -a PXD022105 -o /Users/yourname/Downloads/foldername/ -f checksum.txt
 ```
 
 Search projects with keywords and filters
 
 ```python
-$ python3 pridepy.py search-projects --keyword accession:PXD012353
+$ pridepy search-projects --keyword accession:PXD012353
 ```
 
 ```python
-$ python3 pridepy.py search-projects --filters accession==PXD012353
+$ pridepy search-projects --filters accession==PXD012353
 ```
 
 Search files with filters
 
 ```python
-$ python3 pridepy.py get-files-by-filter --filter fileCategory.value==RAW
+$ pridepy get-files-by-filter --filter fileCategory.value==RAW
 ```
 
 Search protein-evidences with keywords and filters
 
 ```python
-$ python3 pridepy.py search-protein-evidences --project_accession PXD012353
+$ pridepy search-protein-evidences --project_accession PXD012353
 ```
 
 Search spectra-evidences with keywords and filters
 
 ```python
-$ python3 pridepy.py search-spectra-evidences --usi "mzspec:PXD019317:sh_5282_HYK_101018_Mac_D_25mM.mzML:scan:10138:YAAMVTC[UNIMOD:4]MDEAVRNITWALKR/3"
+$ pridepy search-spectra-evidences --usi "mzspec:PXD019317:sh_5282_HYK_101018_Mac_D_25mM.mzML:scan:10138:YAAMVTC[UNIMOD:4]MDEAVRNITWALKR/3"
 ```
 
 Use below command to view list of commands available
