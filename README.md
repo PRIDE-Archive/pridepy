@@ -1,6 +1,7 @@
 # pridepy: Python client for PRIDE Archive database
 
 [![PyPI version](https://badge.fury.io/py/pridepy.svg)](https://badge.fury.io/py/pridepy)
+![PyPI - Downloads](https://img.shields.io/pypi/dm/pridepy)
 ![Upload Python Package](https://github.com/PRIDE-Archive/pridepy/workflows/Upload%20Python%20Package/badge.svg)
 ![Python package](https://github.com/PRIDE-Archive/pridepy/workflows/Python%20package/badge.svg?branch=master)
 
