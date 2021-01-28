@@ -8,7 +8,7 @@ Python Client library for PRIDE Rest API
 To install, simply use `pip`:
 
 ```bash
-$ pip install --upgrade pride-py
+$ pip install --upgrade pridepy
 ```
 
 # Examples 
