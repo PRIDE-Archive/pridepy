@@ -21,10 +21,10 @@ class Files:
     def __init__(self):
         pass
 
-    def get_all_paged_files(self, filter, page_size, page, sort_direction, sort_conditions):
+    def get_all_paged_files(self, query_filter, page_size, page, sort_direction, sort_conditions):
         """
          Get all filtered pride submission files
-        :param filter: Parameters to filter the search results
+        :param query_filter: Parameters to filter the search results
         :param page_size: Number of results to fetch in a page
         :param page: Identifies which page of results to fetch
         :param sort_direction: Sorting direction: ASC or DESC
@@ -36,8 +36,8 @@ class Files:
         """
         request_url = self.api_base_url + "files?"
 
-        if filter:
-            request_url = request_url + "filter=" + filter + "&"
+        if query_filter:
+            request_url = request_url + "filter=" + query_filter + "&"
 
         request_url = request_url + "pageSize=" + str(page_size) + "&page=" + str(page) + \
                       "&sortDirection=" + sort_direction + \
@@ -187,7 +187,7 @@ class Files:
             response = Util.get_api_call(request_url, headers)
             return response.json()
         except Exception as e:
-            raise Exception("File not found")
+            raise Exception("File not found" + str(e))
 
     @staticmethod
     def copy_from_dir(complete_source_dir, file_list_from_dir, file_list_json):
