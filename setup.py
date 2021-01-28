@@ -17,10 +17,12 @@ setup(
     packages=setuptools.find_packages(),
     py_modules=['pridepy'],
     install_requires=[
-        'Click',
-        'plotly',
         'requests',
-        'ratelimit'
+        'ratelimit',
+        'click',
+        'pytest',
+        'setuptools',
+        'plotly'
     ],
     entry_points='''
         [console_scripts]
