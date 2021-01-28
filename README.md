@@ -75,3 +75,7 @@ $ python3 pridepy.py --help
 # NOTE
 
 Please make sure you are using Python3, not Python 2.7 version.
+
+# Citation
+
+Selvakumar Kamatchinathan, Suresh Hewapathirana, & Yasset Perez-Riverol. (2021, January 28). pridepy: python client for the PRIDE Archive database (Version v0.0.2). [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.4475414.svg)](https://doi.org/10.5281/zenodo.4475414)
