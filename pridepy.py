@@ -103,13 +103,13 @@ def update_metadata(filename, username, password):
               help='Field(s) for sorting the results on. Default for this '
                    'request is submission_date. More fields can be separated by '
                    'comma and passed. Example: submission_date,project_title')
-def search_projects_by_keywords_and_filters(keyword, query_filter, page_size, page, date_gap, sort_direction, sort_fields):
+def search_projects_by_keywords_and_filters(keyword, filter, page_size, page, date_gap, sort_direction, sort_fields):
     """
     search public pride with keywords and filters
     :return:
     """
     project = Project()
-    print(project.search_by_keywords_and_filters(keyword, query_filter, page_size, page, date_gap, sort_direction,
+    print(project.search_by_keywords_and_filters(keyword, filter, page_size, page, date_gap, sort_direction,
                                                  sort_fields))
 
 
@@ -127,13 +127,13 @@ def search_projects_by_keywords_and_filters(keyword, query_filter, page_size, pa
               help='Field(s) for sorting the results on. Default for this '
                    'request is submission_date. More fields can be separated by '
                    'comma and passed. Example: submission_date,project_title')
-def search_projects_by_keywords_and_filters(keyword, query_filter, page_size, page, date_gap, sort_direction, sort_fields):
+def search_projects_by_keywords_and_filters(keyword, filter, page_size, page, date_gap, sort_direction, sort_fields):
     """
     search public pride with keywords and filters
     :return:
     """
     project = Project()
-    print(project.search_by_keywords_and_filters(keyword, query_filter, page_size, page, date_gap, sort_direction,
+    print(project.search_by_keywords_and_filters(keyword, filter, page_size, page, date_gap, sort_direction,
                                                  sort_fields))
 
 
@@ -199,13 +199,13 @@ def get_similar_projects_by_accession(accession):
               help='Field(s) for sorting the results on. Default for this '
                    'request is project_accession. More fields can be separated by '
                    'comma and passed. Example: submission_date,project_title')
-def get_files_by_project_accession(accession, query_filter, page_size, page, sort_direction, sort_conditions):
+def get_files_by_project_accession(accession, filter, page_size, page, sort_direction, sort_conditions):
     """
     get files by project accession
     :return:
     """
     project = Project()
-    print(project.get_files_by_accession(accession, query_filter, page_size, page, sort_direction, sort_conditions))
+    print(project.get_files_by_accession(accession, filter, page_size, page, sort_direction, sort_conditions))
 
 
 @main.command()
@@ -291,13 +291,13 @@ def search_peptide_evidences(project_accession, assay_accession, protein_accessi
               help='Field(s) for sorting the results on. Default for this '
                    'request is submissionDate. More fields can be separated by '
                    'comma and passed. Example: submission_date,project_title')
-def get_files_by_filter(query_filter, page_size, page, sort_direction, sort_conditions):
+def get_files_by_filter(filter, page_size, page, sort_direction, sort_conditions):
     """
     get paged files
     :return:
     """
     files = Files()
-    print(files.get_all_paged_files(query_filter, page_size, page, sort_direction, sort_conditions))
+    print(files.get_all_paged_files(filter, page_size, page, sort_direction, sort_conditions))
 
 
 if __name__ == '__main__':

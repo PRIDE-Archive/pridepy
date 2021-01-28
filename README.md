@@ -1,4 +1,4 @@
-# PRIDE_PY
+# pridepy: Python client for PRIDE Archive database
 
 [![PyPI version](https://badge.fury.io/py/google-api-python-client.svg)](https://badge.fury.io/py/google-api-python-client)
 
@@ -29,11 +29,7 @@ $ pridepy download-files-by-name -a PXD022105 -o /Users/yourname/Downloads/folde
 Search projects with keywords and filters
 
 ```python
-$ pridepy search-projects --keyword accession:PXD012353
-```
-
-```python
-$ pridepy search-projects --filters accession==PXD012353
+$ pridepy search-projects-by-keywords-and-filters --keyword accession:PXD012353
 ```
 
 Search files with filters
