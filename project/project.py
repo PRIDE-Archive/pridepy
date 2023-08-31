@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import json
 
 from util.api_handling import Util
 
@@ -8,7 +9,8 @@ class Project:
         This class handles PRIDE API Projects endpoint.
     """
 
-    api_base_url = "https://www.ebi.ac.uk/pride/ws/archive/v2/"
+    API_BASE_URL = "https://www.ebi.ac.uk/pride/ws/archive/v2/"
+    PRIVATE_API_BASE_URL = "https://www.ebi.ac.uk/pride/private/ws/archive/v2/"
 
     def __init__(self):
         pass
@@ -22,7 +24,7 @@ class Project:
            :param sort_conditions: Field(s) for sorting the results on
            :return: paged peptide_evidences in json format
        """
-        request_url = self.api_base_url + "projects?" + "pageSize=" + str(page_size) + "&page=" + str(page) + "&sortDirection=" + sort_direction + "&sortConditions=" + sort_conditions
+        request_url = self.API_BASE_URL + "projects?" + "pageSize=" + str(page_size) + "&page=" + str(page) + "&sortDirection=" + sort_direction + "&sortConditions=" + sort_conditions
         headers = {"Accept": "application/JSON"}
         response = Util.get_api_call(request_url, headers)
         return response.json()
@@ -32,7 +34,7 @@ class Project:
             search PRIDE projects by reanalysis accession
             :return: project list on JSON format
         """
-        request_url = self.api_base_url + "projects/reanalysis/" + accession
+        request_url = self.API_BASE_URL + "projects/reanalysis/" + accession
         headers = {"Accept": "application/JSON"}
         response = Util.get_api_call(request_url, headers)
         return response.json()
@@ -43,7 +45,7 @@ class Project:
             :param accession: PRIDE accession
             :return: project list on JSON format
         """
-        request_url = self.api_base_url + "projects/" + accession
+        request_url = self.API_BASE_URL + "projects/" + accession
         headers = {"Accept": "application/JSON"}
         response = Util.get_api_call(request_url, headers)
         return response.json()
@@ -59,7 +61,7 @@ class Project:
         :param sort_conditions: Field(s) for sorting the results on
         :return: PRIDE project files
         """
-        request_url = self.api_base_url + "projects/" + accession + "/files?"
+        request_url = self.API_BASE_URL + "projects/" + accession + "/files?"
 
         if query_filter:
             request_url = request_url + "filter=" + query_filter + "&"
@@ -69,6 +71,32 @@ class Project:
         headers = {"Accept": "application/JSON"}
         response = Util.get_api_call(request_url, headers)
         return response.json()
+
+    def get_private_files_by_accession(self, accession, user, passwd):
+
+        all_files = []
+        request_url = self.PRIVATE_API_BASE_URL + "getAAPTokenWeb"
+        headers = {"Content-Type": "application/json;charset=UTF-8"}
+
+        data =  {"Credentials":{"username": user,"password": passwd}}
+        aapToken = Util.post_api_call(request_url, headers, data)
+        print(aapToken.text)
+
+        request_url = self.PRIVATE_API_BASE_URL + "projects/" + accession + "/files"
+        headers = {"Authorization": "Bearer " + aapToken.text}
+
+        while True:
+            response = Util.get_api_call(request_url, headers)
+            response_json = response.json()
+            if '_embedded' in response_json:
+                files = response_json['_embedded']['files']
+                if len(files) > 0:
+                    all_files.extend(files)
+                    request_url = response_json['_links']['next']['href']
+            else:
+                break
+
+        return all_files
 
     def get_similar_projects_by_accession(self, accession):
         """
@@ -80,7 +108,7 @@ class Project:
             search PRIDE project's files by accession
             :return: file list on JSON format
         """
-        request_url = self.api_base_url + "projects/" + accession + "/files"
+        request_url = self.API_BASE_URL + "projects/" + accession + "/files"
         headers = {"Accept": "application/JSON"}
         response = Util.get_api_call(request_url, headers)
         return response.json()
@@ -97,7 +125,7 @@ class Project:
         :param sort_fields: Field(s) for sorting the results on
         :return: PRIDE projects in json format
         """
-        request_url = self.api_base_url + "search/projects?keyword=" + keyword + "&"
+        request_url = self.API_BASE_URL + "search/projects?keyword=" + keyword + "&"
 
         if query_filter:
             request_url = request_url + "filter=" + query_filter + "&"

@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 
 import logging
+import os
 from datetime import datetime
 
 import click
+import requests
 
 from authentication.authentication import Authentication
 from files.files import Files
@@ -12,6 +14,7 @@ from peptide.peptide import Peptide
 from project.project import Project
 from protein.protein import Protein
 from spectra.spectra import Spectra
+from util.api_handling import Util
 from util.file_handling import FileHanding
 
 
@@ -315,6 +318,45 @@ def get_files_by_filter(filter, page_size, page, sort_direction, sort_conditions
     """
     files = Files()
     print(files.get_all_paged_files(filter, page_size, page, sort_direction, sort_conditions))
+
+
+@main.command()
+@click.option('-a', '--accession', required=True, help='accession of the project')
+@click.option('-u', '--user', required=True, help='PRIDE login username')
+@click.option('-p', '--password', required=True, help='PRiDE login password')
+def get_private_files(accession, user, password):
+    """
+    get files by project accession
+    :return:
+    """
+    project = Project()
+    return project.get_private_files_by_accession(accession, user, password)
+
+@main.command()
+@click.option('-a', '--accession', required=True, help='accession of the project')
+@click.option('-u', '--user', required=True, help='PRIDE login username')
+@click.option('-p', '--password', required=True, help='PRiDE login password')
+@click.option('-l', '--location', required=True, help='location to save files')
+def download_private_files(accession, user, password, location):
+    """
+    get files by project accession
+    :return:
+    """
+    project = Project()
+    files_list = project.get_private_files_by_accession(accession, user, password)
+    for f in files_list:
+        url = f['_links']['download']['href']
+        local_dir = os.path.join(location, accession)
+        local_filename = os.path.join(local_dir, f['fileName'])
+        os.mkdir(local_dir)
+        with requests.get(url, stream=True) as r:
+            r.raise_for_status()
+            with open(local_filename, 'wb') as f:
+                for chunk in r.iter_content(chunk_size=8192):
+                    # If you have chunk encoded response uncomment if
+                    # and set chunk_size parameter to None.
+                    # if chunk:
+                    f.write(chunk)
 
 
 if __name__ == '__main__':
