@@ -1,7 +1,7 @@
 requests
 ratelimit
 click
-
 pytest
 setuptools
 plotly
+boto3

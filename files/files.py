@@ -7,6 +7,9 @@ import re
 import shutil
 import urllib
 import urllib.request
+import boto3
+import botocore
+from botocore.config import Config
 
 from util.api_handling import Util
 
@@ -16,7 +19,9 @@ class Files:
     This class handles PRIDE API files endpoint.
     """
 
-    api_base_url = "https://www.ebi.ac.uk/pride/ws/archive/v2/"
+    API_BASE_URL = "https://www.ebi.ac.uk/pride/ws/archive/v2/"
+    S3_URL = 'https://hh.fire.sdo.ebi.ac.uk'
+    S3_BUCKET = 'pride-public'
 
     def __init__(self):
         pass
@@ -34,7 +39,7 @@ class Files:
         """
            
         """
-        request_url = self.api_base_url + "files?"
+        request_url = self.API_BASE_URL + "files?"
 
         if query_filter:
             request_url = request_url + "filter=" + query_filter + "&"
@@ -52,7 +57,7 @@ class Files:
         :return: raw file list in JSON format
         """
 
-        request_url = self.api_base_url + "files/byProject?accession=" + project_accession + ",fileCategory.value==RAW"
+        request_url = self.API_BASE_URL + "files/byProject?accession=" + project_accession + ",fileCategory.value==RAW"
         headers = {"Accept": "application/JSON"}
 
         response = Util.get_api_call(request_url, headers)
@@ -90,6 +95,31 @@ class Files:
             logging.debug(file['accession'] + " -> " + public_filepath_part[1])
             new_file_path = file['accession'] + "-" + public_filepath_part[1]
             urllib.request.urlretrieve(ftp_filepath, output_folder + new_file_path)
+
+    def download_file_from_s3(self, file_name, path, output_folder):
+        """
+        Download files from s3 bucket
+        :param file_name: file name
+        :param path: path in s3
+        :param output_folder: folder to download the files
+        """
+        if not (os.path.isdir(output_folder)):
+            os.mkdir(output_folder)
+
+        s3_resource = boto3.resource('s3', config=Config(signature_version=botocore.UNSIGNED), endpoint_url=self.S3_URL)
+
+        try:
+            bucket = s3_resource.Bucket(self.S3_BUCKET)
+            bucket.download_file(path + '/' + file_name, os.path.join(output_folder, file_name))
+            objects_all = bucket.objects.filter(Prefix=path)
+            print(objects_all)
+            for item in objects_all:
+                print(item)
+        except botocore.exceptions.ClientError as e:
+            if e.response['Error']['Code'] == "404":
+                print("The object does not exist.")
+            else:
+                raise
 
     def get_submitted_file_path_prefix(self, accession):
         """
@@ -179,7 +209,7 @@ class Files:
         :param file_name: file name
         :return: file in json format
         """
-        request_url = self.api_base_url + "files/byProject?accession=" + accession + ",fileName==" + file_name
+        request_url = self.API_BASE_URL + "files/byProject?accession=" + accession + ",fileName==" + file_name
         headers = {"Accept": "application/JSON"}
         try:
             response = Util.get_api_call(request_url, headers)

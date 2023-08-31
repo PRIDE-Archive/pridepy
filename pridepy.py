@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import logging
+from datetime import datetime
 
 import click
 
@@ -65,6 +66,22 @@ def download_files_by_name(accession, file_name, ftp_download_enabled, input_fol
         logging.info("Data will be copied from file system " + output_folder)
         raw_files.copy_file_from_dir_by_name(accession, file_name, input_folder)
 
+@main.command()
+@click.option('-a', '--accession', required=True, help='PRIDE project accession')
+@click.option('-f', '--file_name', required=True, help='fileName to be downloaded')
+@click.option('-o', '--output_folder', required=True, help='output folder to download or copy files')
+def download_single_files_by_name(accession, file_name, output_folder):
+    """
+    This script downloads a single file of a specified project
+    """
+    project = Project()
+    file_obj = Files()
+    project_json = project.get_by_accession(accession)
+    print(project_json)
+    pub_date = project_json['publicationDate']
+    datem = datetime.strptime(pub_date, "%Y-%m-%d")
+    s3_path = str(datem.year) + '/' + str(datem.month).zfill(2) + '/' + accession
+    file_obj.download_file_from_s3(file_name, s3_path, output_folder)
 
 @main.command()
 @click.option('-f', '--filename', required=True, help='Metadata file')
