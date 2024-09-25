@@ -14,7 +14,6 @@ from peptide.peptide import Peptide
 from project.project import Project
 from protein.protein import Protein
 from spectra.spectra import Spectra
-from util.api_handling import Util
 from util.file_handling import FileHanding
 
 
@@ -101,8 +100,8 @@ def update_metadata(filename, username, password):
     token = authentication.get_token(username, password)
 
     # Format extracted metadata to compatible with PRIDE API endpoint
-    fileHandling = FileHanding()
-    fileHandling.wrap_with_ms_run_metadata(filename)
+    file_handling = FileHanding()
+    file_handling.wrap_with_ms_run_metadata(filename)
 
     # Update msrun metatdata
     msrun = MsRun()

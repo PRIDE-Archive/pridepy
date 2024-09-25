@@ -4,7 +4,6 @@ from files.files import Files
 from peptide.peptide import Peptide
 from project.project import Project
 from protein.protein import Protein
-from spectra.spectra import Spectra
 
 
 class TestSearch(TestCase):

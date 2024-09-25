@@ -162,7 +162,7 @@ class Files:
         """
 
         # get the full path where you can find the raw files in the file system
-        # to support that, data should be written in following format:
+        # to support that, data should be written in the following format:
         # base/path/ + yyyy/mm/accession/ + submitted/
         path_fragment = self.get_submitted_file_path_prefix(accession)
         complete_source_dir = source_base_directory + "/" + path_fragment + "/submitted/"
