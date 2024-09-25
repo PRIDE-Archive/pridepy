@@ -9,6 +9,9 @@ import shutil
 import subprocess
 import urllib
 import urllib.request
+import boto3
+import botocore
+from botocore.config import Config
 
 from util.api_handling import Util
 
@@ -18,7 +21,9 @@ class Files:
     This class handles PRIDE API files endpoint.
     """
 
-    api_base_url = "https://www.ebi.ac.uk/pride/ws/archive/v2/"
+    API_BASE_URL = "https://www.ebi.ac.uk/pride/ws/archive/v2/"
+    S3_URL = 'https://hh.fire.sdo.ebi.ac.uk'
+    S3_BUCKET = 'pride-public'
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
     def __init__(self):
@@ -37,7 +42,7 @@ class Files:
         """
            
         """
-        request_url = self.api_base_url + "files?"
+        request_url = self.API_BASE_URL + "files?"
 
         if query_filter:
             request_url = request_url + "filter=" + query_filter + "&"
@@ -56,7 +61,7 @@ class Files:
         :return: raw file list in JSON format
         """
 
-        request_url = self.api_base_url + "files/byProject?accession=" + project_accession + ",fileCategory.value==RAW"
+        request_url = self.API_BASE_URL + "files/byProject?accession=" + project_accession + ",fileCategory.value==RAW"
         headers = {"Accept": "application/JSON"}
 
         response = Util.get_api_call(request_url, headers)
@@ -133,7 +138,7 @@ class Files:
     @staticmethod
     def download_files_from_globus(file_list_json, output_folder):
         for file in file_list_json:
-            if file['publicFileLocations'][0]['name'] == 'Aspera Protocol':
+            if file['publicFileLocations'][0]['name'] == 'FTP Protocol':
                 download_url = file['publicFileLocations'][0]['value']
             else:
                 download_url = file['publicFileLocations'][1]['value']
@@ -265,7 +270,7 @@ class Files:
         :param file_name: file name
         :return: file in json format
         """
-        request_url = self.api_base_url + "files/byProject?accession=" + accession + ",fileName==" + file_name
+        request_url = self.API_BASE_URL + "files/byProject?accession=" + accession + ",fileName==" + file_name
         headers = {"Accept": "application/JSON"}
         try:
             response = Util.get_api_call(request_url, headers)
