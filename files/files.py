@@ -3,13 +3,12 @@
 import glob
 import logging
 import os
+import platform
 import re
 import shutil
+import subprocess
 import urllib
 import urllib.request
-import boto3
-import botocore
-from botocore.config import Config
 
 from util.api_handling import Util
 
@@ -19,9 +18,8 @@ class Files:
     This class handles PRIDE API files endpoint.
     """
 
-    API_BASE_URL = "https://www.ebi.ac.uk/pride/ws/archive/v2/"
-    S3_URL = 'https://hh.fire.sdo.ebi.ac.uk'
-    S3_BUCKET = 'pride-public'
+    api_base_url = "https://www.ebi.ac.uk/pride/ws/archive/v2/"
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
     def __init__(self):
         pass
@@ -39,12 +37,13 @@ class Files:
         """
            
         """
-        request_url = self.API_BASE_URL + "files?"
+        request_url = self.api_base_url + "files?"
 
         if query_filter:
             request_url = request_url + "filter=" + query_filter + "&"
 
-        request_url = request_url + "pageSize=" + str(page_size) + "&page=" + str(page) + "&sortDirection=" + sort_direction + "&sortConditions=" + sort_conditions
+        request_url = request_url + "pageSize=" + str(page_size) + "&page=" + str(
+            page) + "&sortDirection=" + sort_direction + "&sortConditions=" + sort_conditions
 
         headers = {"Accept": "application/JSON"}
         response = Util.get_api_call(request_url, headers)
@@ -57,17 +56,18 @@ class Files:
         :return: raw file list in JSON format
         """
 
-        request_url = self.API_BASE_URL + "files/byProject?accession=" + project_accession + ",fileCategory.value==RAW"
+        request_url = self.api_base_url + "files/byProject?accession=" + project_accession + ",fileCategory.value==RAW"
         headers = {"Accept": "application/JSON"}
 
         response = Util.get_api_call(request_url, headers)
         return response.json()
 
-    def download_raw_files_from_ftp(self, accession, output_folder):
+    def download_all_raw_files(self, accession, output_folder, protocol):
         """
         This method will download all the raw files from PRIDE FTP
         :param output_folder: output directory where raw files will get saved
         :param accession: PRIDE accession
+        :param protocol: ftp, aspera, globus
         :return: None
         """
 
@@ -76,7 +76,7 @@ class Files:
 
         response_body = self.get_all_raw_file_list(accession)
 
-        self.download_files_from_ftp(response_body, output_folder)
+        self.download_files(response_body, output_folder, protocol)
 
     @staticmethod
     def download_files_from_ftp(file_list_json, output_folder):
@@ -95,31 +95,6 @@ class Files:
             logging.debug(file['accession'] + " -> " + public_filepath_part[1])
             new_file_path = file['accession'] + "-" + public_filepath_part[1]
             urllib.request.urlretrieve(ftp_filepath, output_folder + new_file_path)
-
-    def download_file_from_s3(self, file_name, path, output_folder):
-        """
-        Download files from s3 bucket
-        :param file_name: file name
-        :param path: path in s3
-        :param output_folder: folder to download the files
-        """
-        if not (os.path.isdir(output_folder)):
-            os.mkdir(output_folder)
-
-        s3_resource = boto3.resource('s3', config=Config(signature_version=botocore.UNSIGNED), endpoint_url=self.S3_URL)
-
-        try:
-            bucket = s3_resource.Bucket(self.S3_BUCKET)
-            bucket.download_file(path + '/' + file_name, os.path.join(output_folder, file_name))
-            objects_all = bucket.objects.filter(Prefix=path)
-            print(objects_all)
-            for item in objects_all:
-                print(item)
-        except botocore.exceptions.ClientError as e:
-            if e.response['Error']['Code'] == "404":
-                print("The object does not exist.")
-            else:
-                raise
 
     def get_submitted_file_path_prefix(self, accession):
         """
@@ -162,7 +137,7 @@ class Files:
         """
 
         # get the full path where you can find the raw files in the file system
-        # to support that, data should be written in the following format:
+        # to support that, data should be written in following format:
         # base/path/ + yyyy/mm/accession/ + submitted/
         path_fragment = self.get_submitted_file_path_prefix(accession)
         complete_source_dir = source_base_directory + "/" + path_fragment + "/submitted/"
@@ -177,18 +152,19 @@ class Files:
 
         self.copy_from_dir(complete_source_dir, file_list_from_dir, response_body)
 
-    def download_file_from_ftp_by_name(self, accession, file_name, output_folder):
+    def download_file_by_name(self, accession, file_name, output_folder, protocol):
         """
-        Download files from ftp url
+        Download files from url
         :param accession: PRIDE accession
         :param file_name: file name to download
         :param output_folder: folder to download the files
+        :param protocol: ftp, aspera, globus
         """
 
         if not (os.path.isdir(output_folder)):
             os.mkdir(output_folder)
         response = self.get_file_from_api(accession, file_name)
-        self.download_files_from_ftp(response, output_folder)
+        self.download_files(response, output_folder, protocol)
 
     def copy_file_from_dir_by_name(self, accession, file_name, input_folder):
         path_fragment = self.get_submitted_file_path_prefix(accession)
@@ -209,7 +185,7 @@ class Files:
         :param file_name: file name
         :return: file in json format
         """
-        request_url = self.API_BASE_URL + "files/byProject?accession=" + accession + ",fileName==" + file_name
+        request_url = self.api_base_url + "files/byProject?accession=" + accession + ",fileName==" + file_name
         headers = {"Accept": "application/JSON"}
         try:
             response = Util.get_api_call(request_url, headers)
@@ -235,3 +211,101 @@ class Files:
                 shutil.copy2(source_file, destination_file)
             else:
                 logging.error(file_name_from_ftp + " not found in " + complete_source_dir)
+
+    @staticmethod
+    def get_ascp_binary():
+        """
+        Detect the OS and architecture, and return the appropriate ascp binary path.
+
+        Returns:
+            str: Path to the correct ascp binary.
+        """
+        os_type = platform.system().lower()
+        arch, _ = platform.architecture()
+        aspera_dir = os.path.abspath('aspera/')
+
+        if os_type == "linux":
+            if arch == "32bit":
+                return os.path.join(aspera_dir, "linux-32", "ascp")
+            elif arch == "64bit":
+                return os.path.join(aspera_dir, "linux-64", "ascp")
+        elif os_type == "darwin":  # macOS (intel-based)
+            return os.path.join(aspera_dir, "mac-intel", "ascp")
+        elif os_type == "windows":
+            if arch == "32bit":
+                return os.path.join(aspera_dir, "windows-32", "ascp.exe")
+            elif arch == "64bit":
+                return os.path.join(aspera_dir, "windows-64", "ascp.exe")
+        else:
+            raise OSError(f"Unsupported OS or architecture: {os_type}, {arch}")
+
+    @staticmethod
+    def download_files(file_list_json, output_folder, protocol='ftp'):
+        """
+        Download files using either FTP or Aspera transfer protocol.
+        :param file_list_json: File list in JSON format
+        :param output_folder: Folder to download the files
+        :param protocol: ftp, aspera, globus
+        """
+        protocols_supported = ['ftp', 'aspera', 'globus']
+        if protocol not in protocols_supported:
+            logging.error('Protocol should be either ftp, aspera, globus')
+            return
+
+        if protocol == 'aspera':
+            ascp_path = Files.get_ascp_binary()
+            key_path = os.path.abspath('aspera/key/asperaweb_id_dsa.openssh')
+
+        for file in file_list_json:
+            protocol_name = file['publicFileLocations'][0]['name']
+            download_url = file['publicFileLocations'][0]['value']
+
+            # Create a clean filename to save the downloaded file
+            public_filepath_part = download_url.rsplit('/', 1)
+            logging.debug(file['accession'] + " -> " + public_filepath_part[1])
+            new_file_path = os.path.join(output_folder, file['accession'] + "-" + public_filepath_part[1])
+
+            # Check if the protocol is FTP or Aspera
+            if protocol == 'ftp':
+                if protocol_name == 'Aspera Protocol':
+                    download_url = file['publicFileLocations'][1]['value']
+
+                # FTP download using urllib
+                logging.debug(f'Downloading via FTP: {download_url}')
+                try:
+                    urllib.request.urlretrieve(download_url, new_file_path)
+                    logging.info(f'Successfully downloaded {new_file_path}')
+                except Exception as e:
+                    logging.error(
+                        f'FTP download failed for {new_file_path} , please trying using aspera or globus: {str(e)}')
+                    raise e
+
+            elif protocol == 'aspera':
+                if protocol_name == 'FTP Protocol':
+                    download_url = file['publicFileLocations'][1]['value']
+                # Aspera download using ascp command
+                ascp_source_url = download_url  # The Aspera URL from the JSON
+                logging.debug(f'Downloading via Aspera: {ascp_source_url}')
+                try:
+                    # Execute the ascp command using subprocess
+                    subprocess.run([
+                        ascp_path, '-QT', '-P', '33001', '-l', '100M',  # Options for Aspera: adjust as necessary
+                        '-i', key_path,
+                        ascp_source_url, new_file_path  # Source and destination
+                    ], check=True)
+                    logging.info(f'Successfully downloaded {new_file_path} via Aspera')
+                except subprocess.CalledProcessError as e:
+                    logging.error(f'Aspera download failed for {new_file_path}: {str(e)}')
+            elif protocol == 'globus':
+                if protocol_name == 'Aspera Protocol':
+                    download_url = file['publicFileLocations'][1]['value']
+                ftp_base_url = "ftp://ftp.pride.ebi.ac.uk/"
+                globus_base_url = "https://g-a8b222.dd271.03c0.data.globus.org/"
+                download_url = download_url.replace(ftp_base_url, globus_base_url)
+                # Globus download using urllib
+                logging.debug(f'Downloading From Globus: {download_url}')
+                try:
+                    urllib.request.urlretrieve(download_url, new_file_path)
+                    logging.info(f'Successfully downloaded {new_file_path}')
+                except Exception as e:
+                    logging.error(f'Download from globus failed for {new_file_path}: {str(e)}')

@@ -13,7 +13,6 @@ from msrun.msrun import MsRun
 from peptide.peptide import Peptide
 from project.project import Project
 from protein.protein import Protein
-from spectra.spectra import Spectra
 from util.file_handling import FileHanding
 
 
@@ -24,11 +23,14 @@ def main():
 
 @main.command()
 @click.option('-a', '--accession', required=True, help='PRIDE project accession')
-@click.option('-f', '--ftp_download_enabled', type=bool, default='True',
-              help='If enabled, files will be downloaded from FTP, otherwise copy from file system')
+@click.option('-cpf', '--copy_from_file_system', type=bool, default='False',
+              help='Copy from file system, If enabled copy from files from local pride file system '
+                   '(This is purely for PRIDE internal developers)')
+@click.option('-p', '--protocol', default='ftp',
+              help='Protocol to be used to download files either by ftp or aspera. Default is ftp')
 @click.option('-i', '--input_folder', required=False, help='Input folder to copy the raw files')
 @click.option('-o', '--output_folder', required=True, help='output folder to download or copy raw files')
-def download_all_raw_files(accession, ftp_download_enabled, input_folder, output_folder):
+def download_all_raw_files(accession, copy_from_file_system, protocol, input_folder, output_folder):
     """
     This script download raw files from FTP or copy from the file system
     """
@@ -37,9 +39,9 @@ def download_all_raw_files(accession, ftp_download_enabled, input_folder, output
 
     logging.info("accession: " + accession)
 
-    if ftp_download_enabled:
-        logging.info("Data will be download from ftp")
-        raw_files.download_raw_files_from_ftp(accession, output_folder)
+    if not copy_from_file_system:
+        logging.info(f"Data will be downloaded from {protocol}")
+        raw_files.download_all_raw_files(accession, output_folder, protocol)
     else:
         logging.info("Data will be copied from file system " + output_folder)
         raw_files.copy_raw_files_from_dir(accession, input_folder)
@@ -47,12 +49,15 @@ def download_all_raw_files(accession, ftp_download_enabled, input_folder, output
 
 @main.command()
 @click.option('-a', '--accession', required=True, help='PRIDE project accession')
-@click.option('-ftp', '--ftp_download_enabled', type=bool, default='True',
-              help='If enabled, files will be downloaded from FTP, otherwise copy from file system')
+@click.option('-cpf', '--copy_from_file_system', type=bool, default=False, required=False,
+              help='Copy from file system, If enabled copy from files from local pride file system '
+                   '(This is purely for PRIDE internal developers)')
+@click.option('-p', '--protocol', default='ftp',
+              help='Protocol to be used to download files either by ftp or aspera. Default is ftp')
 @click.option('-f', '--file_name', required=True, help='fileName to be downloaded')
 @click.option('-i', '--input_folder', required=False, help='Input folder to copy the files')
 @click.option('-o', '--output_folder', required=True, help='output folder to download or copy files')
-def download_files_by_name(accession, file_name, ftp_download_enabled, input_folder, output_folder):
+def download_files_by_name(accession, copy_from_file_system, protocol, file_name, input_folder, output_folder):
     """
     This script download files from FTP or copy from the file system
     """
@@ -61,9 +66,9 @@ def download_files_by_name(accession, file_name, ftp_download_enabled, input_fol
 
     logging.info("accession: " + accession)
 
-    if ftp_download_enabled:
-        logging.info("Data will be download from ftp")
-        raw_files.download_file_from_ftp_by_name(accession, file_name, output_folder)
+    if not copy_from_file_system:
+        logging.info(f"Data will be downloaded from {protocol}")
+        raw_files.download_file_by_name(accession, file_name, output_folder, protocol)
     else:
         logging.info("Data will be copied from file system " + output_folder)
         raw_files.copy_file_from_dir_by_name(accession, file_name, input_folder)
@@ -249,29 +254,29 @@ def search_protein_evidences(project_accession, assay_accession, reported_access
                                     sort_direction, sort_conditions))
 
 
-@main.command()
-@click.option('-usi', '--usi', required=False, help='usi, Provide multiple values separated by \n')
-@click.option('-pa', '--project_accession', required=False, help='projectAccession')
-@click.option('-aa', '--assay_accession', required=False, help='assayAccession')
-@click.option('-pepSeq', '--peptide_sequence', required=False, help='peptideSequence')
-@click.option('-modSeq', '--modified_sequence', required=False, help='peptideSequence')
-@click.option('-rt', '--result_type', required=False, default='COMPACT', help='peptideSequence')
-@click.option('-ps', '--page_size', required=False, default=100, help='Number of results to fetch in a page')
-@click.option('-p', '--page', required=False, default=0, help='Identifies which page of results to fetch')
-@click.option('-sd', '--sort_direction', required=False, default='DESC', help='Sorting direction: ASC or DESC')
-@click.option('-sc', '--sort_conditions', required=False, default='projectAccession',
-              help='Field(s) for sorting the results on. Default for this '
-                   'request is project_accession. More fields can be separated by '
-                   'comma and passed. Example: submission_date,project_title')
-def search_spectra_evidences(usi, project_accession, assay_accession, peptide_sequence, modified_sequence,
-                             result_type, page_size, page, sort_direction, sort_conditions):
-    """
-    search public pride spectra with keywords and filters
-    :return:
-    """
-    spectra = Spectra()
-    print(spectra.spectra_evidences(usi, project_accession, assay_accession, peptide_sequence, modified_sequence,
-                                    result_type, page_size, page, sort_direction, sort_conditions))
+# @main.command()
+# @click.option('-usi', '--usi', required=False, help='usi, Provide multiple values separated by \n')
+# @click.option('-pa', '--project_accession', required=False, help='projectAccession')
+# @click.option('-aa', '--assay_accession', required=False, help='assayAccession')
+# @click.option('-pepSeq', '--peptide_sequence', required=False, help='peptideSequence')
+# @click.option('-modSeq', '--modified_sequence', required=False, help='peptideSequence')
+# @click.option('-rt', '--result_type', required=False, default='COMPACT', help='peptideSequence')
+# @click.option('-ps', '--page_size', required=False, default=100, help='Number of results to fetch in a page')
+# @click.option('-p', '--page', required=False, default=0, help='Identifies which page of results to fetch')
+# @click.option('-sd', '--sort_direction', required=False, default='DESC', help='Sorting direction: ASC or DESC')
+# @click.option('-sc', '--sort_conditions', required=False, default='projectAccession',
+#               help='Field(s) for sorting the results on. Default for this '
+#                    'request is project_accession. More fields can be separated by '
+#                    'comma and passed. Example: submission_date,project_title')
+# def search_spectra_evidences(usi, project_accession, assay_accession, peptide_sequence, modified_sequence,
+#                              result_type, page_size, page, sort_direction, sort_conditions):
+#     """
+#     search public pride spectra with keywords and filters
+#     :return:
+#     """
+#     spectra = Spectra()
+#     print(spectra.spectra_evidences(usi, project_accession, assay_accession, peptide_sequence, modified_sequence,
+#                                     result_type, page_size, page, sort_direction, sort_conditions))
 
 
 @main.command()
