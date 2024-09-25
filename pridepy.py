@@ -213,26 +213,26 @@ def get_files_by_project_accession(accession, filter, page_size, page, sort_dire
     print(project.get_files_by_accession(accession, filter, page_size, page, sort_direction, sort_conditions))
 
 
-@main.command()
-@click.option('-pa', '--project_accession', required=False, help='projectAccession')
-@click.option('-aa', '--assay_accession', required=False, help='assayAccession')
-@click.option('-ra', '--reported_accession', required=False, help='reportedAccession')
-@click.option('-ps', '--page_size', required=False, default=100, help='Number of results to fetch in a page')
-@click.option('-p', '--page', required=False, default=0, help='Identifies which page of results to fetch')
-@click.option('-sd', '--sort_direction', required=False, default='DESC', help='Sorting direction: ASC or DESC')
-@click.option('-sc', '--sort_conditions', required=False, default='projectAccession',
-              help='Field(s) for sorting the results on. Default for this '
-                   'request is project_accession. More fields can be separated by '
-                   'comma and passed. Example: submission_date,project_title')
-def search_protein_evidences(project_accession, assay_accession, reported_accession, page_size, page,
-                             sort_direction, sort_conditions):
-    """
-    search public pride protein evidences with keywords and filters
-    :return:
-    """
-    protein = Protein()
-    print(protein.protein_evidences(project_accession, assay_accession, reported_accession, page_size, page,
-                                    sort_direction, sort_conditions))
+# @main.command()
+# @click.option('-pa', '--project_accession', required=False, help='projectAccession')
+# @click.option('-aa', '--assay_accession', required=False, help='assayAccession')
+# @click.option('-ra', '--reported_accession', required=False, help='reportedAccession')
+# @click.option('-ps', '--page_size', required=False, default=100, help='Number of results to fetch in a page')
+# @click.option('-p', '--page', required=False, default=0, help='Identifies which page of results to fetch')
+# @click.option('-sd', '--sort_direction', required=False, default='DESC', help='Sorting direction: ASC or DESC')
+# @click.option('-sc', '--sort_conditions', required=False, default='projectAccession',
+#               help='Field(s) for sorting the results on. Default for this '
+#                    'request is project_accession. More fields can be separated by '
+#                    'comma and passed. Example: submission_date,project_title')
+# def search_protein_evidences(project_accession, assay_accession, reported_accession, page_size, page,
+#                              sort_direction, sort_conditions):
+#     """
+#     search public pride protein evidences with keywords and filters
+#     :return:
+#     """
+#     protein = Protein()
+#     print(protein.protein_evidences(project_accession, assay_accession, reported_accession, page_size, page,
+#                                     sort_direction, sort_conditions))
 
 
 # @main.command()
@@ -260,29 +260,29 @@ def search_protein_evidences(project_accession, assay_accession, reported_access
 #                                     result_type, page_size, page, sort_direction, sort_conditions))
 
 
-@main.command()
-@click.option('-pa', '--project_accession', required=False, help='projectAccession')
-@click.option('-aa', '--assay_accession', required=False, help='assayAccession')
-@click.option('-aa', '--protein_accession', required=False, help='proteinAccession')
-@click.option('-aa', '--peptide_evidence_accession', required=False, help='peptideEvidenceAccession')
-@click.option('-pepSeq', '--peptide_sequence', required=False, help='peptideSequence')
-@click.option('-ps', '--page_size', required=False, default=100, help='Number of results to fetch in a page')
-@click.option('-p', '--page', required=False, default=0, help='Identifies which page of results to fetch')
-@click.option('-sd', '--sort_direction', required=False, default='DESC', help='Sorting direction: ASC or DESC')
-@click.option('-sc', '--sort_conditions', required=False, default='projectAccession',
-              help='Field(s) for sorting the results on. Default for this '
-                   'request is project_accession. More fields can be separated by '
-                   'comma and passed. Example: submission_date,project_title')
-def search_peptide_evidences(project_accession, assay_accession, protein_accession, peptide_evidence_accession,
-                             peptide_sequence, page_size, page, sort_direction, sort_conditions):
-    """
-    search public pride peptide evidences with keywords and filters
-    :return:
-    """
-    peptide = Peptide()
-    print(peptide.peptide_evidences(project_accession, assay_accession, protein_accession,
-                                    peptide_evidence_accession, peptide_sequence,
-                                    page_size, page, sort_direction, sort_conditions))
+# @main.command()
+# @click.option('-pa', '--project_accession', required=False, help='projectAccession')
+# @click.option('-aa', '--assay_accession', required=False, help='assayAccession')
+# @click.option('-aa', '--protein_accession', required=False, help='proteinAccession')
+# @click.option('-aa', '--peptide_evidence_accession', required=False, help='peptideEvidenceAccession')
+# @click.option('-pepSeq', '--peptide_sequence', required=False, help='peptideSequence')
+# @click.option('-ps', '--page_size', required=False, default=100, help='Number of results to fetch in a page')
+# @click.option('-p', '--page', required=False, default=0, help='Identifies which page of results to fetch')
+# @click.option('-sd', '--sort_direction', required=False, default='DESC', help='Sorting direction: ASC or DESC')
+# @click.option('-sc', '--sort_conditions', required=False, default='projectAccession',
+#               help='Field(s) for sorting the results on. Default for this '
+#                    'request is project_accession. More fields can be separated by '
+#                    'comma and passed. Example: submission_date,project_title')
+# def search_peptide_evidences(project_accession, assay_accession, protein_accession, peptide_evidence_accession,
+#                              peptide_sequence, page_size, page, sort_direction, sort_conditions):
+#     """
+#     search public pride peptide evidences with keywords and filters
+#     :return:
+#     """
+#     peptide = Peptide()
+#     print(peptide.peptide_evidences(project_accession, assay_accession, protein_accession,
+#                                     peptide_evidence_accession, peptide_sequence,
+#                                     page_size, page, sort_direction, sort_conditions))
 
 
 @main.command()
