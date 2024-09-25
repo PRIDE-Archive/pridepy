@@ -17,6 +17,7 @@ $ pip install --upgrade pridepy
 
 Download all the raw files from a dataset(eg: PXD012353).
 Warning: Raw files are generally large in size, so it may take some time to download depending on the number of files and file sizes.
+-p in download specifies protocol , Available protocols nows are ftp, aspera, s3 and globus. Default is ftp.
 
 ```python
 $ pridepy download-all-raw-files -a PXD012353 -o /Users/yourname/Downloads/foldername/ -p aspera
@@ -25,8 +26,14 @@ $ pridepy download-all-raw-files -a PXD012353 -o /Users/yourname/Downloads/folde
 Download single file by name
 
 ```python
-$ pridepy download-files-by-name -a PXD022105 -o /Users/yourname/Downloads/foldername/ -f checksum.txt -p aspera
+$ pridepy download-files-by-name -a PXD022105 -o /Users/yourname/Downloads/foldername/ -f checksum.txt -p s3
 ```
+
+```python
+$ pridepy download-files-by-name -a PXD022105 -o /Users/yourname/Downloads/foldername/ -f checksum.txt -p globus
+```
+
+Please note : Currently we use globus urls ( when -p globus is used) via https not globus protocol.
 
 Search projects with keywords and filters
 

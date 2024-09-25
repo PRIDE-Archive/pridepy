@@ -10,9 +10,7 @@ import requests
 from authentication.authentication import Authentication
 from files.files import Files
 from msrun.msrun import MsRun
-from peptide.peptide import Peptide
 from project.project import Project
-from protein.protein import Protein
 from util.file_handling import FileHanding
 
 
@@ -27,7 +25,7 @@ def main():
               help='Copy from file system, If enabled copy from files from local pride file system '
                    '(This is purely for PRIDE internal developers)')
 @click.option('-p', '--protocol', default='ftp',
-              help='Protocol to be used to download files either by ftp or aspera. Default is ftp')
+              help='Protocol to be used to download files either by ftp or aspera or from globus. Default is ftp')
 @click.option('-i', '--input_folder', required=False, help='Input folder to copy the raw files')
 @click.option('-o', '--output_folder', required=True, help='output folder to download or copy raw files')
 def download_all_raw_files(accession, copy_from_file_system, protocol, input_folder, output_folder):
@@ -53,13 +51,13 @@ def download_all_raw_files(accession, copy_from_file_system, protocol, input_fol
               help='Copy from file system, If enabled copy from files from local pride file system '
                    '(This is purely for PRIDE internal developers)')
 @click.option('-p', '--protocol', default='ftp',
-              help='Protocol to be used to download files either by ftp or aspera. Default is ftp')
+              help='Protocol to be used to download files either by ftp or aspera or from globus. Default is ftp')
 @click.option('-f', '--file_name', required=True, help='fileName to be downloaded')
 @click.option('-i', '--input_folder', required=False, help='Input folder to copy the files')
 @click.option('-o', '--output_folder', required=True, help='output folder to download or copy files')
 def download_files_by_name(accession, copy_from_file_system, protocol, file_name, input_folder, output_folder):
     """
-    This script download files from FTP or copy from the file system
+    This script download single file from servers or copy from the file system
     """
 
     raw_files = Files()
@@ -72,23 +70,6 @@ def download_files_by_name(accession, copy_from_file_system, protocol, file_name
     else:
         logging.info("Data will be copied from file system " + output_folder)
         raw_files.copy_file_from_dir_by_name(accession, file_name, input_folder)
-
-@main.command()
-@click.option('-a', '--accession', required=True, help='PRIDE project accession')
-@click.option('-f', '--file_name', required=True, help='fileName to be downloaded')
-@click.option('-o', '--output_folder', required=True, help='output folder to download or copy files')
-def download_single_files_by_name(accession, file_name, output_folder):
-    """
-    This script downloads a single file of a specified project
-    """
-    project = Project()
-    file_obj = Files()
-    project_json = project.get_by_accession(accession)
-    print(project_json)
-    pub_date = project_json['publicationDate']
-    datem = datetime.strptime(pub_date, "%Y-%m-%d")
-    s3_path = str(datem.year) + '/' + str(datem.month).zfill(2) + '/' + accession
-    file_obj.download_file_from_s3(file_name, s3_path, output_folder)
 
 @main.command()
 @click.option('-f', '--filename', required=True, help='Metadata file')

@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import urllib
 import urllib.request
+
 import boto3
 import botocore
 from botocore.config import Config
@@ -69,7 +70,7 @@ class Files:
 
     def download_all_raw_files(self, accession, output_folder, protocol):
         """
-        This method will download all the raw files from PRIDE FTP
+        This method will download all the raw files from PRIDE PROJECT
         :param output_folder: output directory where raw files will get saved
         :param accession: PRIDE accession
         :param protocol: ftp, aspera, globus
@@ -109,7 +110,7 @@ class Files:
     @staticmethod
     def download_files_from_aspera(file_list_json, output_folder):
         """
-        Download files using ftp transfer url
+        Download files using aspera transfer url
         :param file_list_json: file list in json format
         :param output_folder: folder to download the files
         """
@@ -137,6 +138,11 @@ class Files:
 
     @staticmethod
     def download_files_from_globus(file_list_json, output_folder):
+        """
+           Download files using globus transfer url
+           :param file_list_json: file list in json format
+           :param output_folder: folder to download the files
+        """
         for file in file_list_json:
             if file['publicFileLocations'][0]['name'] == 'FTP Protocol':
                 download_url = file['publicFileLocations'][0]['value']
@@ -156,30 +162,39 @@ class Files:
             except Exception as e:
                 logging.error(f'Download from globus failed for {new_file_path}: {str(e)}')
 
-    def download_file_from_s3(self, file_name, path, output_folder):
+    @staticmethod
+    def download_files_from_s3(file_list_json, output_folder):
         """
-        Download files from s3 bucket
-        :param file_name: file name
-        :param path: path in s3
-        :param output_folder: folder to download the files
+           Download files using s3 transfer url
+           :param file_list_json: file list in json format
+           :param output_folder: folder to download the files
         """
+
         if not (os.path.isdir(output_folder)):
             os.mkdir(output_folder)
 
-        s3_resource = boto3.resource('s3', config=Config(signature_version=botocore.UNSIGNED), endpoint_url=self.S3_URL)
+        s3_resource = boto3.resource('s3', config=Config(signature_version=botocore.UNSIGNED),
+                                     endpoint_url=Files.S3_URL)
+        for file in file_list_json:
+            try:
+                bucket = s3_resource.Bucket(Files.S3_BUCKET)
+                if file['publicFileLocations'][0]['name'] == 'FTP Protocol':
+                    download_url = file['publicFileLocations'][0]['value']
+                else:
+                    download_url = file['publicFileLocations'][1]['value']
 
-        try:
-            bucket = s3_resource.Bucket(self.S3_BUCKET)
-            bucket.download_file(path + '/' + file_name, os.path.join(output_folder, file_name))
-            objects_all = bucket.objects.filter(Prefix=path)
-            print(objects_all)
-            for item in objects_all:
-                print(item)
-        except botocore.exceptions.ClientError as e:
-            if e.response['Error']['Code'] == "404":
-                print("The object does not exist.")
-            else:
-                raise
+                ftp_base_url = "ftp://ftp.pride.ebi.ac.uk/pride/data/archive/"
+                s3_path = download_url.replace(ftp_base_url, "")
+                new_file_path = Files.get_output_file_name(download_url, file, output_folder)
+                logging.debug(f'Downloading From S3: {s3_path}')
+                bucket.download_file(s3_path, new_file_path)
+                logging.info(f'Successfully downloaded {new_file_path}')
+                before_last_slash, _, _ = s3_path.rpartition('/')
+            except botocore.exceptions.ClientError as e:
+                if e.response['Error']['Code'] == "404":
+                    print("The object does not exist.")
+                else:
+                    raise
 
     def get_submitted_file_path_prefix(self, accession):
         """
@@ -332,7 +347,7 @@ class Files:
         :param output_folder: Folder to download the files
         :param protocol: ftp, aspera, globus
         """
-        protocols_supported = ['ftp', 'aspera', 'globus']
+        protocols_supported = ['ftp', 'aspera', 'globus', 's3']
         if protocol not in protocols_supported:
             logging.error('Protocol should be either ftp, aspera, globus')
             return
@@ -343,3 +358,5 @@ class Files:
             Files.download_files_from_aspera(file_list_json, output_folder)
         elif protocol == 'globus':
             Files.download_files_from_globus(file_list_json, output_folder)
+        elif protocol == 's3':
+            Files.download_files_from_s3(file_list_json, output_folder)
