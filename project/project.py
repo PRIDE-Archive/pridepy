@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-import json
 
 from util.api_handling import Util
 
@@ -24,7 +23,8 @@ class Project:
            :param sort_conditions: Field(s) for sorting the results on
            :return: paged peptide_evidences in json format
        """
-        request_url = self.API_BASE_URL + "projects?" + "pageSize=" + str(page_size) + "&page=" + str(page) + "&sortDirection=" + sort_direction + "&sortConditions=" + sort_conditions
+        request_url = self.API_BASE_URL + "projects?" + "pageSize=" + str(page_size) + "&page=" + str(
+            page) + "&sortDirection=" + sort_direction + "&sortConditions=" + sort_conditions
         headers = {"Accept": "application/JSON"}
         response = Util.get_api_call(request_url, headers)
         return response.json()
@@ -66,7 +66,8 @@ class Project:
         if query_filter:
             request_url = request_url + "filter=" + query_filter + "&"
 
-        request_url = request_url + "pageSize=" + str(page_size) + "&page=" + str(page) + "&sortDirection=" + sort_direction + "&sortConditions=" + sort_conditions
+        request_url = request_url + "pageSize=" + str(page_size) + "&page=" + str(
+            page) + "&sortDirection=" + sort_direction + "&sortConditions=" + sort_conditions
 
         headers = {"Accept": "application/JSON"}
         response = Util.get_api_call(request_url, headers)
@@ -78,12 +79,12 @@ class Project:
         request_url = self.PRIVATE_API_BASE_URL + "getAAPTokenWeb"
         headers = {"Content-Type": "application/json;charset=UTF-8"}
 
-        data =  {"Credentials":{"username": user,"password": passwd}}
-        aapToken = Util.post_api_call(request_url, headers, data)
-        print(aapToken.text)
+        data = {"Credentials": {"username": user, "password": passwd}}
+        aap_token = Util.post_api_call(request_url, headers, data)
+        print(aap_token.text)
 
         request_url = self.PRIVATE_API_BASE_URL + "projects/" + accession + "/files"
-        headers = {"Authorization": "Bearer " + aapToken.text}
+        headers = {"Authorization": "Bearer " + aap_token.text}
 
         while True:
             response = Util.get_api_call(request_url, headers)
@@ -113,7 +114,8 @@ class Project:
         response = Util.get_api_call(request_url, headers)
         return response.json()
 
-    def search_by_keywords_and_filters(self, keyword, query_filter, page_size, page, date_gap, sort_direction, sort_fields):
+    def search_by_keywords_and_filters(self, keyword, query_filter, page_size, page, date_gap, sort_direction,
+                                       sort_fields):
         """
         search PRIDE API projects by keyword and filters
         :param keyword: keyword to search projects

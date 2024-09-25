@@ -32,8 +32,8 @@ class Spectra:
         request_url = self.api_base_url + "spectra?"
 
         if usi:
-            usiArray = usi.split("\\n")
-            for usiElement in usiArray:
+            usi_array = usi.split("\\n")
+            for usiElement in usi_array:
                 request_url = request_url + "usi=" + usiElement + "&"
 
         if project_accession:
