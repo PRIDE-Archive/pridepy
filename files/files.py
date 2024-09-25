@@ -13,6 +13,7 @@ import urllib.request
 import boto3
 import botocore
 from botocore.config import Config
+from tqdm import tqdm
 
 from util.api_handling import Util
 
@@ -98,8 +99,6 @@ class Files:
                 download_url = file['publicFileLocations'][1]['value']
             logging.debug('ftp_filepath:' + download_url)
             new_file_path = Files.get_output_file_name(download_url, file, output_folder)
-            from tqdm import tqdm
-
             with tqdm(unit='B', unit_scale=True, unit_divisor=1024, miniters=1, desc=file['accession']) as progress_bar:
                 urllib.request.urlretrieve(download_url, new_file_path, reporthook=lambda blocks, block_size, total_size: progress_bar.update(block_size))
 

@@ -2,8 +2,6 @@
 
 import logging
 import os
-from datetime import datetime
-
 import click
 import requests
 

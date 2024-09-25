@@ -22,7 +22,8 @@ setup(
         'click',
         'pytest',
         'setuptools',
-        'plotly'
+        'plotly',
+        'tqdm'
     ],
     entry_points='''
         [console_scripts]
