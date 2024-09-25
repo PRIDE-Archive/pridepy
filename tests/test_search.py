@@ -3,7 +3,6 @@ from unittest import TestCase
 from files.files import Files
 from project.project import Project
 
-
 class TestSearch(TestCase):
     """
     A test class to test files related methods.
