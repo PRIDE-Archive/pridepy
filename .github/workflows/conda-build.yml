@@ -1,12 +1,12 @@
-ame: Conda Build
+name: Conda Build and Test
 
 on:
   push:
     branches:
-      - main
+      - master
   pull_request:
     branches:
-      - main
+      - master
 
 jobs:
   build:
