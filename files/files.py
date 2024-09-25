@@ -99,6 +99,9 @@ class Files:
                 download_url = file['publicFileLocations'][1]['value']
             logging.debug('ftp_filepath:' + download_url)
             new_file_path = Files.get_output_file_name(download_url, file, output_folder)
+            with urllib.request.urlopen(download_url) as response, open(new_file_path, 'wb') as out_file:
+                shutil.copyfileobj(response, out_file)
+
             with tqdm(unit='B', unit_scale=True, unit_divisor=1024, miniters=1, desc=file['accession']) as progress_bar:
                 urllib.request.urlretrieve(download_url, new_file_path, reporthook=lambda blocks, block_size, total_size: progress_bar.update(block_size))
 
