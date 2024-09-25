@@ -27,10 +27,12 @@ class Statistics:
         response_body = response.json()
 
         # sort data by past to present
-        data = [go.Bar(
-            x=[d[0] for d in response_body][::-1],
-            y=[d[1] for d in response_body][::-1]
-        )]
+        data = [
+            go.Bar(
+                x=[d[0] for d in response_body][::-1],
+                y=[d[1] for d in response_body][::-1],
+            )
+        ]
 
         # plot the data in a bar chart
         plotly.offline.plot(data, filename=output_filename, auto_open=True)

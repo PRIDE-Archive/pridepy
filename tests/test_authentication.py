@@ -37,5 +37,5 @@ class TestAuthentication(unittest.TestCase):
         self.assertTrue(auth.validate_token(api_token), "Token is invalid or expired!")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
