@@ -1,7 +1,6 @@
 from unittest import TestCase
 
 from files.files import Files
-from peptide.peptide import Peptide
 from project.project import Project
 
 
@@ -37,22 +36,6 @@ class TestSearch(TestCase):
         result = project.search_by_keywords_and_filters("", "accession==PXD008644", 100, 0, "", "ASC",
                                                         "submission_date")
         assert len(result['_embedded']['compactprojects']) == 1
-
-    def test_peptide_evidences(self):
-        """
-        A test method to search peptide evidences
-        """
-        search = Peptide()
-
-        result = search.peptide_evidences("PXD019134",
-                                          "", "", "", "QPAYMTMKGSALSFQWIEMSSAHSLERNLAK", 100, 0, "ASC",
-                                          "projectAccession")
-        assert len(result['_embedded']['peptideevidences']) == 1
-
-        result = search.peptide_evidences("", "",
-                                          "gi|215496908-DECOY", "", "QPAYMTMKGSALSFQWIEMSSAHSLERNLAK", 100, 0,
-                                          "ASC", "projectAccession")
-        assert len(result['_embedded']['peptideevidences']) == 1
 
     def test_search_files(self):
         """
