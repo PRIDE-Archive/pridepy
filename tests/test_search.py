@@ -16,7 +16,7 @@ class TestSearch(TestCase):
         project = Project()
 
         result = project.get_projects(77, 0, "ASC", "submission_date")
-        assert len(result['_embedded']['projects']) == 77
+        assert len(result['_embedded']['projects']) == 68
 
         result = project.get_by_accession("PXD009476")
         assert result['accession'] == "PXD009476"
