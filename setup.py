@@ -24,6 +24,8 @@ setup(
         "setuptools",
         "plotly",
         "tqdm",
+        "boto3",
+        "botocore"
     ],
     entry_points="""
         [console_scripts]
