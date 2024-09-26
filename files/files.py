@@ -139,7 +139,7 @@ class Files:
                 new_file_path = Files.get_output_file_name(download_url, file, output_folder)
 
                 # Fetch the total file size from the headers for progress tracking
-                with urllib.request.urlopen(download_url) as response:
+                with urllib.request.urlopen(download_url, timeout=30) as response:
                     total_size = int(response.headers.get("Content-Length", 0))
 
                 # Initialize progress bar
