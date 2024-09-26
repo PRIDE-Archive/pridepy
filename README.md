@@ -30,7 +30,12 @@ $ pip install .
 
 Download all the raw files from a dataset(eg: PXD012353).
 Warning: Raw files are generally large in size, so it may take some time to download depending on the number of files and file sizes.
--p in download specifies protocol , Available protocols nows are ftp, aspera, s3 and globus. Default is ftp.
+
+`-p`: in download specifies protocol (ftp default): 
+   - **ftp**: FTP protocol
+   - **aspera**: using the aspera protocol
+   - **s3**: using streaming protocol from PRIDE
+   - **globus**: globus protocol
 
 ```python
 $ pridepy download-all-raw-files -a PXD012353 -o /Users/yourname/Downloads/foldername/ -p aspera
