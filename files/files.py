@@ -143,10 +143,23 @@ class Files:
                     total_size = int(response.headers.get("Content-Length", 0))
 
                 # Initialize progress bar
-                progress = Progress(total_size, new_file_path)
+                def download_with_retry(url, path, progress_callback, max_retries=3, delay=5):
+                    for attempt in range(max_retries):
+                        try:
+                            urllib.request.urlretrieve(url, path, reporthook=progress_callback)
+                            return
+                        except urllib.error.URLError as e:
+                            if attempt < max_retries - 1:
+                                logging.warning(f"Download failed, retrying in {delay} seconds... (Attempt {attempt + 1}/{max_retries})")
+                                time.sleep(delay)
+                            else:
+                                raise e
 
-                # Download with progress bar
-                urllib.request.urlretrieve(
+                download_with_retry(
+                    download_url,
+                    new_file_path,
+                    lambda blocks, block_size, total_size: progress(block_size)
+                )
                     download_url,
                     new_file_path,
                     reporthook=lambda blocks, block_size, total_size: progress(block_size)
