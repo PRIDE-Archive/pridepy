@@ -28,50 +28,40 @@ bibliography: paper.bib
 ---
 
 # Summary
-# Summary
 
-`pridepy` is a Python client designed to access the PRIDE Archive `[@Perez-Riverol2022-ow]`, a major public repository for proteomics data. The `pridepy` provides a flexible, programmatic interface to search, retrieve, and download data from the PRIDE Archive via its REST API. This tool simplifies the integration of PRIDE data into bioinformatics pipelines, making it easier for researchers to access large datasets programmatically.
-
-`pridepy` can be easily installed using pip:
+The Proteomics Identification Database (PRIDE) [@Perez-Riverol2022-ow] is the world's largest repository for proteomics data and a founding member of ProteomeXchange [@Deutsch2023-mu]. We introduce pridepy, a Python client designed to access PRIDE Archive data, including project metadata and file downloads. pridepy offers a flexible programmatic interface for searching, retrieving, and downloading data via the PRIDE REST API. This tool simplifies the integration of PRIDE datasets into bioinformatics pipelines, making it easier for researchers to handle large datasets programmatically.
 
 # Statement of Need
+
+The PRIDE Archive storages an extensive collection of proteomics data [@Perez-Riverol2022-ow], but manually accessing this data can be inefficient and time-consuming. With the growing need for cloud-based [@Dai2024-yc] and HPC bioinformatics tools [@Mehta2023-og], command-line utilities that seamlessly interact with the PRIDE API are increasingly important. `pridepy` addresses this by enabling researchers to programmatically access PRIDE using Python, a widely adopted language. It allows efficient dataset integration into automated workflows, with support for large-scale data transfers via [Aspera](https://www.ibm.com/products/aspera), [Globus](https://www.globus.org/data-transfer), FTP, and HTTPS, making it ideal for scalable, reproducible pipelines.
+
 # Methods
 
-`pridepy` is built in Python and interacts with the [PRIDE Archive REST API](https://www.ebi.ac.uk/pride/ws/archive/v2/swagger-ui.html). The core functionality includes:
+`pridepy` is built in Python and interacts with the [PRIDE Archive REST API](https://www.ebi.ac.uk/pride/ws/archive/v2/swagger-ui.html). The library and package not only provide data models for eanc data structure of the API but also a set of commandline to facilitate their use by users. The main features of `pridepy` include:
 
-- Searching for datasets using accession numbers or keywords.
-- Retrieving and downloading raw files or specific project data using different protocols (e.g., Aspera, Globus, FTP, and HTTPS). This is supported by multiple protocols implemented at the PRIDE Archive (Figure 1).
-- Handling biological data types such as proteins and peptides through a high-level interface.
-  
-The API client leverages Python's request library to handle HTTP requests and responses. It provides a structured approach to query the database, filter results, and download associated files, including mass spectrometry data.
+- The main use case and functionality of pridepy is the file downloaded from PRIDE Archive (**Figure 1**). PRIDE archive stores the data in a S3-like storage system, called FIRE [@Thakur2024-zu] which also include other major EMBL-EBI archives including ENA (European Nucleotide Archive) and EGA (European Genome-phenome Archive). FIRE data is accessible via multiple protocols including FTP, Aspera, S3 and Globus. The pridepy client provides a simple command line interface to download the files from PRIDE Archive using these protocols. For private datasets, only S3 is supported and the users need to provide the submitter or reviewer credentials to access the data.
+- Searching for datasets using accession numbers or keywords, or filtering by species, instrument, etc. This feature allows users to find datasets of interest quickly and programatically interact with the PRIDE Archive search engine. 
 
-## Dependencies
+The client is available on [PyPI](https://pypi.org/project/pridepy/) and can be installed using `pip`. The source code is hosted on [GitHub](https://github.com/bigbio/pridepy) and is open-source under the Apache 2.0 license. In addition, a conda recipe is available for easy installation in conda environments. The package is continuously tested using GitHub Actions and has been successfully deployed on the EMBL-EBI HPC cluster. 
 
-`pridepy` relies on the following main Python libraries:
-- `requests`: For handling HTTP requests
-- `pandas`: For data manipulation and analysis
-- Additional libraries may be required for specific transfer protocols (e.g., Aspera, Globus)
-- Handling biological data types such as proteins and peptides through a high-level interface.
-  
-The API client leverages Python's request library to handle HTTP requests and responses. It provides a structured approach to query the database, filter results, and download associated files, including mass spectrometry data.
-# Usage
+![Figure 1: Architecture of transfer protocols supported by PRIDE Archive](figure.png){ width=80% }
 
-The main features of `pridepy` include:
-- `download_all_raw_files`: Downloads all raw files for a given project.
-- `search_projects_by_keywords_and_filters`: Searches PRIDE Archive projects by keyword, species, instrument, etc.
-- `search_protein_evidences`: Retrieves protein evidence associated with a project.
+# Downloading files from PRIDE Archive
 
-Here's a simple example of how to use `pridepy` to download raw files:
-- `search_protein_evidences`: Retrieves protein evidence associated with a project.
+Users can download files from PRIDE Archive using the following commands options, `download-all-raw-files`, `download-files-by-name`. The `download-all-raw-files` command downloads all the raw files from a dataset, while the `download-files-by-name` command downloads a single file by name. Users can specify the output directory, protocol (FTP, Aspera, S3, or Globus), and other options to customize the download process. One example of downloading all raw files using aspera from a dataset is shown below:
+
+```bash
+$ pridepy download-all-raw-files -a PXD012353 -o /Users/yourname/Downloads/foldername/ -p aspera
+```
 
 This makes the client suitable for handling large-scale proteomics data in automated workflows, particularly in environments requiring bulk downloads of proteomics datasets.
 
 # Discussion and Future Directions
 
-`pridepy` successfully simplifies access to the PRIDE Archive, but future development could focus on improving the handling of large downloads by implementing parallel downloads or better error handling mechanisms. Additionally, adding more advanced querying capabilities, such as custom filters for specific peptide or protein properties, would make the tool even more powerful for large-scale proteomics analysis. Expanding user documentation and examples could help broaden its use within the scientific community.
+`pridepy` successfully simplifies access to the PRIDE Archive data, but future development could focus on improving the handling of large downloads by implementing parallel downloads. Additionally, we will expand the user documentation and examples could help broaden its use within the scientific community; and at the same time produce a group of benchmarks to evaluate the performance of the client in different scenarios. We plat to continue extending the library to support more features of the PRIDE Archive API, such as dataset metadata streaming, and submission of new datasets to the PRIDE Archive.
 
 # Acknowledgments
 
-We would like to thank the PRIDE Archive team and contributors to this project for their invaluable input and feedback.
+We would like to thank the PRIDE Archive team and contributors to this project for their invaluable input and feedback. The work is supported by core funding from the European Molecular Biology Laboratory (EMBL) and the Wellcome Trust [grant numbers 208391/Z/17/Z and 223745/Z/21/Z], and the BBSRC grant ‘DIA-Exchange’ [BB/X001911/1]. 
 
 # References
