@@ -4,7 +4,7 @@ channels:
   - bioconda
   - conda-forge
 dependencies:
-  - requests~=2.31.0
+  - requests>=2.32.0
   - ratelimit~=2.2.1
   - click~=8.1.7
   - pytest~=8.0.2
