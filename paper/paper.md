@@ -47,14 +47,14 @@ The PRIDE Archive storages an extensive collection of proteomics data [@Perez-Ri
 - Handling biological data types such as proteins and peptides through a high-level interface.
   
 The API client leverages Python's request library to handle HTTP requests and responses. It provides a structured approach to query the database, filter results, and download associated files, including mass spectrometry data.
-
-![Figure 1: Architecture of transfer protocols supported by PRIDE Archive](figure.png){ width=80% }
-
 # Usage
 
 The main features of `pridepy` include:
 - `download_all_raw_files`: Downloads all raw files for a given project.
 - `search_projects_by_keywords_and_filters`: Searches PRIDE Archive projects by keyword, species, instrument, etc.
+- `search_protein_evidences`: Retrieves protein evidence associated with a project.
+
+Here's a simple example of how to use `pridepy` to download raw files:
 - `search_protein_evidences`: Retrieves protein evidence associated with a project.
 
 This makes the client suitable for handling large-scale proteomics data in automated workflows, particularly in environments requiring bulk downloads of proteomics datasets.
