@@ -7,10 +7,23 @@
 Python Client library for PRIDE Rest API
 
 # Installation
+
+## From PyPI
+
 To install, simply use `pip`:
 
 ```bash
 $ pip install --upgrade pridepy
+```
+
+## From Source
+
+First, clone the repository on your local machine and then install the package using `pip`:
+
+```bash
+$ git clone https://github.com/bigbio/pridepy 
+$ cd pridepy
+$ pip install .
 ```
 
 # Examples
