@@ -35,15 +35,22 @@ bibliography: paper.bib
 `pridepy` can be easily installed using pip:
 
 # Statement of Need
-
-The PRIDE Archive storages an extensive collection of proteomics data [@Perez-Riverol2022-ow], but manually accessing this data can be inefficient and time-consuming. With the growing need for cloud-based [@Dai2024-yc] and HPC bioinformatics tools [@Mehta2023-og], command-line utilities that seamlessly interact with the PRIDE API are increasingly important. `pridepy` addresses this by enabling researchers to programmatically access PRIDE using Python, a widely adopted language. It allows efficient dataset integration into automated workflows, with support for large-scale data transfers via Aspera, Globus, FTP, and HTTPS, making it ideal for scalable, reproducible pipelines.
-
 # Methods
 
 `pridepy` is built in Python and interacts with the [PRIDE Archive REST API](https://www.ebi.ac.uk/pride/ws/archive/v2/swagger-ui.html). The core functionality includes:
 
 - Searching for datasets using accession numbers or keywords.
 - Retrieving and downloading raw files or specific project data using different protocols (e.g., Aspera, Globus, FTP, and HTTPS). This is supported by multiple protocols implemented at the PRIDE Archive (Figure 1).
+- Handling biological data types such as proteins and peptides through a high-level interface.
+  
+The API client leverages Python's request library to handle HTTP requests and responses. It provides a structured approach to query the database, filter results, and download associated files, including mass spectrometry data.
+
+## Dependencies
+
+`pridepy` relies on the following main Python libraries:
+- `requests`: For handling HTTP requests
+- `pandas`: For data manipulation and analysis
+- Additional libraries may be required for specific transfer protocols (e.g., Aspera, Globus)
 - Handling biological data types such as proteins and peptides through a high-level interface.
   
 The API client leverages Python's request library to handle HTTP requests and responses. It provides a structured approach to query the database, filter results, and download associated files, including mass spectrometry data.
