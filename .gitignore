@@ -2,3 +2,12 @@
 dist
 build
 *.egg-info
+*.egg
+.idea/*
+.idea/
+.vscode
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+paper/paper.pdf
