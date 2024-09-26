@@ -25,8 +25,14 @@ class Authentication:
 
         # get token to access the api
         url = self.base_url + "getAAPToken"
-        headers = {'Content-type': 'application/json', 'Accept': 'text/plain'}
-        credentials = "{\"Credentials\":{\"username\":\"" + username + "\", \"password\":\"" + password + "\"}}"
+        headers = {"Content-type": "application/json", "Accept": "text/plain"}
+        credentials = (
+            '{"Credentials":{"username":"'
+            + username
+            + '", "password":"'
+            + password
+            + '"}}'
+        )
 
         response = requests.post(url, data=credentials, headers=headers)
 
@@ -44,8 +50,12 @@ class Authentication:
         :return: Return True if the token is valid and not expired: Otherwise returns False
         """
         url = self.base_url + "token-validation"
-        headers = {'Authorization': 'Bearer ' + token}
+        headers = {"Authorization": "Bearer " + token}
 
         response = requests.post(url, headers=headers)
 
-        return response.ok and response.status_code == 200 and response.text == 'Token Valid'
+        return (
+            response.ok
+            and response.status_code == 200
+            and response.text == "Token Valid"
+        )

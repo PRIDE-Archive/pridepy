@@ -1,0 +1,64 @@
+name: Conda Build and Test
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Set up Miniconda
+      uses: conda-incubator/setup-miniconda@v2
+      with:
+        auto-update-conda: true
+        python-version: 3.8
+        channels: conda-forge,defaults,bioconda
+
+    - name: Create conda environment
+      run: conda env create -f environment.yml
+
+    - name: Install mamba, boa and conda-build
+      run: |
+        source $CONDA/etc/profile.d/conda.sh
+        conda activate pridepy
+        conda install conda-forge::mamba
+        conda install conda-forge::boa
+        mamba install conda-build anaconda-client
+      shell: bash -l {0}
+
+    - name: Activate conda environment and build package
+      run: |
+        source $CONDA/etc/profile.d/conda.sh
+        conda activate pridepy
+        conda mambabuild recipe
+      shell: bash -l {0}
+
+    - name: Install the built package
+      run: |
+        source $CONDA/etc/profile.d/conda.sh
+        conda activate pridepy
+        mamba install --use-local pridepy
+      shell: bash -l {0}
+
+    - name: Output package info
+      run: |
+        source $CONDA/etc/profile.d/conda.sh
+        conda activate pridepy
+        conda list
+      shell: bash -l {0}
+
+    - name: Test the installed package
+      run: |
+        conda activate pridepy
+        pridepy --help
+
+      shell: bash -l {0}

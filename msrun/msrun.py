@@ -26,10 +26,14 @@ class MsRun:
         """
 
         # get project file accession from the prefix of the file name (e.g: PXF00000145820)
-        accession = filename.split('-', 1)[0]
+        accession = filename.split("-", 1)[0]
 
         url = self.base_url + "msruns/" + accession + "/updateMetadata"
-        headers = {'Content-type': 'application/json', 'Accept': 'application/json', 'Authorization': 'Bearer ' + token}
+        headers = {
+            "Content-type": "application/json",
+            "Accept": "application/json",
+            "Authorization": "Bearer " + token,
+        }
 
         with open(filename) as json_file:
             data = json.load(json_file)

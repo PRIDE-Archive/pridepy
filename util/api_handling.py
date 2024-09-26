@@ -23,7 +23,7 @@ class Util:
         response = requests.get(url, headers=headers)
 
         if (not response.ok) or response.status_code != 200:
-            raise Exception('PRIDE API response: {}'.format(response.status_code))
+            raise Exception("PRIDE API response: {}".format(response.status_code))
         return response
 
     @staticmethod
@@ -41,7 +41,7 @@ class Util:
         response = requests.post(url, headers=headers, json=data)
 
         if (not response.ok) or response.status_code != 200:
-            raise Exception('PRIDE API response: {}'.format(response.status_code))
+            raise Exception("PRIDE API response: {}".format(response.status_code))
         return response
 
     @staticmethod
@@ -57,6 +57,6 @@ class Util:
         response = requests.put(url, data=data, headers=headers)
 
         if (not response.ok) or response.status_code != 200:
-            raise Exception('PRIDE API response: {}'.format(response.status_code))
+            raise Exception("PRIDE API response: {}".format(response.status_code))
         else:
             logging.debug(response)

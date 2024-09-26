@@ -43,10 +43,10 @@ class FileHanding:
         :return:
         """
         try:
-            with open(filename, 'r+') as editing_file:
+            with open(filename, "r+") as editing_file:
                 content = editing_file.read()
                 editing_file.seek(0, 0)
-                editing_file.write(prefix.rstrip('\r\n') + content)
+                editing_file.write(prefix.rstrip("\r\n") + content)
         except FileNotFoundError as file_write_error:
             logging.error(file_write_error)
 

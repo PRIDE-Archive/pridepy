@@ -5,15 +5,27 @@ from util.api_handling import Util
 
 class Spectra:
     """
-        This class handles PRIDE API Spectra endpoint.
+    This class handles PRIDE API Spectra endpoint.
     """
+
     api_base_url = "https://www.ebi.ac.uk/pride/ws/archive/v2/"
 
     def __init__(self):
         pass
 
-    def spectra_evidences(self, usi, project_accession, assay_accession, peptide_sequence, modified_sequence,
-                          result_type, page_size, page, sort_direction, sort_conditions):
+    def spectra_evidences(
+        self,
+        usi,
+        project_accession,
+        assay_accession,
+        peptide_sequence,
+        modified_sequence,
+        result_type,
+        page_size,
+        page,
+        sort_direction,
+        sort_conditions,
+    ):
         """
         Search spectra evidences from PRIDE API
         :param usi: USI
@@ -51,7 +63,17 @@ class Spectra:
         if result_type:
             request_url = request_url + "resultType=" + result_type + "&"
 
-        request_url = request_url + "pageSize=" + str(page_size) + "&page=" + str(page) + "&sortDirection=" + sort_direction + "&sortConditions=" + sort_conditions
+        request_url = (
+            request_url
+            + "pageSize="
+            + str(page_size)
+            + "&page="
+            + str(page)
+            + "&sortDirection="
+            + sort_direction
+            + "&sortConditions="
+            + sort_conditions
+        )
 
         headers = {"Accept": "application/JSON"}
         response = Util.get_api_call(request_url, headers)
