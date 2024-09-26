@@ -71,7 +71,7 @@ class Files:
 
     def get_all_raw_file_list(self, project_accession):
         """
-        Get all raw file list from PRIDE API for a given project_accession
+        Get all raw file lists from PRIDE API for a given project_accession
         :param project_accession: PRIDE accession
         :return: raw file list in JSON format
         """
@@ -273,49 +273,6 @@ class Files:
         path_fragment = re.search(r"\d{4}/\d{2}/PXD\d*", first_file).group()
         return path_fragment
 
-    @staticmethod
-    def get_files_from_dir(location, regex):
-        """
-        match files with provided regex in the source location
-        :param regex: files to match
-        :param location: location to search files
-        :return:
-        """
-
-        file_list_from_dir = []
-
-        for file in glob.glob(location + regex):
-            logging.debug("found file: " + file)
-            filename = file.rsplit("/", 1)[1]
-            file_list_from_dir.append(filename)
-        return file_list_from_dir
-
-    def copy_raw_files_from_dir(self, accession, source_base_directory):
-        """
-        This function copy raw files from the given directory if they are in the PRIDE FTP folder.
-        When copying, prefix the file accession given by PRIDE archive
-        :param accession: pride project accession
-        :param source_base_directory : file path of the given directory
-        """
-
-        # get the full path where you can find the raw files in the file system
-        # to support that, data should be written in the following format:
-        # base/path/ + yyyy/mm/accession/ + submitted/
-        path_fragment = self.get_submitted_file_path_prefix(accession)
-        complete_source_dir = (
-            source_base_directory + "/" + path_fragment + "/submitted/"
-        )
-
-        if not (os.path.isdir(complete_source_dir)):
-            logging.exception("Folder does not exists! " + complete_source_dir)
-
-        # get the list of raw files from the given directory
-        file_list_from_dir = self.get_files_from_dir(complete_source_dir, "*.raw")
-
-        response_body = self.get_all_raw_file_list(accession)
-
-        self.copy_from_dir(complete_source_dir, file_list_from_dir, response_body)
-
     def download_file_by_name(self, accession, file_name, output_folder, protocol):
         """
         Download files from url
@@ -329,18 +286,6 @@ class Files:
             os.mkdir(output_folder)
         response = self.get_file_from_api(accession, file_name)
         self.download_files(response, output_folder, protocol)
-
-    def copy_file_from_dir_by_name(self, accession, file_name, input_folder):
-        path_fragment = self.get_submitted_file_path_prefix(accession)
-        complete_source_dir = input_folder + "/" + path_fragment + "/submitted/"
-
-        if not (os.path.isdir(complete_source_dir)):
-            logging.exception("Folder does not exists! " + complete_source_dir)
-
-        file_list_from_dir = self.get_files_from_dir(complete_source_dir, file_name)
-        response_body = self.get_file_from_api(accession, file_name)
-
-        self.copy_from_dir(complete_source_dir, file_list_from_dir, response_body)
 
     def get_file_from_api(self, accession, file_name):
         """

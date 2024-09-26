@@ -16,21 +16,10 @@ def main():
 @main.command()
 @click.option("-a", "--accession", required=True, help="PRIDE project accession")
 @click.option(
-    "-cpf",
-    "--copy_from_file_system",
-    type=bool,
-    default="False",
-    help="Copy from file system, If enabled copy from files from local pride file system "
-    "(This is purely for PRIDE internal developers)",
-)
-@click.option(
     "-p",
     "--protocol",
     default="ftp",
     help="Protocol to be used to download files either by ftp or aspera or from globus. Default is ftp",
-)
-@click.option(
-    "-i", "--input_folder", required=False, help="Input folder to copy the raw files"
 )
 @click.option(
     "-o",
@@ -39,7 +28,7 @@ def main():
     help="output folder to download or copy raw files",
 )
 def download_all_raw_files(
-    accession, copy_from_file_system, protocol, input_folder, output_folder
+    accession, protocol, output_folder
 ):
     """
     This script download raw files from FTP or copy from the file system
@@ -49,25 +38,13 @@ def download_all_raw_files(
 
     logging.info("accession: " + accession)
 
-    if not copy_from_file_system:
-        logging.info(f"Data will be downloaded from {protocol}")
-        raw_files.download_all_raw_files(accession, output_folder, protocol)
-    else:
-        logging.info("Data will be copied from file system " + output_folder)
-        raw_files.copy_raw_files_from_dir(accession, input_folder)
+    logging.info(f"Data will be downloaded from {protocol}")
+    raw_files.download_all_raw_files(accession, output_folder, protocol)
+
 
 
 @main.command()
 @click.option("-a", "--accession", required=True, help="PRIDE project accession")
-@click.option(
-    "-cpf",
-    "--copy_from_file_system",
-    type=bool,
-    default=False,
-    required=False,
-    help="Copy from file system, If enabled copy from files from local pride file system "
-    "(This is purely for PRIDE internal developers)",
-)
 @click.option(
     "-p",
     "--protocol",
@@ -76,16 +53,13 @@ def download_all_raw_files(
 )
 @click.option("-f", "--file_name", required=True, help="fileName to be downloaded")
 @click.option(
-    "-i", "--input_folder", required=False, help="Input folder to copy the files"
-)
-@click.option(
     "-o",
     "--output_folder",
     required=True,
     help="output folder to download or copy files",
 )
 def download_files_by_name(
-    accession, copy_from_file_system, protocol, file_name, input_folder, output_folder
+    accession, protocol, file_name, output_folder
 ):
     """
     This script download single file from servers or copy from the file system
@@ -95,13 +69,8 @@ def download_files_by_name(
 
     logging.info("accession: " + accession)
 
-    if not copy_from_file_system:
-        logging.info(f"Data will be downloaded from {protocol}")
-        raw_files.download_file_by_name(accession, file_name, output_folder, protocol)
-    else:
-        logging.info("Data will be copied from file system " + output_folder)
-        raw_files.copy_file_from_dir_by_name(accession, file_name, input_folder)
-
+    logging.info(f"Data will be downloaded from {protocol}")
+    raw_files.download_file_by_name(accession, file_name, output_folder, protocol)
 
 @main.command()
 @click.option(
