@@ -42,9 +42,10 @@ The PRIDE Archive storages an extensive collection of proteomics data [@Perez-Ri
 - The main use case and functionality of pridepy is file downloading from PRIDE Archive (**Figure 1**). PRIDE archive stores the data in a S3-like storage system, called FIRE [@Thakur2024-zu] which also includes other major EMBL-EBI archives such as ENA (European Nucleotide Archive) and EGA (European Genome-phenome Archive). FIRE data is accessible via multiple protocols including FTP, Aspera, S3 and Globus. The pridepy client provides a simple command line interface to download files from PRIDE Archive using these protocols. Each protocol offers different advantages:
   - FTP: Widely supported and easy to use
   - Aspera: High-speed file transfers, especially for large files or over long distances
-  - S3: Direct access to cloud storage, useful for cloud-based workflows
-  - Globus: Reliable transfers for very large datasets, with pause and resume capabilities
-For private datasets, only S3 is supported and users need to provide submitter or reviewer credentials to access the data.
+  - S3 streaming: Easy to download private datasets and stream small files
+  - Globus: Reliable transfers for very large datasets. 
+
+For private datasets, only S3 streaming is supported and users need to provide submitter or reviewer credentials to access the data.
 
 The client is available on [PyPI](https://pypi.org/project/pridepy/) and can be installed using `pip`. The source code is hosted on [GitHub](https://github.com/bigbio/pridepy) and is open-source under the Apache 2.0 license. In addition, a conda recipe is available for easy installation in conda environments. The package is continuously tested using GitHub Actions and has been successfully deployed on the EMBL-EBI HPC cluster. 
 
@@ -53,6 +54,7 @@ The client is available on [PyPI](https://pypi.org/project/pridepy/) and can be 
 # Downloading files from PRIDE Archive
 
 Users can download files from PRIDE Archive using the following command options: `download-all-raw-files` and `download-files-by-name`. The `download-all-raw-files` command downloads all raw files from a dataset, while the `download-files-by-name` command downloads a single file by name. Users can specify the output directory, protocol (FTP, Aspera, S3, or Globus), and other options to customize the download process. pridepy implements robust error handling and retry mechanisms to ensure successful downloads, especially for large datasets or unstable network connections. One example of downloading all raw files using Aspera from a dataset is shown below:
+
 ```bash
 $ pridepy download-all-raw-files -a PXD012353 -o /Users/yourname/Downloads/foldername/ -p aspera
 ```
