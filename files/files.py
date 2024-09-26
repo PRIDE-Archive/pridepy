@@ -18,6 +18,16 @@ from tqdm import tqdm
 from util.api_handling import Util
 
 
+class Progress:
+    def __init__(self, total_size, file_name):
+        self.pbar = tqdm(total=total_size, unit='B', unit_scale=True, desc="Downloading {}".format(file_name))
+
+    def __call__(self, bytes_amount):
+        self.pbar.update(bytes_amount)
+
+    def close(self):
+        self.pbar.close()
+
 class Files:
     """
     This class handles PRIDE API files endpoint.
@@ -222,7 +232,7 @@ class Files:
     @staticmethod
     def download_files_from_s3(file_list_json, output_folder):
         """
-        Download files using s3 transfer url
+        Download files using s3 transfer url with progress bar for each file
         :param file_list_json: file list in json format
         :param output_folder: folder to download the files
         """
@@ -235,6 +245,7 @@ class Files:
             config=Config(signature_version=botocore.UNSIGNED),
             endpoint_url=Files.S3_URL,
         )
+
         for file in file_list_json:
             try:
                 bucket = s3_resource.Bucket(Files.S3_BUCKET)
@@ -245,13 +256,24 @@ class Files:
 
                 ftp_base_url = "ftp://ftp.pride.ebi.ac.uk/pride/data/archive/"
                 s3_path = download_url.replace(ftp_base_url, "")
-                new_file_path = Files.get_output_file_name(
-                    download_url, file, output_folder
-                )
+                new_file_path = Files.get_output_file_name(download_url, file, output_folder)
+
                 logging.debug(f"Downloading From S3: {s3_path}")
-                bucket.download_file(s3_path, new_file_path)
+
+                # Get the file size for progress tracking
+                obj = bucket.Object(s3_path)
+                total_size = obj.content_length
+
+                # Initialize progress bar
+                progress = Progress(total_size, new_file_path)
+
+                # Download with progress bar
+                bucket.download_file(s3_path, new_file_path, Callback=progress)
+
+                progress.close()
+
                 logging.info(f"Successfully downloaded {new_file_path}")
-                before_last_slash, _, _ = s3_path.rpartition("/")
+
             except botocore.exceptions.ClientError as e:
                 if e.response["Error"]["Code"] == "404":
                     print("The object does not exist.")
