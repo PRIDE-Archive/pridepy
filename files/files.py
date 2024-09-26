@@ -116,38 +116,44 @@ class Files:
     @staticmethod
     def download_files_from_ftp(file_list_json, output_folder):
         """
-        Download files using ftp transfer url
+        Download files using ftp transfer url with progress bar for each file
         :param file_list_json: file list in json format
         :param output_folder: folder to download the files
         """
-        for file in file_list_json:
-            if file["publicFileLocations"][0]["name"] == "FTP Protocol":
-                download_url = file["publicFileLocations"][0]["value"]
-            else:
-                download_url = file["publicFileLocations"][1]["value"]
-            logging.debug("ftp_filepath:" + download_url)
-            new_file_path = Files.get_output_file_name(
-                download_url, file, output_folder
-            )
-            with urllib.request.urlopen(download_url) as response, open(
-                new_file_path, "wb"
-            ) as out_file:
-                shutil.copyfileobj(response, out_file)
 
-            with tqdm(
-                unit="B",
-                unit_scale=True,
-                unit_divisor=1024,
-                miniters=1,
-                desc=file["accession"],
-            ) as progress_bar:
+        if not (os.path.isdir(output_folder)):
+            os.mkdir(output_folder)
+
+        for file in file_list_json:
+            try:
+                if file["publicFileLocations"][0]["name"] == "FTP Protocol":
+                    download_url = file["publicFileLocations"][0]["value"]
+                else:
+                    download_url = file["publicFileLocations"][1]["value"]
+
+                logging.debug("ftp_filepath:" + download_url)
+
+                new_file_path = Files.get_output_file_name(download_url, file, output_folder)
+
+                # Fetch the total file size from the headers for progress tracking
+                with urllib.request.urlopen(download_url) as response:
+                    total_size = int(response.headers.get("Content-Length", 0))
+
+                # Initialize progress bar
+                progress = Progress(total_size, new_file_path)
+
+                # Download with progress bar
                 urllib.request.urlretrieve(
                     download_url,
                     new_file_path,
-                    reporthook=lambda blocks, block_size, total_size: progress_bar.update(
-                        block_size
-                    ),
+                    reporthook=lambda blocks, block_size, total_size: progress(block_size)
                 )
+
+                progress.close()
+                logging.info(f"Successfully downloaded {new_file_path}")
+
+            except Exception as e:
+                logging.error(f"Failed to download {new_file_path}: {str(e)}")
 
     @staticmethod
     def get_output_file_name(download_url, file, output_folder):
@@ -202,32 +208,48 @@ class Files:
     @staticmethod
     def download_files_from_globus(file_list_json, output_folder):
         """
-        Download files using globus transfer url
+        Download files using globus transfer url with progress bar for each file
         :param file_list_json: file list in json format
         :param output_folder: folder to download the files
         """
+
+        if not (os.path.isdir(output_folder)):
+            os.mkdir(output_folder)
+
         for file in file_list_json:
-            if file["publicFileLocations"][0]["name"] == "FTP Protocol":
-                download_url = file["publicFileLocations"][0]["value"]
-            else:
-                download_url = file["publicFileLocations"][1]["value"]
-            logging.debug(f"Downloading fron Globus: {download_url}")
-            ftp_base_url = "ftp://ftp.pride.ebi.ac.uk/"
-            globus_base_url = "https://g-a8b222.dd271.03c0.data.globus.org/"
-            download_url = download_url.replace(ftp_base_url, globus_base_url)
-            # Globus download using urllib
-            logging.debug(f"Downloading From Globus: {download_url}")
-            # Create a clean filename to save the downloaded file
-            new_file_path = Files.get_output_file_name(
-                download_url, file, output_folder
-            )
             try:
-                urllib.request.urlretrieve(download_url, new_file_path)
-                logging.info(f"Successfully downloaded {new_file_path}")
-            except Exception as e:
-                logging.error(
-                    f"Download from globus failed for {new_file_path}: {str(e)}"
+                if file["publicFileLocations"][0]["name"] == "FTP Protocol":
+                    download_url = file["publicFileLocations"][0]["value"]
+                else:
+                    download_url = file["publicFileLocations"][1]["value"]
+
+                logging.debug(f"Downloading from Globus: {download_url}")
+                ftp_base_url = "ftp://ftp.pride.ebi.ac.uk/"
+                globus_base_url = "https://g-a8b222.dd271.03c0.data.globus.org/"
+                download_url = download_url.replace(ftp_base_url, globus_base_url)
+
+                # Create a clean filename to save the downloaded file
+                new_file_path = Files.get_output_file_name(download_url, file, output_folder)
+
+                # Get total file size for progress tracking
+                with urllib.request.urlopen(download_url) as response:
+                    total_size = int(response.headers.get("Content-Length", 0))
+
+                # Initialize progress bar
+                progress = Progress(total_size, new_file_path)
+
+                # Download the file with progress bar
+                urllib.request.urlretrieve(
+                    download_url,
+                    new_file_path,
+                    reporthook=lambda blocks, block_size, total_size: progress(block_size)
                 )
+
+                progress.close()
+                logging.info(f"Successfully downloaded {new_file_path}")
+
+            except Exception as e:
+                logging.error(f"Download from Globus failed for {new_file_path}: {str(e)}")
 
     @staticmethod
     def download_files_from_s3(file_list_json, output_folder):
