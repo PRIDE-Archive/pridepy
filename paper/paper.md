@@ -28,8 +28,11 @@ bibliography: paper.bib
 ---
 
 # Summary
+# Summary
 
 `pridepy` is a Python client designed to access the PRIDE Archive `[@Perez-Riverol2022-ow]`, a major public repository for proteomics data. The `pridepy` provides a flexible, programmatic interface to search, retrieve, and download data from the PRIDE Archive via its REST API. This tool simplifies the integration of PRIDE data into bioinformatics pipelines, making it easier for researchers to access large datasets programmatically.
+
+`pridepy` can be easily installed using pip:
 
 # Statement of Need
 
