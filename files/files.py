@@ -143,11 +143,8 @@ class Files:
     def get_output_file_name(download_url, file, output_folder):
         public_filepath_part = download_url.rsplit("/", 1)
         logging.debug(file["accession"] + " -> " + public_filepath_part[1])
-        import uuid
-
-        unique_id = str(uuid.uuid4())[:8]
         new_file_path = os.path.join(
-            output_folder, f"{file['accession']}-{unique_id}-{public_filepath_part[1]}"
+            output_folder, f"{public_filepath_part[1]}"
         )
         return new_file_path
 
