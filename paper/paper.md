@@ -56,7 +56,10 @@ The client is available on [PyPI](https://pypi.org/project/pridepy/) and can be 
 Users can download files from PRIDE Archive using the following command options: `download-all-raw-files` and `download-files-by-name`. The `download-all-raw-files` command downloads all raw files from a dataset, while the `download-files-by-name` command downloads a single file by name. Users can specify the output directory, protocol (FTP, Aspera, S3, or Globus), and other options to customize the download process. pridepy implements robust error handling and retry mechanisms to ensure successful downloads, especially for large datasets or unstable network connections. One example of downloading all raw files using Aspera from a dataset is shown below:
 
 ```bash
-$ pridepy download-all-raw-files -a PXD012353 -o /Users/yourname/Downloads/foldername/ -p aspera
+$ pridepy download-all-raw-files \
+  -a PXD012353 \
+  -o /Users/yourname/Downloads/foldername/ \
+  -p aspera
 ```
 
 This makes the client suitable for handling large-scale proteomics data in automated workflows, particularly in environments requiring bulk downloads of proteomics datasets.
