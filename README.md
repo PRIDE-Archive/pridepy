@@ -51,7 +51,7 @@ $ pridepy download-files-by-name -a PXD022105 -o /Users/yourname/Downloads/folde
 $ pridepy download-files-by-name -a PXD022105 -o /Users/yourname/Downloads/foldername/ -f checksum.txt -p globus
 ```
 
-Please note : Currently we use globus urls ( when -p globus is used) via https not globus protocol.
+Please note: Currently we use globus urls ( when -p globus is used) via https not globus protocol.
 
 Search projects with keywords and filters
 
