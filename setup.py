@@ -25,7 +25,7 @@ setup(
         "plotly",
         "tqdm",
         "boto3",
-        "botocore"
+        "botocore",
     ],
     entry_points="""
         [console_scripts]

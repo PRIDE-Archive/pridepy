@@ -4,12 +4,8 @@ import logging
 import os
 import click
 import requests
-
-from authentication.authentication import Authentication
 from files.files import Files
-from msrun.msrun import MsRun
 from project.project import Project
-from util.file_handling import FileHanding
 
 
 @click.group()
@@ -105,29 +101,6 @@ def download_files_by_name(
     else:
         logging.info("Data will be copied from file system " + output_folder)
         raw_files.copy_file_from_dir_by_name(accession, file_name, input_folder)
-
-
-@main.command()
-@click.option("-f", "--filename", required=True, help="Metadata file")
-@click.option("-u", "--username", required=True, help="PRIDE account username")
-@click.option("-p", "--password", required=True, help="PRIDE account password")
-def update_metadata(filename, username, password):
-    """
-    Update extracted metadata from raw files into MongoDB
-    :return:
-    """
-
-    # Get user token to make calls with PRIDE API
-    authentication = Authentication()
-    token = authentication.get_token(username, password)
-
-    # Format extracted metadata to compatible with PRIDE API endpoint
-    file_handling = FileHanding()
-    file_handling.wrap_with_ms_run_metadata(filename)
-
-    # Update msrun metatdata
-    msrun = MsRun()
-    msrun.update_msrun_metadata(filename, token)
 
 
 @main.command()

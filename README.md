@@ -7,10 +7,23 @@
 Python Client library for PRIDE Rest API
 
 # Installation
+
+## From PyPI
+
 To install, simply use `pip`:
 
 ```bash
 $ pip install --upgrade pridepy
+```
+
+## From Source
+
+First, clone the repository on your local machine and then install the package using `pip`:
+
+```bash
+$ git clone https://github.com/bigbio/pridepy 
+$ cd pridepy
+$ pip install .
 ```
 
 # Examples
@@ -71,10 +84,7 @@ $ python3 pridepy.py --help
   get-projects-by-accession       
   get-reanalysis-projects-by-accession
   get-similar-projects-by-accession
-  search-peptide-evidences        
-  search-projects-by-keywords-and-filters
-  search-protein-evidences       
-  update-metadata                 
+  search-projects-by-keywords-and-filters                 
 
 ```
 
@@ -84,4 +94,6 @@ Please make sure you are using Python3, not Python 2.7 version.
 
 # Citation
 
-Selvakumar Kamatchinathan, Suresh Hewapathirana, Yasset Perez-Riverol. (2021, January 28). pridepy: python client for the PRIDE Archive database (Version v0.0.2). [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.4475414.svg)](https://doi.org/10.5281/zenodo.4475414)
+Selvakumar Kamatchinathan, Suresh Hewapathirana, Yasset Perez-Riverol. (2021, January 28). pridepy: python client for the PRIDE Archive database (Version v0.0.2). 
+
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.4475414.svg)](https://doi.org/10.5281/zenodo.4475414)
