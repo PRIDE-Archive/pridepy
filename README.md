@@ -71,10 +71,7 @@ $ python3 pridepy.py --help
   get-projects-by-accession       
   get-reanalysis-projects-by-accession
   get-similar-projects-by-accession
-  search-peptide-evidences        
-  search-projects-by-keywords-and-filters
-  search-protein-evidences       
-  update-metadata                 
+  search-projects-by-keywords-and-filters                 
 
 ```
 
@@ -84,4 +81,6 @@ Please make sure you are using Python3, not Python 2.7 version.
 
 # Citation
 
-Selvakumar Kamatchinathan, Suresh Hewapathirana, Yasset Perez-Riverol. (2021, January 28). pridepy: python client for the PRIDE Archive database (Version v0.0.2). [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.4475414.svg)](https://doi.org/10.5281/zenodo.4475414)
+Selvakumar Kamatchinathan, Suresh Hewapathirana, Yasset Perez-Riverol. (2021, January 28). pridepy: python client for the PRIDE Archive database (Version v0.0.2). 
+
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.4475414.svg)](https://doi.org/10.5281/zenodo.4475414)
