@@ -1,11 +1,10 @@
 #!/usr/bin/env python
 
-import glob
+import importlib.resources
 import logging
 import os
 import platform
 import re
-import shutil
 import subprocess
 import urllib
 import urllib.request
@@ -15,7 +14,7 @@ import botocore
 from botocore.config import Config
 from tqdm import tqdm
 
-from util.api_handling import Util
+from pridepy.util.api_handling import Util
 
 
 class Progress:
@@ -175,7 +174,8 @@ class Files:
         :param output_folder: folder to download the files
         """
         ascp_path = Files.get_ascp_binary()
-        key_path = os.path.abspath("aspera/key/asperaweb_id_dsa.openssh")
+        key_full_path = importlib.resources.files('pridepy').joinpath('aspera/key/asperaweb_id_dsa.openssh')
+        key_path = os.path.abspath(key_full_path)
         for file in file_list_json:
             if file["publicFileLocations"][0]["name"] == "Aspera Protocol":
                 download_url = file["publicFileLocations"][0]["value"]
@@ -356,27 +356,6 @@ class Files:
             raise Exception("File not found" + str(e))
 
     @staticmethod
-    def copy_from_dir(complete_source_dir, file_list_from_dir, file_list_json):
-        """
-        Copy files from nfs directory
-        :param complete_source_dir: nfs directory
-        :param file_list_from_dir: files to copy
-        :param file_list_json: file list from api
-        :return:
-        """
-        for file in file_list_json:
-            ftp_filepath = file["publicFileLocations"][0]["value"]
-            file_name_from_ftp = ftp_filepath.rsplit("/", 1)[1]
-            if file_name_from_ftp in file_list_from_dir:
-                source_file = complete_source_dir + file_name_from_ftp
-                destination_file = file["accession"] + "-" + file_name_from_ftp
-                shutil.copy2(source_file, destination_file)
-            else:
-                logging.error(
-                    file_name_from_ftp + " not found in " + complete_source_dir
-                )
-
-    @staticmethod
     def get_ascp_binary():
         """
         Detect the OS and architecture, and return the appropriate ascp binary path.
@@ -386,7 +365,7 @@ class Files:
         """
         os_type = platform.system().lower()
         arch, _ = platform.architecture()
-        aspera_dir = os.path.abspath("aspera/")
+        aspera_dir = importlib.resources.files('pridepy').joinpath('aspera/')
 
         if os_type == "linux":
             if arch == "32bit":

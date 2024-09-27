@@ -1,7 +1,7 @@
 import plotly
 import plotly.graph_objs as go
 
-from util.api_handling import Util
+from pridepy.util.api_handling import Util
 
 base_url = "https://www.ebi.ac.uk/pride/ws/archive/v2/"
 

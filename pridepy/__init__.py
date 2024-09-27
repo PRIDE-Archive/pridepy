@@ -1,0 +1,1 @@
+from .pridepy import main

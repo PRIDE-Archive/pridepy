@@ -4,8 +4,8 @@ import logging
 import os
 import click
 import requests
-from files.files import Files
-from project.project import Project
+from pridepy.files.files import Files
+from pridepy.project.project import Project
 
 
 @click.group()
@@ -422,7 +422,7 @@ def download_private_files(accession, user, password, location):
                 for chunk in r.iter_content(chunk_size=8192):
                     # If you have chunk encoded response uncomment if
                     # and set chunk_size parameter to None.
-                    # if chunk:
+                    # if chunked:
                     f.write(chunk)
 
 

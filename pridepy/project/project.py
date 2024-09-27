@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from util.api_handling import Util
+from pridepy.util.api_handling import Util
 
 
 class Project:

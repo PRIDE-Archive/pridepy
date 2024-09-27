@@ -1,6 +1,6 @@
 from unittest import TestCase
 
-from files.files import Files
+from pridepy.files.files import Files
 
 
 class TestRawFiles(TestCase):

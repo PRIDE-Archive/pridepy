@@ -5,4 +5,4 @@ include README.md
 include LICENSE
 
 # Include the data files
-recursive-include aspera *
+recursive-include pridepy *
