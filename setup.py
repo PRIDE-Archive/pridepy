@@ -27,6 +27,11 @@ setup(
         "boto3",
         "botocore",
     ],
+    include_package_data=True,
+    package_data={
+        "": ["*.txt", "*.md"],  # Include text or markdown files from any package
+        "aspera": ["**/*"],  # Include all files from the aspera directory
+    },
     entry_points="""
         [console_scripts]
         pridepy=pridepy:main

@@ -1,21 +1,40 @@
 #!/usr/bin/env python
 
-import glob
+import importlib.resources
 import logging
 import os
 import platform
 import re
-import shutil
 import subprocess
 import urllib
 import urllib.request
+from typing import Dict
 
 import boto3
 import botocore
 from botocore.config import Config
 from tqdm import tqdm
 
-from util.api_handling import Util
+from pridepy.util.api_handling import Util
+
+
+class Progress:
+    def __init__(self, total_size, file_name):
+        self.pbar = tqdm(
+            total=total_size,
+            unit="B",
+            unit_scale=True,
+            desc="Downloading {}".format(file_name),
+        )
+
+    def __call__(self, bytes_amount):
+        self.pbar.update(bytes_amount)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.pbar.close()
 
 
 class Files:
@@ -87,12 +106,15 @@ class Files:
         response = Util.get_api_call(request_url, headers)
         return response.json()
 
-    def download_all_raw_files(self, accession, output_folder, protocol):
+    def download_all_raw_files(
+        self, accession, output_folder, protocol, aspera_maximum_bandwidth: str
+    ):
         """
         This method will download all the raw files from PRIDE PROJECT
         :param output_folder: output directory where raw files will get saved
         :param accession: PRIDE accession
         :param protocol: ftp, aspera, globus
+        :param aspera_maximum_bandwidth: Aspera maximum bandwidth
         :return: None
         """
 
@@ -101,62 +123,81 @@ class Files:
 
         response_body = self.get_all_raw_file_list(accession)
 
-        self.download_files(response_body, output_folder, protocol)
+        self.download_files(
+            response_body,
+            output_folder,
+            protocol,
+            aspera_maximum_bandwidth=aspera_maximum_bandwidth,
+        )
 
     @staticmethod
     def download_files_from_ftp(file_list_json, output_folder):
         """
-        Download files using ftp transfer url
+        Download files using ftp transfer url with progress bar for each file
         :param file_list_json: file list in json format
         :param output_folder: folder to download the files
         """
-        for file in file_list_json:
-            if file["publicFileLocations"][0]["name"] == "FTP Protocol":
-                download_url = file["publicFileLocations"][0]["value"]
-            else:
-                download_url = file["publicFileLocations"][1]["value"]
-            logging.debug("ftp_filepath:" + download_url)
-            new_file_path = Files.get_output_file_name(
-                download_url, file, output_folder
-            )
-            with urllib.request.urlopen(download_url) as response, open(
-                new_file_path, "wb"
-            ) as out_file:
-                shutil.copyfileobj(response, out_file)
 
-            with tqdm(
-                unit="B",
-                unit_scale=True,
-                unit_divisor=1024,
-                miniters=1,
-                desc=file["accession"],
-            ) as progress_bar:
+        if not (os.path.isdir(output_folder)):
+            os.mkdir(output_folder)
+
+        for file in file_list_json:
+            try:
+                if file["publicFileLocations"][0]["name"] == "FTP Protocol":
+                    download_url = file["publicFileLocations"][0]["value"]
+                else:
+                    download_url = file["publicFileLocations"][1]["value"]
+
+                logging.debug("ftp_filepath:" + download_url)
+
+                new_file_path = Files.get_output_file_name(
+                    download_url, file, output_folder
+                )
+
+                # Fetch the total file size from the headers for progress tracking
+                with urllib.request.urlopen(download_url, timeout=30) as response:
+                    total_size = int(response.headers.get("Content-Length", 0))
+
+                # Initialize progress bar
+                progress = Progress(total_size, new_file_path)
+
+                # Download with progress bar
                 urllib.request.urlretrieve(
                     download_url,
                     new_file_path,
-                    reporthook=lambda blocks, block_size, total_size: progress_bar.update(
+                    reporthook=lambda blocks, block_size, total_size: progress(
                         block_size
                     ),
                 )
+
+                progress.close()
+                logging.info(f"Successfully downloaded {new_file_path}")
+
+            except Exception as e:
+                logging.error(f"Failed to download {new_file_path}: {str(e)}")
 
     @staticmethod
     def get_output_file_name(download_url, file, output_folder):
         public_filepath_part = download_url.rsplit("/", 1)
         logging.debug(file["accession"] + " -> " + public_filepath_part[1])
-        new_file_path = os.path.join(
-            output_folder, f"{public_filepath_part[1]}"
-        )
+        new_file_path = os.path.join(output_folder, f"{public_filepath_part[1]}")
         return new_file_path
 
     @staticmethod
-    def download_files_from_aspera(file_list_json, output_folder):
+    def download_files_from_aspera(
+        file_list_json: Dict, output_folder: str, maximum_bandwidth: str = "100M"
+    ):
         """
         Download files using aspera transfer url
         :param file_list_json: file list in json format
         :param output_folder: folder to download the files
+        :param maximum_bandwidth: parameter in Aspera sets the maximum bandwidth for the transfer.
         """
         ascp_path = Files.get_ascp_binary()
-        key_path = os.path.abspath("aspera/key/asperaweb_id_dsa.openssh")
+        key_full_path = importlib.resources.files("pridepy").joinpath(
+            "aspera/key/asperaweb_id_dsa.openssh"
+        )
+        key_path = os.path.abspath(key_full_path)
         for file in file_list_json:
             if file["publicFileLocations"][0]["name"] == "Aspera Protocol":
                 download_url = file["publicFileLocations"][0]["value"]
@@ -177,7 +218,7 @@ class Files:
                         "-P",
                         "33001",
                         "-l",
-                        "100M",  # Options for Aspera: adjust as necessary
+                        maximum_bandwidth,  # Options for Aspera: adjust as necessary
                         "-i",
                         key_path,
                         download_url,
@@ -192,37 +233,59 @@ class Files:
     @staticmethod
     def download_files_from_globus(file_list_json, output_folder):
         """
-        Download files using globus transfer url
+        Download files using globus transfer url with progress bar for each file
         :param file_list_json: file list in json format
         :param output_folder: folder to download the files
         """
+
+        if not (os.path.isdir(output_folder)):
+            os.mkdir(output_folder)
+
         for file in file_list_json:
-            if file["publicFileLocations"][0]["name"] == "FTP Protocol":
-                download_url = file["publicFileLocations"][0]["value"]
-            else:
-                download_url = file["publicFileLocations"][1]["value"]
-            logging.debug(f"Downloading fron Globus: {download_url}")
-            ftp_base_url = "ftp://ftp.pride.ebi.ac.uk/"
-            globus_base_url = "https://g-a8b222.dd271.03c0.data.globus.org/"
-            download_url = download_url.replace(ftp_base_url, globus_base_url)
-            # Globus download using urllib
-            logging.debug(f"Downloading From Globus: {download_url}")
-            # Create a clean filename to save the downloaded file
-            new_file_path = Files.get_output_file_name(
-                download_url, file, output_folder
-            )
             try:
-                urllib.request.urlretrieve(download_url, new_file_path)
+                if file["publicFileLocations"][0]["name"] == "FTP Protocol":
+                    download_url = file["publicFileLocations"][0]["value"]
+                else:
+                    download_url = file["publicFileLocations"][1]["value"]
+
+                logging.debug(f"Downloading from Globus: {download_url}")
+                ftp_base_url = "ftp://ftp.pride.ebi.ac.uk/"
+                globus_base_url = "https://g-a8b222.dd271.03c0.data.globus.org/"
+                download_url = download_url.replace(ftp_base_url, globus_base_url)
+
+                # Create a clean filename to save the downloaded file
+                new_file_path = Files.get_output_file_name(
+                    download_url, file, output_folder
+                )
+
+                # Get total file size for progress tracking
+                with urllib.request.urlopen(download_url) as response:
+                    total_size = int(response.headers.get("Content-Length", 0))
+
+                # Initialize progress bar
+                progress = Progress(total_size, new_file_path)
+
+                # Download the file with progress bar
+                urllib.request.urlretrieve(
+                    download_url,
+                    new_file_path,
+                    reporthook=lambda blocks, block_size, total_size: progress(
+                        block_size
+                    ),
+                )
+
+                progress.close()
                 logging.info(f"Successfully downloaded {new_file_path}")
+
             except Exception as e:
                 logging.error(
-                    f"Download from globus failed for {new_file_path}: {str(e)}"
+                    f"Download from Globus failed for {new_file_path}: {str(e)}"
                 )
 
     @staticmethod
     def download_files_from_s3(file_list_json, output_folder):
         """
-        Download files using s3 transfer url
+        Download files using s3 transfer url with progress bar for each file
         :param file_list_json: file list in json format
         :param output_folder: folder to download the files
         """
@@ -235,6 +298,7 @@ class Files:
             config=Config(signature_version=botocore.UNSIGNED),
             endpoint_url=Files.S3_URL,
         )
+
         for file in file_list_json:
             try:
                 bucket = s3_resource.Bucket(Files.S3_BUCKET)
@@ -248,10 +312,23 @@ class Files:
                 new_file_path = Files.get_output_file_name(
                     download_url, file, output_folder
                 )
+
                 logging.debug(f"Downloading From S3: {s3_path}")
-                bucket.download_file(s3_path, new_file_path)
+
+                # Get the file size for progress tracking
+                obj = bucket.Object(s3_path)
+                total_size = obj.content_length
+
+                # Initialize progress bar
+                progress = Progress(total_size, new_file_path)
+
+                # Download with progress bar
+                bucket.download_file(s3_path, new_file_path, Callback=progress)
+
+                progress.close()
+
                 logging.info(f"Successfully downloaded {new_file_path}")
-                before_last_slash, _, _ = s3_path.rpartition("/")
+
             except botocore.exceptions.ClientError as e:
                 if e.response["Error"]["Code"] == "404":
                     print("The object does not exist.")
@@ -273,19 +350,27 @@ class Files:
         path_fragment = re.search(r"\d{4}/\d{2}/PXD\d*", first_file).group()
         return path_fragment
 
-    def download_file_by_name(self, accession, file_name, output_folder, protocol):
+    def download_file_by_name(
+        self, accession, file_name, output_folder, protocol, aspera_maximum_bandwidth
+    ):
         """
         Download files from url
         :param accession: PRIDE accession
         :param file_name: file name to download
         :param output_folder: folder to download the files
         :param protocol: ftp, aspera, globus
+        :param aspera_maximum_bandwidth: Aspera maximum bandwidth
         """
 
         if not (os.path.isdir(output_folder)):
             os.mkdir(output_folder)
         response = self.get_file_from_api(accession, file_name)
-        self.download_files(response, output_folder, protocol)
+        self.download_files(
+            response,
+            output_folder,
+            protocol,
+            aspera_maximum_bandwidth=aspera_maximum_bandwidth,
+        )
 
     def get_file_from_api(self, accession, file_name):
         """
@@ -309,27 +394,6 @@ class Files:
             raise Exception("File not found" + str(e))
 
     @staticmethod
-    def copy_from_dir(complete_source_dir, file_list_from_dir, file_list_json):
-        """
-        Copy files from nfs directory
-        :param complete_source_dir: nfs directory
-        :param file_list_from_dir: files to copy
-        :param file_list_json: file list from api
-        :return:
-        """
-        for file in file_list_json:
-            ftp_filepath = file["publicFileLocations"][0]["value"]
-            file_name_from_ftp = ftp_filepath.rsplit("/", 1)[1]
-            if file_name_from_ftp in file_list_from_dir:
-                source_file = complete_source_dir + file_name_from_ftp
-                destination_file = file["accession"] + "-" + file_name_from_ftp
-                shutil.copy2(source_file, destination_file)
-            else:
-                logging.error(
-                    file_name_from_ftp + " not found in " + complete_source_dir
-                )
-
-    @staticmethod
     def get_ascp_binary():
         """
         Detect the OS and architecture, and return the appropriate ascp binary path.
@@ -339,7 +403,7 @@ class Files:
         """
         os_type = platform.system().lower()
         arch, _ = platform.architecture()
-        aspera_dir = os.path.abspath("aspera/")
+        aspera_dir = importlib.resources.files("pridepy").joinpath("aspera/")
 
         if os_type == "linux":
             if arch == "32bit":
@@ -357,12 +421,18 @@ class Files:
             raise OSError(f"Unsupported OS or architecture: {os_type}, {arch}")
 
     @staticmethod
-    def download_files(file_list_json, output_folder, protocol="ftp"):
+    def download_files(
+        file_list_json,
+        output_folder: str,
+        protocol: str = "ftp",
+        aspera_maximum_bandwidth: str = "100M",
+    ):
         """
         Download files using either FTP or Aspera transfer protocol.
         :param file_list_json: File list in JSON format
         :param output_folder: Folder to download the files
         :param protocol: ftp, aspera, globus
+        :param aspera_maximum_bandwidth: parameter in Aspera sets the maximum bandwidth for the transfer.
         """
         protocols_supported = ["ftp", "aspera", "globus", "s3"]
         if protocol not in protocols_supported:
@@ -372,7 +442,11 @@ class Files:
         if protocol == "ftp":
             Files.download_files_from_ftp(file_list_json, output_folder)
         elif protocol == "aspera":
-            Files.download_files_from_aspera(file_list_json, output_folder)
+            Files.download_files_from_aspera(
+                file_list_json,
+                output_folder,
+                maximum_bandwidth=aspera_maximum_bandwidth,
+            )
         elif protocol == "globus":
             Files.download_files_from_globus(file_list_json, output_folder)
         elif protocol == "s3":

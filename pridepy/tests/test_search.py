@@ -1,7 +1,7 @@
 from unittest import TestCase
 
-from files.files import Files
-from project.project import Project
+from pridepy.files.files import Files
+from pridepy.project.project import Project
 
 
 class TestSearch(TestCase):
