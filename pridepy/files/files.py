@@ -185,7 +185,7 @@ class Files:
 
     @staticmethod
     def download_files_from_aspera(
-        file_list_json: Dict, output_folder: str, maximum_bandwidth: str = "50M"
+        file_list_json: Dict, output_folder: str, maximum_bandwidth: str = "100M"
     ):
         """
         Download files using aspera transfer url
@@ -425,7 +425,7 @@ class Files:
         file_list_json,
         output_folder: str,
         protocol: str = "ftp",
-        aspera_maximum_bandwidth: str = "50M",
+        aspera_maximum_bandwidth: str = "100M",
     ):
         """
         Download files using either FTP or Aspera transfer protocol.
