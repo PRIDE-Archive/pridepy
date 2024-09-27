@@ -30,7 +30,8 @@ def main():
 @click.option(
     "--aspera_maximum_bandwidth",
     required=False,
-    help="Aspera maximum bandwidth (e.g 50M, 100M, 200M), depending on the user's network bandwidth",
+    help="Aspera maximum bandwidth (e.g 50M, 100M, 200M), depending on the user's network bandwidth, default is 100M",
+    default="100M",
 )
 def download_all_raw_files(
     accession, protocol, output_folder, aspera_maximum_bandwidth: str = "50M"
@@ -44,13 +45,15 @@ def download_all_raw_files(
     logging.info("accession: " + accession)
 
     logging.info(f"Data will be downloaded from {protocol}")
+    if protocol == "aspera":
+        logging.info(f"Aspera maximum bandwidth: {aspera_maximum_bandwidth}")
+
     raw_files.download_all_raw_files(
         accession,
         output_folder,
         protocol,
         aspera_maximum_bandwidth=aspera_maximum_bandwidth,
     )
-
 
 @main.command()
 @click.option("-a", "--accession", required=True, help="PRIDE project accession")
@@ -70,7 +73,8 @@ def download_all_raw_files(
 @click.option(
     "--aspera_maximum_bandwidth",
     required=False,
-    help="Aspera maximum bandwidth (e.g 50M, 100M, 200M), depending on the user's network bandwidth",
+    help="Aspera maximum bandwidth (e.g 50M, 100M, 200M), depending on the user's network bandwidth, default is 100M",
+    default="100M",
 )
 def download_files_by_name(
     accession, protocol, file_name, output_folder, aspera_maximum_bandwidth: str = "50M"
@@ -84,6 +88,9 @@ def download_files_by_name(
     logging.info("accession: " + accession)
 
     logging.info(f"Data will be downloaded from {protocol}")
+    if protocol == "aspera":
+        logging.info(f"Aspera maximum bandwidth: {aspera_maximum_bandwidth}")
+
     raw_files.download_file_by_name(
         accession,
         file_name,
