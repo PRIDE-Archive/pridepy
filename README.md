@@ -38,7 +38,7 @@ Warning: Raw files are generally large in size, so it may take some time to down
    - **globus**: globus protocol
 
 ```python
-$ pridepy download-all-raw-files -a PXD012353 -o /Users/yourname/Downloads/foldername/ -p aspera
+$ pridepy download-all-public-raw-files -a PXD012353 -o /Users/yourname/Downloads/foldername/ -p aspera
 ```
 
 Download single file by name

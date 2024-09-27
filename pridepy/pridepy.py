@@ -13,7 +13,10 @@ def main():
     pass
 
 
-@main.command()
+@main.command(
+    "download-all-public-raw-files",
+    help="Download all public raw files from a given PRIDE public project",
+)
 @click.option("-a", "--accession", required=True, help="PRIDE project accession")
 @click.option(
     "-p",
@@ -33,7 +36,7 @@ def main():
     help="Aspera maximum bandwidth (e.g 50M, 100M, 200M), depending on the user's network bandwidth, default is 100M",
     default="100M",
 )
-def download_all_raw_files(
+def download_all_public_raw_files(
     accession, protocol, output_folder, aspera_maximum_bandwidth: str = "50M"
 ):
     """
@@ -41,10 +44,9 @@ def download_all_raw_files(
     """
 
     raw_files = Files()
-
     logging.info("accession: " + accession)
-
     logging.info(f"Data will be downloaded from {protocol}")
+
     if protocol == "aspera":
         logging.info(f"Aspera maximum bandwidth: {aspera_maximum_bandwidth}")
 
@@ -55,7 +57,11 @@ def download_all_raw_files(
         aspera_maximum_bandwidth=aspera_maximum_bandwidth,
     )
 
-@main.command()
+
+@main.command(
+    "download-file-by-name",
+    help="Download a single file from a given PRIDE project (public or private)",
+)
 @click.option("-a", "--accession", required=True, help="PRIDE project accession")
 @click.option(
     "-p",
@@ -71,13 +77,25 @@ def download_all_raw_files(
     help="output folder to download or copy files",
 )
 @click.option(
+    "--username", required=False, help="PRIDE login username for private files"
+)
+@click.option(
+    "--password", required=False, help="PRIDE login password for private files"
+)
+@click.option(
     "--aspera_maximum_bandwidth",
     required=False,
     help="Aspera maximum bandwidth (e.g 50M, 100M, 200M), depending on the user's network bandwidth, default is 100M",
     default="100M",
 )
-def download_files_by_name(
-    accession, protocol, file_name, output_folder, aspera_maximum_bandwidth: str = "50M"
+def download_file_by_name(
+    accession,
+    protocol,
+    file_name,
+    output_folder,
+    username: str = None,
+    password: str = None,
+    aspera_maximum_bandwidth: str = "50M",
 ):
     """
     This script download single file from servers or copy from the file system
@@ -86,7 +104,6 @@ def download_files_by_name(
     raw_files = Files()
 
     logging.info("accession: " + accession)
-
     logging.info(f"Data will be downloaded from {protocol}")
     if protocol == "aspera":
         logging.info(f"Aspera maximum bandwidth: {aspera_maximum_bandwidth}")
@@ -96,6 +113,8 @@ def download_files_by_name(
         file_name,
         output_folder,
         protocol,
+        username,
+        password,
         aspera_maximum_bandwidth=aspera_maximum_bandwidth,
     )
 

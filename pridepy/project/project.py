@@ -179,3 +179,16 @@ class Project:
         headers = {"Accept": "application/JSON"}
         response = Util.get_api_call(request_url, headers)
         return response.json()
+
+    def get_project_file_names(
+        self, accession: str, user: str = None, password: str = None
+    ) -> list:
+
+        if user and password:
+            files = self.get_private_files_by_accession(accession, user, password)
+        else:
+            files = self.get_files_by_accession(
+                accession, "", 100, 0, "ASC", "fileName"
+            )["list"]
+
+        return [file["fileName"] for file in files]

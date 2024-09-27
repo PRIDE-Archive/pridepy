@@ -10,7 +10,7 @@ class Authentication:
     This class holds authentication related methods including issuing and validating access token.
     """
 
-    base_url = "https://www.ebi.ac.uk/pride/private/ws/archive/v2/"
+    base_url = "https://www.ebi.ac.uk/pride/private/ws/archive/v2"
 
     def __init__(self):
         pass
@@ -24,7 +24,7 @@ class Authentication:
         """
 
         # get token to access the api
-        url = self.base_url + "getAAPToken"
+        url = self.base_url + "/login"
         headers = {"Content-type": "application/json", "Accept": "text/plain"}
         credentials = (
             '{"Credentials":{"username":"'
@@ -49,7 +49,7 @@ class Authentication:
         :param token: Token
         :return: Return True if the token is valid and not expired: Otherwise returns False
         """
-        url = self.base_url + "token-validation"
+        url = self.base_url + "/token-validation"
         headers = {"Authorization": "Bearer " + token}
 
         response = requests.post(url, headers=headers)
