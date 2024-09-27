@@ -2,6 +2,8 @@ import unittest
 
 import pytest
 
+from pridepy.authentication import authentication
+
 
 class TestAuthentication(unittest.TestCase):
     """
@@ -16,7 +18,7 @@ class TestAuthentication(unittest.TestCase):
         """
         username = "******"
         password = "******"
-        auth = pridepy.authentication.authentication.Authentication()
+        auth = authentication.Authentication()
         api_token = auth.get_token(username, password)
         print(api_token)
         self.assertTrue(len(api_token) > 20, "Token not found!")
@@ -29,7 +31,7 @@ class TestAuthentication(unittest.TestCase):
         """
         username = "******"
         password = "******"
-        auth = pridepy.authentication.authentication.Authentication()
+        auth = authentication.Authentication()
         api_token = auth.get_token(username, password)
         print(api_token)
         self.assertTrue(auth.validate_token(api_token), "Token is invalid or expired!")
