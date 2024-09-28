@@ -4,6 +4,7 @@ import pytest
 
 from pridepy.authentication import authentication
 from pridepy.files.files import Files
+from pridepy.project.project import Project
 
 
 class TestAuthentication(unittest.TestCase):
@@ -37,10 +38,11 @@ class TestAuthentication(unittest.TestCase):
         print(api_token)
         self.assertTrue(auth.validate_token(api_token), "Token is invalid or expired!")
 
+    @pytest.mark.skip(reason="Needs credentials")
     def test_get_dataset_private(self):
-        username = "yperez@ebi.ac.uk"
-        password = "pass.root"
-        dataset = "PXD044389"
+        username = "******"
+        password = "******"
+        dataset = "******"
 
         file_handler = Files()
         files = file_handler.download_private_file_name(
@@ -50,6 +52,16 @@ class TestAuthentication(unittest.TestCase):
             output_folder="./",
             file_name="g00739_Prot_36_06.raw",
         )
+        print(files)
+
+    @pytest.mark.skip(reason="Needs credentials")
+    def test_list_private_files(self):
+        username = "********"
+        password = "********"
+        dataset = "********"
+
+        project = Project()
+        files = project.get_private_files_by_accession(dataset, username, password)
         print(files)
 
 
