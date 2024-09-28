@@ -38,6 +38,9 @@ class Progress:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.pbar.close()
 
+    def close(self):
+        self.pbar.close()
+
 
 class Files:
     """
