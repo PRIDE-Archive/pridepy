@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 
 import logging
-import os
 import click
-import requests
 from pridepy.files.files import Files
 from pridepy.project.project import Project
 
@@ -13,7 +11,10 @@ def main():
     pass
 
 
-@main.command()
+@main.command(
+    "download-all-public-raw-files",
+    help="Download all public raw files from a given PRIDE public project",
+)
 @click.option("-a", "--accession", required=True, help="PRIDE project accession")
 @click.option(
     "-p",
@@ -33,7 +34,7 @@ def main():
     help="Aspera maximum bandwidth (e.g 50M, 100M, 200M), depending on the user's network bandwidth, default is 100M",
     default="100M",
 )
-def download_all_raw_files(
+def download_all_public_raw_files(
     accession, protocol, output_folder, aspera_maximum_bandwidth: str = "50M"
 ):
     """
@@ -41,10 +42,9 @@ def download_all_raw_files(
     """
 
     raw_files = Files()
-
     logging.info("accession: " + accession)
-
     logging.info(f"Data will be downloaded from {protocol}")
+
     if protocol == "aspera":
         logging.info(f"Aspera maximum bandwidth: {aspera_maximum_bandwidth}")
 
@@ -55,7 +55,11 @@ def download_all_raw_files(
         aspera_maximum_bandwidth=aspera_maximum_bandwidth,
     )
 
-@main.command()
+
+@main.command(
+    "download-file-by-name",
+    help="Download a single file from a given PRIDE project (public or private)",
+)
 @click.option("-a", "--accession", required=True, help="PRIDE project accession")
 @click.option(
     "-p",
@@ -71,33 +75,73 @@ def download_all_raw_files(
     help="output folder to download or copy files",
 )
 @click.option(
+    "--username", required=False, help="PRIDE login username for private files"
+)
+@click.option(
+    "--password", required=False, help="PRIDE login password for private files"
+)
+@click.option(
     "--aspera_maximum_bandwidth",
     required=False,
     help="Aspera maximum bandwidth (e.g 50M, 100M, 200M), depending on the user's network bandwidth, default is 100M",
     default="100M",
 )
-def download_files_by_name(
-    accession, protocol, file_name, output_folder, aspera_maximum_bandwidth: str = "50M"
+def download_file_by_name(
+    accession,
+    protocol,
+    file_name,
+    output_folder,
+    username: str = None,
+    password: str = None,
+    aspera_maximum_bandwidth: str = "50M",
 ):
     """
     This script download single file from servers or copy from the file system
+    :param accession: PRIDE project accession
+    :param protocol: Protocol to be used to download files either by ftp or aspera or from globus. Default is ftp
+    :param file_name: fileName to be downloaded
+    :param output_folder: output folder to download or copy files
+    :param username: PRIDE login username for private files
+    :param password: PRIDE login password for private files
+    :param aspera_maximum_bandwidth: Aspera maximum bandwidth (e.g 50M, 100M, 200M), depending on the user's network bandwidth, default is 100M
     """
 
-    raw_files = Files()
+    file_handler = Files()
 
     logging.info("accession: " + accession)
-
     logging.info(f"Data will be downloaded from {protocol}")
     if protocol == "aspera":
         logging.info(f"Aspera maximum bandwidth: {aspera_maximum_bandwidth}")
 
-    raw_files.download_file_by_name(
-        accession,
-        file_name,
-        output_folder,
-        protocol,
+    file_handler.download_file_by_name(
+        accession=accession,
+        file_name=file_name,
+        output_folder=output_folder,
+        protocol=protocol,
+        username=username,
+        password=password,
         aspera_maximum_bandwidth=aspera_maximum_bandwidth,
     )
+
+
+@main.command("get-private-files", help="Get private files by project accession")
+@click.option("-a", "--accession", required=True, help="accession of the project")
+@click.option("-u", "--user", required=True, help="PRIDE login username")
+@click.option("-p", "--password", required=True, help="PRiDE login password")
+def get_private_files(accession, user, password):
+    """
+    get files by project accession
+    :return:
+    """
+    project = Project()
+    list_files = project.get_private_files_by_accession(accession, user, password)
+    if list_files:
+        print("File Name\tFile Size\tCategory")
+        for f in list_files:
+            # Get file size in MB from bytes
+            file_size = f["fileSizeBytes"] / (1024 * 1024)
+            file_category = f["fileCategory"]["value"]
+            print(f["fileName"] + "\t" + str(file_size) + " MB\t" + file_category)
 
 
 @main.command()
@@ -412,46 +456,6 @@ def get_files_by_filter(filter, page_size, page, sort_direction, sort_conditions
             filter, page_size, page, sort_direction, sort_conditions
         )
     )
-
-
-@main.command()
-@click.option("-a", "--accession", required=True, help="accession of the project")
-@click.option("-u", "--user", required=True, help="PRIDE login username")
-@click.option("-p", "--password", required=True, help="PRiDE login password")
-def get_private_files(accession, user, password):
-    """
-    get files by project accession
-    :return:
-    """
-    project = Project()
-    return project.get_private_files_by_accession(accession, user, password)
-
-
-@main.command()
-@click.option("-a", "--accession", required=True, help="accession of the project")
-@click.option("-u", "--user", required=True, help="PRIDE login username")
-@click.option("-p", "--password", required=True, help="PRiDE login password")
-@click.option("-l", "--location", required=True, help="location to save files")
-def download_private_files(accession, user, password, location):
-    """
-    get files by project accession
-    :return:
-    """
-    project = Project()
-    files_list = project.get_private_files_by_accession(accession, user, password)
-    for f in files_list:
-        url = f["_links"]["download"]["href"]
-        local_dir = os.path.join(location, accession)
-        local_filename = os.path.join(local_dir, f["fileName"])
-        os.mkdir(local_dir)
-        with requests.get(url, stream=True) as r:
-            r.raise_for_status()
-            with open(local_filename, "wb") as f:
-                for chunk in r.iter_content(chunk_size=8192):
-                    # If you have chunk encoded response uncomment if
-                    # and set chunk_size parameter to None.
-                    # if chunked:
-                    f.write(chunk)
 
 
 if __name__ == "__main__":

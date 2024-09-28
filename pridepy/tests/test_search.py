@@ -1,7 +1,9 @@
+import logging
 from unittest import TestCase
 
 from pridepy.files.files import Files
 from pridepy.project.project import Project
+from pridepy.util.api_handling import Util
 
 
 class TestSearch(TestCase):
@@ -55,3 +57,22 @@ class TestSearch(TestCase):
             "projectAccessions==PXD022105", "100", 0, "ASC", "submissionDate"
         )
         assert result["page"]["totalElements"] == 11
+
+    def test_status_dataset(self):
+
+        files = Files()
+        accession = "PXD044389"
+
+        project_status = Util.get_api_call(
+            files.API_BASE_URL + "/status/{}".format(accession)
+        )
+        public_project = False
+        if project_status.status_code == 200:
+            if project_status.text == "PRIVATE":
+                public_project = True
+            elif project_status.text == "PUBLIC":
+                public_project = False
+            else:
+                raise Exception(
+                    "Dataset {} is not present in PRIDE Archive".format(accession)
+                )

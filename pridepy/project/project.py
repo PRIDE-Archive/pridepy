@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-
+from pridepy.authentication.authentication import Authentication
 from pridepy.util.api_handling import Util
 
 
@@ -96,16 +96,13 @@ class Project:
 
     def get_private_files_by_accession(self, accession, user, passwd):
 
-        all_files = []
-        request_url = self.PRIVATE_API_BASE_URL + "getAAPTokenWeb"
-        headers = {"Content-Type": "application/json;charset=UTF-8"}
-
-        data = {"Credentials": {"username": user, "password": passwd}}
-        aap_token = Util.post_api_call(request_url, headers, data)
-        print(aap_token.text)
+        auth = Authentication()
+        aap_token = auth.get_token(user, passwd)
 
         request_url = self.PRIVATE_API_BASE_URL + "projects/" + accession + "/files"
-        headers = {"Authorization": "Bearer " + aap_token.text}
+        headers = {"Authorization": "Bearer " + aap_token}
+
+        all_files = []
 
         while True:
             response = Util.get_api_call(request_url, headers)
@@ -179,3 +176,16 @@ class Project:
         headers = {"Accept": "application/JSON"}
         response = Util.get_api_call(request_url, headers)
         return response.json()
+
+    def get_project_file_names(
+        self, accession: str, user: str = None, password: str = None
+    ) -> list:
+
+        if user and password:
+            files = self.get_private_files_by_accession(accession, user, password)
+        else:
+            files = self.get_files_by_accession(
+                accession, "", 100, 0, "ASC", "fileName"
+            )["list"]
+
+        return [file["fileName"] for file in files]

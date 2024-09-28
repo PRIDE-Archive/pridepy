@@ -12,9 +12,11 @@ from typing import Dict
 
 import boto3
 import botocore
+import requests
 from botocore.config import Config
 from tqdm import tqdm
 
+from pridepy.authentication.authentication import Authentication
 from pridepy.util.api_handling import Util
 
 
@@ -36,13 +38,17 @@ class Progress:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.pbar.close()
 
+    def close(self):
+        self.pbar.close()
+
 
 class Files:
     """
     This class handles PRIDE API files endpoint.
     """
 
-    API_BASE_URL = "https://www.ebi.ac.uk/pride/ws/archive/v2/"
+    API_BASE_URL = "https://www.ebi.ac.uk/pride/ws/archive/v2"
+    API_PRIVATE_URL = "https://www.ebi.ac.uk/pride/private/ws/archive/v2"
     S3_URL = "https://hh.fire.sdo.ebi.ac.uk"
     S3_BUCKET = "pride-public"
     logging.basicConfig(
@@ -67,7 +73,7 @@ class Files:
         """
            
         """
-        request_url = self.API_BASE_URL + "files?"
+        request_url = self.API_BASE_URL + "/files?"
 
         if query_filter:
             request_url = request_url + "filter=" + query_filter + "&"
@@ -97,7 +103,7 @@ class Files:
 
         request_url = (
             self.API_BASE_URL
-            + "files/byProject?accession="
+            + "/files/byProject?accession="
             + project_accession
             + ",fileCategory.value==RAW"
         )
@@ -351,7 +357,14 @@ class Files:
         return path_fragment
 
     def download_file_by_name(
-        self, accession, file_name, output_folder, protocol, aspera_maximum_bandwidth
+        self,
+        accession,
+        file_name,
+        output_folder,
+        protocol,
+        username,
+        password,
+        aspera_maximum_bandwidth,
     ):
         """
         Download files from url
@@ -359,18 +372,59 @@ class Files:
         :param file_name: file name to download
         :param output_folder: folder to download the files
         :param protocol: ftp, aspera, globus
+        :param username: Username for private datasets
+        :param password: Password for private datasets
         :param aspera_maximum_bandwidth: Aspera maximum bandwidth
         """
 
         if not (os.path.isdir(output_folder)):
             os.mkdir(output_folder)
-        response = self.get_file_from_api(accession, file_name)
-        self.download_files(
-            response,
-            output_folder,
-            protocol,
-            aspera_maximum_bandwidth=aspera_maximum_bandwidth,
+
+        ## Check type of project
+        public_project = False
+        project_status = Util.get_api_call(
+            self.API_BASE_URL + "/status/{}".format(accession)
         )
+
+        if project_status.status_code == 200:
+            if project_status.text == "PRIVATE":
+                public_project = False
+            elif project_status.text == "PUBLIC":
+                public_project = True
+            else:
+                raise Exception(
+                    "Dataset {} is not present in PRIDE Archive".format(accession)
+                )
+
+        if public_project:
+            logging.info("Downloading file from public dataset {}".format(accession))
+            response = self.get_file_from_api(accession, file_name)
+            self.download_files(
+                response,
+                output_folder,
+                protocol,
+                aspera_maximum_bandwidth=aspera_maximum_bandwidth,
+            )
+        elif not public_project and (username is not None and password is not None):
+            logging.info("Downloading file from private dataset {}".format(accession))
+            self.download_private_file_name(
+                accession=accession,
+                file_name=file_name,
+                output_folder=output_folder,
+                username=username,
+                password=password,
+            )
+        else:
+            logging.error(
+                "For a private dataset {} you must provide a username and password".format(
+                    accession
+                )
+            )
+            raise Exception(
+                "For a private dataset {} you must provide a username and password".format(
+                    accession
+                )
+            )
 
     def get_file_from_api(self, accession, file_name):
         """
@@ -381,7 +435,7 @@ class Files:
         """
         request_url = (
             self.API_BASE_URL
-            + "files/byProject?accession="
+            + "/files/byProject?accession="
             + accession
             + ",fileName=="
             + file_name
@@ -391,7 +445,96 @@ class Files:
             response = Util.get_api_call(request_url, headers)
             return response.json()
         except Exception as e:
-            raise Exception("File not found" + str(e))
+            raise Exception("File not found " + str(e))
+
+    def download_private_file_name(
+        self, accession, file_name, output_folder, username, password
+    ):
+        """
+        Get the information for a given private file to be downloaded from the api.
+        :param accession: Project accession
+        :param file_name: The file name to be downloaded
+        :param username: Username with access to the dataset
+        :param password: Password for user with access to the dataset
+        """
+
+        auth = Authentication()
+        auth_token = auth.get_token(username, password)
+        validate_token = auth.validate_token(auth_token)
+        logging.info("Valid token after login: {}".format(validate_token))
+
+        url = self.API_PRIVATE_URL + "/projects/{}/files?search={}".format(
+            accession, file_name
+        )
+        content = requests.get(
+            url, headers={"Authorization": "Bearer {}".format(auth_token)}
+        )
+        if content.ok and content.status_code == 200:
+            json_file = content.json()
+            if (
+                "_embedded" in json_file
+                and "files" in json_file["_embedded"]
+                and len(json_file["_embedded"]["files"]) == 1
+            ):
+                download_url = json_file["_embedded"]["files"][0]["_links"]["download"][
+                    "href"
+                ]
+                total_size = json_file["_embedded"]["files"][0]["fileSizeBytes"]
+                logging.info(download_url)
+
+                # Create a clean filename to save the downloaded file
+                new_file_path = os.path.join(output_folder, f"{file_name}")
+
+                session = (
+                    Util.create_session_with_retries()
+                )  # Create session with retries
+                # Check if the file already exists
+                if os.path.exists(new_file_path):
+                    resume_header = {
+                        "Range": f"bytes={os.path.getsize(new_file_path)}-"
+                    }
+                    mode = "ab"  # Append to file
+                    resume_size = os.path.getsize(new_file_path)
+                else:
+                    resume_header = {}
+                    mode = "wb"  # Write new file
+                    resume_size = 0
+
+                with session.get(
+                    download_url, stream=True, headers=resume_header, timeout=(10, 60)
+                ) as r:
+                    r.raise_for_status()
+                    total_size = int(r.headers.get("content-length", 0)) + resume_size
+                    block_size = 1024 * 1024  # 1 MB chunks
+
+                    with tqdm(
+                        total=total_size,
+                        unit="B",
+                        unit_scale=True,
+                        desc=new_file_path,
+                        initial=resume_size,
+                    ) as pbar:
+                        with open(new_file_path, mode) as f:
+                            for chunk in r.iter_content(chunk_size=block_size):
+                                if chunk:
+                                    f.write(chunk)
+                                    pbar.update(len(chunk))
+
+                logging.info(f"Successfully downloaded {new_file_path}")
+
+            else:
+                logging.info(
+                    "File name {} found more than once for the given project {}".format(
+                        file_name, accession
+                    )
+                )
+        else:
+            logging.info(
+                f"File name {file_name} now found in the project {accession}, or user don't have access"
+            )
+            raise Exception(
+                f"File name {file_name} now found in the project {accession}, or user don't have access"
+            )
 
     @staticmethod
     def get_ascp_binary():
