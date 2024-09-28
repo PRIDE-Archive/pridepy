@@ -99,6 +99,13 @@ def download_file_by_name(
 ):
     """
     This script download single file from servers or copy from the file system
+    :param accession: PRIDE project accession
+    :param protocol: Protocol to be used to download files either by ftp or aspera or from globus. Default is ftp
+    :param file_name: fileName to be downloaded
+    :param output_folder: output folder to download or copy files
+    :param username: PRIDE login username for private files
+    :param password: PRIDE login password for private files
+    :param aspera_maximum_bandwidth: Aspera maximum bandwidth (e.g 50M, 100M, 200M), depending on the user's network bandwidth, default is 100M
     """
 
     raw_files = Files()
@@ -433,7 +440,7 @@ def get_files_by_filter(filter, page_size, page, sort_direction, sort_conditions
     )
 
 
-@main.command()
+@main.command("get-private-files", help="Get private files by project accession")
 @click.option("-a", "--accession", required=True, help="accession of the project")
 @click.option("-u", "--user", required=True, help="PRIDE login username")
 @click.option("-p", "--password", required=True, help="PRiDE login password")
@@ -443,7 +450,14 @@ def get_private_files(accession, user, password):
     :return:
     """
     project = Project()
-    return project.get_private_files_by_accession(accession, user, password)
+    list_files = project.get_private_files_by_accession(accession, user, password)
+    if list_files:
+        print("File Name\tFile Size\tCategory")
+        for f in list_files:
+            # Get file size in MB from bytes
+            file_size = f["fileSizeBytes"] / (1024 * 1024)
+            file_category = f["fileCategory"]['value']
+            print(f["fileName"] + "\t" + str(file_size) + " MB\t" + file_category)
 
 
 @main.command()
