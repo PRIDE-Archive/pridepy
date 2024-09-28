@@ -108,14 +108,14 @@ def download_file_by_name(
     :param aspera_maximum_bandwidth: Aspera maximum bandwidth (e.g 50M, 100M, 200M), depending on the user's network bandwidth, default is 100M
     """
 
-    raw_files = Files()
+    file_handler = Files()
 
     logging.info("accession: " + accession)
     logging.info(f"Data will be downloaded from {protocol}")
     if protocol == "aspera":
         logging.info(f"Aspera maximum bandwidth: {aspera_maximum_bandwidth}")
 
-    raw_files.download_file_by_name(
+    file_handler.download_file_by_name(
         accession=accession,
         file_name=file_name,
         output_folder=output_folder,
