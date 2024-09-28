@@ -13,6 +13,7 @@ class TestAuthentication(unittest.TestCase):
     """
 
     # @pytest.mark.skip(reason="Needs credentials")
+    @pytest.mark.skip(reason="Needs credentials")
     def test_get_token(self):
         """
         Test get API AAP token functionality
