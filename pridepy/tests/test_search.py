@@ -73,4 +73,6 @@ class TestSearch(TestCase):
             elif project_status.text == "PUBLIC":
                 public_project = False
             else:
-                raise Exception("Dataset {} is not present in PRIDE Archive".format(accession))
+                raise Exception(
+                    "Dataset {} is not present in PRIDE Archive".format(accession)
+                )

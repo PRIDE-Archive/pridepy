@@ -25,7 +25,9 @@ class Util:
         response = requests.get(url, headers=headers)
 
         if (not response.ok) or response.status_code != 200:
-            raise Exception("PRIDE API call {} response: {}".format(url, response.status_code))
+            raise Exception(
+                "PRIDE API call {} response: {}".format(url, response.status_code)
+            )
         return response
 
     @staticmethod

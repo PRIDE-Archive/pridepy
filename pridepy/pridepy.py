@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 
 import logging
-import os
 import click
-import requests
 from pridepy.files.files import Files
 from pridepy.project.project import Project
 
@@ -126,6 +124,26 @@ def download_file_by_name(
     )
 
 
+@main.command("get-private-files", help="Get private files by project accession")
+@click.option("-a", "--accession", required=True, help="accession of the project")
+@click.option("-u", "--user", required=True, help="PRIDE login username")
+@click.option("-p", "--password", required=True, help="PRiDE login password")
+def get_private_files(accession, user, password):
+    """
+    get files by project accession
+    :return:
+    """
+    project = Project()
+    list_files = project.get_private_files_by_accession(accession, user, password)
+    if list_files:
+        print("File Name\tFile Size\tCategory")
+        for f in list_files:
+            # Get file size in MB from bytes
+            file_size = f["fileSizeBytes"] / (1024 * 1024)
+            file_category = f["fileCategory"]["value"]
+            print(f["fileName"] + "\t" + str(file_size) + " MB\t" + file_category)
+
+
 @main.command()
 @click.option(
     "-k",
@@ -258,6 +276,7 @@ def search_projects_by_keywords_and_filters(
             keyword, filter, page_size, page, date_gap, sort_direction, sort_fields
         )
     )
+
 
 @main.command()
 @click.option(
@@ -437,26 +456,6 @@ def get_files_by_filter(filter, page_size, page, sort_direction, sort_conditions
             filter, page_size, page, sort_direction, sort_conditions
         )
     )
-
-
-@main.command("get-private-files", help="Get private files by project accession")
-@click.option("-a", "--accession", required=True, help="accession of the project")
-@click.option("-u", "--user", required=True, help="PRIDE login username")
-@click.option("-p", "--password", required=True, help="PRiDE login password")
-def get_private_files(accession, user, password):
-    """
-    get files by project accession
-    :return:
-    """
-    project = Project()
-    list_files = project.get_private_files_by_accession(accession, user, password)
-    if list_files:
-        print("File Name\tFile Size\tCategory")
-        for f in list_files:
-            # Get file size in MB from bytes
-            file_size = f["fileSizeBytes"] / (1024 * 1024)
-            file_category = f["fileCategory"]['value']
-            print(f["fileName"] + "\t" + str(file_size) + " MB\t" + file_category)
 
 
 if __name__ == "__main__":
