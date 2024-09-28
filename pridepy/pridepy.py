@@ -259,7 +259,6 @@ def search_projects_by_keywords_and_filters(
         )
     )
 
-
 @main.command()
 @click.option(
     "-ps",
@@ -458,33 +457,6 @@ def get_private_files(accession, user, password):
             file_size = f["fileSizeBytes"] / (1024 * 1024)
             file_category = f["fileCategory"]['value']
             print(f["fileName"] + "\t" + str(file_size) + " MB\t" + file_category)
-
-
-@main.command()
-@click.option("-a", "--accession", required=True, help="accession of the project")
-@click.option("-u", "--user", required=True, help="PRIDE login username")
-@click.option("-p", "--password", required=True, help="PRiDE login password")
-@click.option("-l", "--location", required=True, help="location to save files")
-def download_private_files(accession, user, password, location):
-    """
-    get files by project accession
-    :return:
-    """
-    project = Project()
-    files_list = project.get_private_files_by_accession(accession, user, password)
-    for f in files_list:
-        url = f["_links"]["download"]["href"]
-        local_dir = os.path.join(location, accession)
-        local_filename = os.path.join(local_dir, f["fileName"])
-        os.mkdir(local_dir)
-        with requests.get(url, stream=True) as r:
-            r.raise_for_status()
-            with open(local_filename, "wb") as f:
-                for chunk in r.iter_content(chunk_size=8192):
-                    # If you have chunk encoded response uncomment if
-                    # and set chunk_size parameter to None.
-                    # if chunked:
-                    f.write(chunk)
 
 
 if __name__ == "__main__":
