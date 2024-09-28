@@ -37,7 +37,7 @@ class Authentication:
         response = requests.post(url, data=credentials, headers=headers)
 
         if (not response.ok) or response.status_code != 200:
-            logging.error("Failed to get the token for user {} and password {}".format(username, password))
+            logging.error("Failed to get the token for user {}".format(username))
             response.raise_for_status()
             sys.exit()
         else:
