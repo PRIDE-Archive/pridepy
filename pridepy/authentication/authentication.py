@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
+import logging
 import sys
 import requests
 
@@ -17,7 +17,7 @@ class Authentication:
 
     def get_token(self, username, password):
         """
-        Get AAP token from EBI USI to access resources
+        Get the PRIDE API token from EBI to access resources
         :param username: username (email)
         :param password: password
         :return: If authenticated, a token is returned
@@ -37,6 +37,7 @@ class Authentication:
         response = requests.post(url, data=credentials, headers=headers)
 
         if (not response.ok) or response.status_code != 200:
+            logging.error("Failed to get the token for user {} and password {}".format(username, password))
             response.raise_for_status()
             sys.exit()
         else:

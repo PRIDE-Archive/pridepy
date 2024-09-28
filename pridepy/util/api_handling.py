@@ -3,6 +3,8 @@
 import requests
 import logging
 from ratelimit import limits, sleep_and_retry
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 
 class Util:
@@ -23,7 +25,7 @@ class Util:
         response = requests.get(url, headers=headers)
 
         if (not response.ok) or response.status_code != 200:
-            raise Exception("PRIDE API response: {}".format(response.status_code))
+            raise Exception("PRIDE API call {} response: {}".format(url, response.status_code))
         return response
 
     @staticmethod
@@ -60,3 +62,16 @@ class Util:
             raise Exception("PRIDE API response: {}".format(response.status_code))
         else:
             logging.debug(response)
+
+    @staticmethod
+    def create_session_with_retries():
+        session = requests.Session()
+        retry_strategy = Retry(
+            total=5,  # Retry up to 5 times
+            backoff_factor=2,  # Exponential backoff: wait 2^i seconds between retries
+            status_forcelist=[429, 500, 502, 503, 504],  # Retry on these HTTP codes
+        )
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        session.mount("http://", adapter)
+        session.mount("https://", adapter)
+        return session

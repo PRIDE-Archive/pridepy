@@ -116,12 +116,12 @@ def download_file_by_name(
         logging.info(f"Aspera maximum bandwidth: {aspera_maximum_bandwidth}")
 
     raw_files.download_file_by_name(
-        accession,
-        file_name,
-        output_folder,
-        protocol,
-        username,
-        password,
+        accession=accession,
+        file_name=file_name,
+        output_folder=output_folder,
+        protocol=protocol,
+        username=username,
+        password=password,
         aspera_maximum_bandwidth=aspera_maximum_bandwidth,
     )
 

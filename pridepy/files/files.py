@@ -47,7 +47,7 @@ class Files:
     This class handles PRIDE API files endpoint.
     """
 
-    API_BASE_URL = "https://www.ebi.ac.uk/pride/ws/archive/v2/"
+    API_BASE_URL = "https://www.ebi.ac.uk/pride/ws/archive/v2"
     API_PRIVATE_URL = "https://www.ebi.ac.uk/pride/private/ws/archive/v2"
     S3_URL = "https://hh.fire.sdo.ebi.ac.uk"
     S3_BUCKET = "pride-public"
@@ -59,7 +59,7 @@ class Files:
         pass
 
     def get_all_paged_files(
-        self, query_filter, page_size, page, sort_direction, sort_conditions
+            self, query_filter, page_size, page, sort_direction, sort_conditions
     ):
         """
          Get all filtered pride submission files
@@ -73,21 +73,21 @@ class Files:
         """
            
         """
-        request_url = self.API_BASE_URL + "files?"
+        request_url = self.API_BASE_URL + "/files?"
 
         if query_filter:
             request_url = request_url + "filter=" + query_filter + "&"
 
         request_url = (
-            request_url
-            + "pageSize="
-            + str(page_size)
-            + "&page="
-            + str(page)
-            + "&sortDirection="
-            + sort_direction
-            + "&sortConditions="
-            + sort_conditions
+                request_url
+                + "pageSize="
+                + str(page_size)
+                + "&page="
+                + str(page)
+                + "&sortDirection="
+                + sort_direction
+                + "&sortConditions="
+                + sort_conditions
         )
 
         headers = {"Accept": "application/JSON"}
@@ -102,10 +102,10 @@ class Files:
         """
 
         request_url = (
-            self.API_BASE_URL
-            + "files/byProject?accession="
-            + project_accession
-            + ",fileCategory.value==RAW"
+                self.API_BASE_URL
+                + "/files/byProject?accession="
+                + project_accession
+                + ",fileCategory.value==RAW"
         )
         headers = {"Accept": "application/JSON"}
 
@@ -113,7 +113,7 @@ class Files:
         return response.json()
 
     def download_all_raw_files(
-        self, accession, output_folder, protocol, aspera_maximum_bandwidth: str
+            self, accession, output_folder, protocol, aspera_maximum_bandwidth: str
     ):
         """
         This method will download all the raw files from PRIDE PROJECT
@@ -191,7 +191,7 @@ class Files:
 
     @staticmethod
     def download_files_from_aspera(
-        file_list_json: Dict, output_folder: str, maximum_bandwidth: str = "100M"
+            file_list_json: Dict, output_folder: str, maximum_bandwidth: str = "100M"
     ):
         """
         Download files using aspera transfer url
@@ -357,14 +357,14 @@ class Files:
         return path_fragment
 
     def download_file_by_name(
-        self,
-        accession,
-        file_name,
-        output_folder,
-        protocol,
-        username,
-        password,
-        aspera_maximum_bandwidth,
+            self,
+            accession,
+            file_name,
+            output_folder,
+            protocol,
+            username,
+            password,
+            aspera_maximum_bandwidth,
     ):
         """
         Download files from url
@@ -385,11 +385,16 @@ class Files:
         project_status = Util.get_api_call(
             self.API_BASE_URL + "/status/{}".format(accession)
         )
-        if project_status.status_code == 200:
-            if project_status.text is not "PRIVATE":
-                public_project = True
 
-        if username is None or password is None and public_project:
+        if project_status.status_code == 200:
+            if project_status.text == "PRIVATE":
+                public_project = False
+            elif project_status.text == "PUBLIC":
+                public_project = True
+            else:
+                raise Exception("Dataset {} is not present in PRIDE Archive".format(accession))
+
+        if public_project:
             logging.info("Downloading file from public dataset {}".format(accession))
             response = self.get_file_from_api(accession, file_name)
             self.download_files(
@@ -405,7 +410,7 @@ class Files:
                 file_name=file_name,
                 output_folder=output_folder,
                 username=username,
-                password=username,
+                password=password,
             )
         else:
             logging.error(
@@ -427,21 +432,21 @@ class Files:
         :return: file in json format
         """
         request_url = (
-            self.API_BASE_URL
-            + "files/byProject?accession="
-            + accession
-            + ",fileName=="
-            + file_name
+                self.API_BASE_URL
+                + "/files/byProject?accession="
+                + accession
+                + ",fileName=="
+                + file_name
         )
         headers = {"Accept": "application/JSON"}
         try:
             response = Util.get_api_call(request_url, headers)
             return response.json()
         except Exception as e:
-            raise Exception("File not found" + str(e))
+            raise Exception("File not found " + str(e))
 
     def download_private_file_name(
-        self, accession, file_name, output_folder, username, password
+            self, accession, file_name, output_folder, username, password
     ):
         """
         Get the information for a given private file to be downloaded from the api.
@@ -454,7 +459,8 @@ class Files:
         auth = Authentication()
         auth_token = auth.get_token(username, password)
         validate_token = auth.validate_token(auth_token)
-        print(validate_token)
+        logging.info("Valid token after login: {}".format(validate_token))
+
         url = self.API_PRIVATE_URL + "/projects/{}/files?search={}".format(
             accession, file_name
         )
@@ -464,9 +470,9 @@ class Files:
         if content.ok and content.status_code == 200:
             json_file = content.json()
             if (
-                "_embedded" in json_file
-                and "files" in json_file["_embedded"]
-                and len(json_file["_embedded"]["files"]) == 1
+                    "_embedded" in json_file
+                    and "files" in json_file["_embedded"]
+                    and len(json_file["_embedded"]["files"]) == 1
             ):
                 download_url = json_file["_embedded"]["files"][0]["_links"]["download"][
                     "href"
@@ -477,19 +483,30 @@ class Files:
                 # Create a clean filename to save the downloaded file
                 new_file_path = os.path.join(output_folder, f"{file_name}")
 
-                # Initialize progress bar
-                progress = Progress(total_size, new_file_path)
+                session = Util.create_session_with_retries()  # Create session with retries
+                # Check if the file already exists
+                if os.path.exists(new_file_path):
+                    resume_header = {'Range': f'bytes={os.path.getsize(new_file_path)}-'}
+                    mode = 'ab'  # Append to file
+                    resume_size = os.path.getsize(new_file_path)
+                else:
+                    resume_header = {}
+                    mode = 'wb'  # Write new file
+                    resume_size = 0
 
-                # Download the file with progress bar
-                urllib.request.urlretrieve(
-                    download_url,
-                    new_file_path,
-                    reporthook=lambda blocks, block_size, total_size: progress(
-                        block_size
-                    ),
-                )
+                with session.get(download_url, stream=True, headers=resume_header,  timeout=(10, 60)) as r:
+                    r.raise_for_status()
+                    total_size = int(r.headers.get('content-length', 0)) + resume_size
+                    block_size = 1024 * 1024  # 1 MB chunks
 
-                progress.close()
+                    with tqdm(total=total_size, unit='B', unit_scale=True, desc=new_file_path,
+                              initial=resume_size) as pbar:
+                        with open(new_file_path, mode) as f:
+                            for chunk in r.iter_content(chunk_size=block_size):
+                                if chunk:
+                                    f.write(chunk)
+                                    pbar.update(len(chunk))
+
                 logging.info(f"Successfully downloaded {new_file_path}")
 
             else:
@@ -498,9 +515,6 @@ class Files:
                         file_name, accession
                     )
                 )
-
-            print(json_file)
-
         else:
             logging.info(
                 f"File name {file_name} now found in the project {accession}, or user don't have access"
@@ -538,10 +552,10 @@ class Files:
 
     @staticmethod
     def download_files(
-        file_list_json,
-        output_folder: str,
-        protocol: str = "ftp",
-        aspera_maximum_bandwidth: str = "100M",
+            file_list_json,
+            output_folder: str,
+            protocol: str = "ftp",
+            aspera_maximum_bandwidth: str = "100M",
     ):
         """
         Download files using either FTP or Aspera transfer protocol.
