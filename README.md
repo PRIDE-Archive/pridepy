@@ -58,14 +58,12 @@ Search projects with keywords and filters
 ```bash
 $ pridepy search-projects-by-keywords-and-filters --keyword accession:PXD012353
 ```
-
 Search files with filters
 
 ```bash
 $ pridepy get-files-by-filter --filter fileCategory.value==RAW
 ```
-
-Use below command to view list of commands available:
+Use below command to view a list of commands available:
 
 ```bash
 $ pridepy --help
@@ -81,15 +79,19 @@ Commands:
   get-files-by-project-accession  get files by project accession...
   get-private-files               Get private files by project...
   get-projects                    get paged projects :return:
-  get-projects-by-accession       get projects by accession...
-
-           
-
+  get-projects-by-accession       get projects by accession...     
 ```
-
 # NOTE
 
 Please make sure you are using Python3, not Python 2.7 version.
+
+# White paper
+
+A white paper is available at [here](paper/paper.md). We can build it as pdf using pandoc.
+
+```bash
+$docker run --rm --platform linux/amd64 -v /Users/yperez/work/pridepy/paper/:/data -w /data openjournals/inara:latest paper.md -p -o pdf
+```
 
 # Citation
 
