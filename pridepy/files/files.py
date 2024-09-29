@@ -114,15 +114,15 @@ class Files:
         return response.json()
 
     def download_all_raw_files(
-            self, accession, output_folder, protocol, aspera_maximum_bandwidth: str, skip_if_downloaded_already
+            self, accession, output_folder, skip_if_downloaded_already, protocol, aspera_maximum_bandwidth: str,
     ):
         """
         This method will download all the raw files from PRIDE PROJECT
         :param output_folder: output directory where raw files will get saved
+        :param skip_if_downloaded_already: Boolean value to skip the download if the file has already been downloaded.
         :param accession: PRIDE accession
         :param protocol: ftp, aspera, globus
         :param aspera_maximum_bandwidth: Aspera maximum bandwidth
-        :param skip_if_downloaded_already: Boolean value to skip the download if the file has already been downloaded.
         :return: None
         """
 
@@ -135,8 +135,8 @@ class Files:
             response_body,
             accession,
             output_folder,
-            protocol,
             skip_if_downloaded_already,
+            protocol,
             aspera_maximum_bandwidth=aspera_maximum_bandwidth,
         )
 
