@@ -8,6 +8,7 @@ import re
 import subprocess
 import urllib
 import urllib.request
+import time
 from typing import Dict
 
 import boto3
@@ -291,27 +292,37 @@ class Files:
     @staticmethod
     def download_files_from_s3(file_list_json: Dict, output_folder: str):
         """
-        Download files using s3 transfer url with progress bar for each file
-        :param file_list_json: file list in json format
+        Download files using S3 transfer URL with a progress bar and retry logic.
+        :param file_list_json: file list in JSON format
         :param output_folder: folder to download the files
         """
 
-        if not (os.path.isdir(output_folder)):
+        if not os.path.isdir(output_folder):
             os.makedirs(output_folder, exist_ok=True)
+
+        # Retry and timeout config
+        retry_config = Config(
+            retries={'max_attempts': 5, 'mode': 'standard'},
+            connect_timeout=120,  # Increase timeout to 120 seconds
+            read_timeout=120,  # Timeout for reading data
+            signature_version=botocore.UNSIGNED,  # Unsigned requests for public data
+        )
 
         s3_resource = boto3.resource(
             "s3",
-            config=Config(signature_version=botocore.UNSIGNED),
+            config=retry_config,
             endpoint_url=Files.S3_URL,
         )
         bucket = s3_resource.Bucket(Files.S3_BUCKET)
 
         for file in file_list_json:
             try:
-                if file["publicFileLocations"][0]["name"] == "FTP Protocol":
-                    download_url = file["publicFileLocations"][0]["value"]
-                else:
-                    download_url = file["publicFileLocations"][1]["value"]
+                # Determine S3 or FTP path
+                download_url = (
+                    file["publicFileLocations"][0]["value"]
+                    if file["publicFileLocations"][0]["name"] == "FTP Protocol"
+                    else file["publicFileLocations"][1]["value"]
+                )
 
                 ftp_base_url = "ftp://ftp.pride.ebi.ac.uk/pride/data/archive/"
                 s3_path = download_url.replace(ftp_base_url, "")
@@ -321,25 +332,33 @@ class Files:
 
                 logging.debug(f"Downloading From S3: {s3_path}")
 
-                # Get the file size for progress tracking
+                # Get file size for progress tracking
                 obj = bucket.Object(s3_path)
                 total_size = obj.content_length
 
                 # Initialize progress bar
                 progress = Progress(total_size, new_file_path)
 
-                # Download with progress bar
-                bucket.download_file(s3_path, new_file_path, Callback=progress)
-
-                progress.close()
-
-                logging.info(f"Successfully downloaded {new_file_path}")
-
-            except botocore.exceptions.ClientError as e:
-                if e.response["Error"]["Code"] == "404":
-                    logging.error("The object does not exist.")
-                else:
-                    raise
+                # Download with progress bar and retry handling
+                for attempt in range(5):
+                    try:
+                        bucket.download_file(s3_path, new_file_path, Callback=progress)
+                        progress.close()
+                        logging.info(f"Successfully downloaded {new_file_path}")
+                        break
+                    except botocore.exceptions.ClientError as e:
+                        if e.response["Error"]["Code"] == "404":
+                            logging.error("The object does not exist.")
+                            break
+                        else:
+                            logging.error(f"Download failed: {e}")
+                            if attempt < 4:
+                                time.sleep(2 ** attempt)  # Exponential backoff
+                                logging.info(f"Retrying... ({attempt + 1}/5)")
+                            else:
+                                raise
+            except Exception as e:
+                logging.error(f"Failed to download {file['fileName']}: {e}")
 
     def get_submitted_file_path_prefix(self, accession):
         """
