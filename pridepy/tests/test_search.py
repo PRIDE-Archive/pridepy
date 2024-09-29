@@ -1,9 +1,9 @@
-import logging
 from unittest import TestCase
 
 from pridepy.files.files import Files
 from pridepy.project.project import Project
 from pridepy.util.api_handling import Util
+import logging
 
 
 class TestSearch(TestCase):
@@ -76,3 +76,4 @@ class TestSearch(TestCase):
                 raise Exception(
                     "Dataset {} is not present in PRIDE Archive".format(accession)
                 )
+        logging.debug(f"Public project: {public_project}")

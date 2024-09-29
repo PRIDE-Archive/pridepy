@@ -8,6 +8,7 @@ import re
 import subprocess
 import urllib
 import urllib.request
+import time
 from typing import Dict
 
 import boto3
@@ -59,7 +60,7 @@ class Files:
         pass
 
     def get_all_paged_files(
-        self, query_filter, page_size, page, sort_direction, sort_conditions
+            self, query_filter, page_size, page, sort_direction, sort_conditions
     ):
         """
          Get all filtered pride submission files
@@ -71,7 +72,7 @@ class Files:
         :return: paged file list on JSON format
         """
         """
-           
+
         """
         request_url = self.API_BASE_URL + "/files?"
 
@@ -79,15 +80,15 @@ class Files:
             request_url = request_url + "filter=" + query_filter + "&"
 
         request_url = (
-            request_url
-            + "pageSize="
-            + str(page_size)
-            + "&page="
-            + str(page)
-            + "&sortDirection="
-            + sort_direction
-            + "&sortConditions="
-            + sort_conditions
+                request_url
+                + "pageSize="
+                + str(page_size)
+                + "&page="
+                + str(page)
+                + "&sortDirection="
+                + sort_direction
+                + "&sortConditions="
+                + sort_conditions
         )
 
         headers = {"Accept": "application/JSON"}
@@ -102,10 +103,10 @@ class Files:
         """
 
         request_url = (
-            self.API_BASE_URL
-            + "/files/byProject?accession="
-            + project_accession
-            + ",fileCategory.value==RAW"
+                self.API_BASE_URL
+                + "/files/byProject?accession="
+                + project_accession
+                + ",fileCategory.value==RAW"
         )
         headers = {"Accept": "application/JSON"}
 
@@ -113,11 +114,12 @@ class Files:
         return response.json()
 
     def download_all_raw_files(
-        self, accession, output_folder, protocol, aspera_maximum_bandwidth: str
+            self, accession, output_folder, skip_if_downloaded_already, protocol, aspera_maximum_bandwidth: str,
     ):
         """
         This method will download all the raw files from PRIDE PROJECT
         :param output_folder: output directory where raw files will get saved
+        :param skip_if_downloaded_already: Boolean value to skip the download if the file has already been downloaded.
         :param accession: PRIDE accession
         :param protocol: ftp, aspera, globus
         :param aspera_maximum_bandwidth: Aspera maximum bandwidth
@@ -131,17 +133,20 @@ class Files:
 
         self.download_files(
             response_body,
+            accession,
             output_folder,
+            skip_if_downloaded_already,
             protocol,
             aspera_maximum_bandwidth=aspera_maximum_bandwidth,
         )
 
     @staticmethod
-    def download_files_from_ftp(file_list_json, output_folder):
+    def download_files_from_ftp(file_list_json, output_folder, skip_if_downloaded_already):
         """
         Download files using ftp transfer url with progress bar for each file
         :param file_list_json: file list in json format
         :param output_folder: folder to download the files
+        :param skip_if_downloaded_already: Boolean value to skip the download if the file has already been downloaded.
         """
 
         if not (os.path.isdir(output_folder)):
@@ -159,6 +164,10 @@ class Files:
                 new_file_path = Files.get_output_file_name(
                     download_url, file, output_folder
                 )
+
+                if skip_if_downloaded_already==True and os.path.exists(new_file_path):
+                    logging.info("Skipping download as file already exists")
+                    continue
 
                 # Fetch the total file size from the headers for progress tracking
                 with urllib.request.urlopen(download_url, timeout=30) as response:
@@ -191,13 +200,14 @@ class Files:
 
     @staticmethod
     def download_files_from_aspera(
-        file_list_json: Dict, output_folder: str, maximum_bandwidth: str = "100M"
+            file_list_json: Dict, output_folder: str, skip_if_downloaded_already, maximum_bandwidth: str = "100M"
     ):
         """
         Download files using aspera transfer url
         :param file_list_json: file list in json format
         :param output_folder: folder to download the files
         :param maximum_bandwidth: parameter in Aspera sets the maximum bandwidth for the transfer.
+        :param skip_if_downloaded_already: Boolean value to skip the download if the file has already been downloaded.
         """
         ascp_path = Files.get_ascp_binary()
         key_full_path = importlib.resources.files("pridepy").joinpath(
@@ -215,6 +225,11 @@ class Files:
             new_file_path = Files.get_output_file_name(
                 download_url, file, output_folder
             )
+
+            if skip_if_downloaded_already==True and os.path.exists(new_file_path):
+                logging.info("Skipping download as file already exists")
+                continue
+
             try:
                 # Execute the ascp command using subprocess
                 subprocess.run(
@@ -237,15 +252,16 @@ class Files:
                 logging.error(f"Aspera download failed for {new_file_path}: {str(e)}")
 
     @staticmethod
-    def download_files_from_globus(file_list_json, output_folder):
+    def download_files_from_globus(file_list_json, output_folder, skip_if_downloaded_already):
         """
         Download files using globus transfer url with progress bar for each file
         :param file_list_json: file list in json format
         :param output_folder: folder to download the files
+        :param skip_if_downloaded_already: Boolean value to skip the download if the file has already been downloaded.
         """
 
         if not (os.path.isdir(output_folder)):
-            os.mkdir(output_folder)
+            os.mkdir(output_folder, exist_ok=True)
 
         for file in file_list_json:
             try:
@@ -263,6 +279,10 @@ class Files:
                 new_file_path = Files.get_output_file_name(
                     download_url, file, output_folder
                 )
+
+                if skip_if_downloaded_already==True and os.path.exists(new_file_path):
+                    logging.info("Skipping download as file already exists")
+                    continue
 
                 # Get total file size for progress tracking
                 with urllib.request.urlopen(download_url) as response:
@@ -289,29 +309,40 @@ class Files:
                 )
 
     @staticmethod
-    def download_files_from_s3(file_list_json, output_folder):
+    def download_files_from_s3(file_list_json: Dict, output_folder: str, skip_if_downloaded_already):
         """
-        Download files using s3 transfer url with progress bar for each file
-        :param file_list_json: file list in json format
+        Download files using S3 transfer URL with a progress bar and retry logic.
+        :param file_list_json: file list in JSON format
         :param output_folder: folder to download the files
+        :param skip_if_downloaded_already: Boolean value to skip the download if the file has already been downloaded.
         """
 
-        if not (os.path.isdir(output_folder)):
-            os.mkdir(output_folder)
+        if not os.path.isdir(output_folder):
+            os.makedirs(output_folder, exist_ok=True)
+
+        # Retry and timeout config
+        retry_config = Config(
+            retries={"max_attempts": 5, "mode": "standard"},
+            connect_timeout=120,  # Increase timeout to 120 seconds
+            read_timeout=120,  # Timeout for reading data
+            signature_version=botocore.UNSIGNED,  # Unsigned requests for public data
+        )
 
         s3_resource = boto3.resource(
             "s3",
-            config=Config(signature_version=botocore.UNSIGNED),
+            config=retry_config,
             endpoint_url=Files.S3_URL,
         )
+        bucket = s3_resource.Bucket(Files.S3_BUCKET)
 
         for file in file_list_json:
             try:
-                bucket = s3_resource.Bucket(Files.S3_BUCKET)
-                if file["publicFileLocations"][0]["name"] == "FTP Protocol":
-                    download_url = file["publicFileLocations"][0]["value"]
-                else:
-                    download_url = file["publicFileLocations"][1]["value"]
+                # Determine S3 or FTP path
+                download_url = (
+                    file["publicFileLocations"][0]["value"]
+                    if file["publicFileLocations"][0]["name"] == "FTP Protocol"
+                    else file["publicFileLocations"][1]["value"]
+                )
 
                 ftp_base_url = "ftp://ftp.pride.ebi.ac.uk/pride/data/archive/"
                 s3_path = download_url.replace(ftp_base_url, "")
@@ -319,27 +350,39 @@ class Files:
                     download_url, file, output_folder
                 )
 
+                if skip_if_downloaded_already==True and os.path.exists(new_file_path):
+                    logging.info("Skipping download as file already exists")
+                    continue
+
                 logging.debug(f"Downloading From S3: {s3_path}")
 
-                # Get the file size for progress tracking
+                # Get file size for progress tracking
                 obj = bucket.Object(s3_path)
                 total_size = obj.content_length
 
                 # Initialize progress bar
                 progress = Progress(total_size, new_file_path)
 
-                # Download with progress bar
-                bucket.download_file(s3_path, new_file_path, Callback=progress)
-
-                progress.close()
-
-                logging.info(f"Successfully downloaded {new_file_path}")
-
-            except botocore.exceptions.ClientError as e:
-                if e.response["Error"]["Code"] == "404":
-                    print("The object does not exist.")
-                else:
-                    raise
+                # Download with progress bar and retry handling
+                for attempt in range(5):
+                    try:
+                        bucket.download_file(s3_path, new_file_path, Callback=progress)
+                        progress.close()
+                        logging.info(f"Successfully downloaded {new_file_path}")
+                        break
+                    except botocore.exceptions.ClientError as e:
+                        if e.response["Error"]["Code"] == "404":
+                            logging.error("The object does not exist.")
+                            break
+                        else:
+                            logging.error(f"Download failed: {e}")
+                            if attempt < 4:
+                                time.sleep(2 ** attempt)  # Exponential backoff
+                                logging.info(f"Retrying... ({attempt + 1}/5)")
+                            else:
+                                raise
+            except Exception as e:
+                logging.error(f"Failed to download {file['fileName']}: {e}")
 
     def get_submitted_file_path_prefix(self, accession):
         """
@@ -357,14 +400,15 @@ class Files:
         return path_fragment
 
     def download_file_by_name(
-        self,
-        accession,
-        file_name,
-        output_folder,
-        protocol,
-        username,
-        password,
-        aspera_maximum_bandwidth,
+            self,
+            accession,
+            file_name,
+            output_folder,
+            skip_if_downloaded_already,
+            protocol,
+            username,
+            password,
+            aspera_maximum_bandwidth,
     ):
         """
         Download files from url
@@ -374,6 +418,7 @@ class Files:
         :param protocol: ftp, aspera, globus
         :param username: Username for private datasets
         :param password: Password for private datasets
+        :param skip_if_downloaded_already: Boolean value to skip the download if the file has already been downloaded.
         :param aspera_maximum_bandwidth: Aspera maximum bandwidth
         """
 
@@ -401,7 +446,9 @@ class Files:
             response = self.get_file_from_api(accession, file_name)
             self.download_files(
                 response,
+                accession,
                 output_folder,
+                skip_if_downloaded_already,
                 protocol,
                 aspera_maximum_bandwidth=aspera_maximum_bandwidth,
             )
@@ -434,11 +481,11 @@ class Files:
         :return: file in json format
         """
         request_url = (
-            self.API_BASE_URL
-            + "/files/byProject?accession="
-            + accession
-            + ",fileName=="
-            + file_name
+                self.API_BASE_URL
+                + "/files/byProject?accession="
+                + accession
+                + ",fileName=="
+                + file_name
         )
         headers = {"Accept": "application/JSON"}
         try:
@@ -448,7 +495,7 @@ class Files:
             raise Exception("File not found " + str(e))
 
     def download_private_file_name(
-        self, accession, file_name, output_folder, username, password
+            self, accession, file_name, output_folder, username, password
     ):
         """
         Get the information for a given private file to be downloaded from the api.
@@ -472,14 +519,13 @@ class Files:
         if content.ok and content.status_code == 200:
             json_file = content.json()
             if (
-                "_embedded" in json_file
-                and "files" in json_file["_embedded"]
-                and len(json_file["_embedded"]["files"]) == 1
+                    "_embedded" in json_file
+                    and "files" in json_file["_embedded"]
+                    and len(json_file["_embedded"]["files"]) == 1
             ):
                 download_url = json_file["_embedded"]["files"][0]["_links"]["download"][
                     "href"
                 ]
-                total_size = json_file["_embedded"]["files"][0]["fileSizeBytes"]
                 logging.info(download_url)
 
                 # Create a clean filename to save the downloaded file
@@ -501,18 +547,18 @@ class Files:
                     resume_size = 0
 
                 with session.get(
-                    download_url, stream=True, headers=resume_header, timeout=(10, 60)
+                        download_url, stream=True, headers=resume_header, timeout=(10, 60)
                 ) as r:
                     r.raise_for_status()
                     total_size = int(r.headers.get("content-length", 0)) + resume_size
                     block_size = 1024 * 1024  # 1 MB chunks
 
                     with tqdm(
-                        total=total_size,
-                        unit="B",
-                        unit_scale=True,
-                        desc=new_file_path,
-                        initial=resume_size,
+                            total=total_size,
+                            unit="B",
+                            unit_scale=True,
+                            desc=new_file_path,
+                            initial=resume_size,
                     ) as pbar:
                         with open(new_file_path, mode) as f:
                             for chunk in r.iter_content(chunk_size=block_size):
@@ -564,33 +610,51 @@ class Files:
             raise OSError(f"Unsupported OS or architecture: {os_type}, {arch}")
 
     @staticmethod
+    def save_checksum_file(accession, output_folder):
+        url = f'https://wwwdev.ebi.ac.uk/pride/ws/archive/v3/files/checksum/{accession}'
+        headers = {'accept': 'text/plain'}
+        request = urllib.request.Request(url, headers=headers, method='GET')
+        logging.info(f'Fetching checksum file from {url}')
+        with urllib.request.urlopen(request) as response:
+            data = response.read().decode('utf-8')
+            # Save the data to a .tsv file
+            output_path = os.path.join(output_folder, f'{accession}-checksum.tsv')
+            with open(output_path, 'w') as file:
+                file.write(data)
+
+    @staticmethod
     def download_files(
-        file_list_json,
-        output_folder: str,
-        protocol: str = "ftp",
-        aspera_maximum_bandwidth: str = "100M",
+            file_list_json,
+            accession,
+            output_folder: str,
+            skip_if_downloaded_already,
+            protocol: str = "ftp",
+            aspera_maximum_bandwidth: str = "100M"
     ):
         """
         Download files using either FTP or Aspera transfer protocol.
         :param file_list_json: File list in JSON format
+        :param accession:  Project accession
         :param output_folder: Folder to download the files
         :param protocol: ftp, aspera, globus
         :param aspera_maximum_bandwidth: parameter in Aspera sets the maximum bandwidth for the transfer.
+        :param skip_if_downloaded_already: Boolean value to skip the download if the file has already been downloaded.
         """
         protocols_supported = ["ftp", "aspera", "globus", "s3"]
         if protocol not in protocols_supported:
             logging.error("Protocol should be either ftp, aspera, globus")
             return
-
+        Files.save_checksum_file(accession, output_folder)
         if protocol == "ftp":
-            Files.download_files_from_ftp(file_list_json, output_folder)
+            Files.download_files_from_ftp(file_list_json, output_folder, skip_if_downloaded_already)
         elif protocol == "aspera":
             Files.download_files_from_aspera(
                 file_list_json,
                 output_folder,
+                skip_if_downloaded_already,
                 maximum_bandwidth=aspera_maximum_bandwidth,
             )
         elif protocol == "globus":
-            Files.download_files_from_globus(file_list_json, output_folder)
+            Files.download_files_from_globus(file_list_json, output_folder, skip_if_downloaded_already)
         elif protocol == "s3":
-            Files.download_files_from_s3(file_list_json, output_folder)
+            Files.download_files_from_s3(file_list_json, output_folder, skip_if_downloaded_already)

@@ -13,3 +13,4 @@ dependencies:
   - boto3~=1.34.61
   - botocore~=1.34.74
   - tqdm
+  - urllib3
