@@ -245,7 +245,7 @@ class Files:
         """
 
         if not (os.path.isdir(output_folder)):
-            os.mkdir(output_folder)
+            os.mkdir(output_folder, exist_ok=True)
 
         for file in file_list_json:
             try:
@@ -289,7 +289,7 @@ class Files:
                 )
 
     @staticmethod
-    def download_files_from_s3(file_list_json, output_folder):
+    def download_files_from_s3(file_list_json: Dict, output_folder: str):
         """
         Download files using s3 transfer url with progress bar for each file
         :param file_list_json: file list in json format
@@ -297,17 +297,17 @@ class Files:
         """
 
         if not (os.path.isdir(output_folder)):
-            os.mkdir(output_folder)
+            os.makedirs(output_folder, exist_ok=True)
 
         s3_resource = boto3.resource(
             "s3",
             config=Config(signature_version=botocore.UNSIGNED),
             endpoint_url=Files.S3_URL,
         )
+        bucket = s3_resource.Bucket(Files.S3_BUCKET)
 
         for file in file_list_json:
             try:
-                bucket = s3_resource.Bucket(Files.S3_BUCKET)
                 if file["publicFileLocations"][0]["name"] == "FTP Protocol":
                     download_url = file["publicFileLocations"][0]["value"]
                 else:
@@ -337,7 +337,7 @@ class Files:
 
             except botocore.exceptions.ClientError as e:
                 if e.response["Error"]["Code"] == "404":
-                    print("The object does not exist.")
+                    logging.error("The object does not exist.")
                 else:
                     raise
 

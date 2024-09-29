@@ -136,12 +136,12 @@ def get_private_files(accession, user, password):
     project = Project()
     list_files = project.get_private_files_by_accession(accession, user, password)
     if list_files:
-        print("File Name\tFile Size\tCategory")
+        logging.info("File Name\tFile Size\tCategory")
         for f in list_files:
             # Get file size in MB from bytes
             file_size = f["fileSizeBytes"] / (1024 * 1024)
             file_category = f["fileCategory"]["value"]
-            print(f["fileName"] + "\t" + str(file_size) + " MB\t" + file_category)
+            logging.info(f["fileName"] + "\t" + str(file_size) + " MB\t" + file_category)
 
 
 @main.command()
@@ -248,7 +248,7 @@ def get_projects(page_size, page, sort_direction, sort_conditions):
     :return:
     """
     project = Project()
-    print(project.get_projects(page_size, page, sort_direction, sort_conditions))
+    logging.info(project.get_projects(page_size, page, sort_direction, sort_conditions))
 
 
 @main.command()
@@ -259,7 +259,7 @@ def get_projects_by_accession(accession):
     :return:
     """
     project = Project()
-    print(project.get_by_accession(accession))
+    logging.info(project.get_by_accession(accession))
 
 
 @main.command()
@@ -270,7 +270,7 @@ def get_reanalysis_projects_by_accession(accession):
     :return:
     """
     project = Project()
-    print(project.get_reanalysis_projects_by_accession(accession))
+    logging.info(project.get_reanalysis_projects_by_accession(accession))
 
 
 @main.command()
@@ -281,7 +281,7 @@ def get_similar_projects_by_accession(accession):
     :return:
     """
     project = Project()
-    print(project.get_similar_projects_by_accession(accession))
+    logging.info(project.get_similar_projects_by_accession(accession))
 
 
 @main.command()
@@ -332,7 +332,7 @@ def get_files_by_project_accession(
     :return:
     """
     project = Project()
-    print(
+    logging.info(
         project.get_files_by_accession(
             accession, filter, page_size, page, sort_direction, sort_conditions
         )
@@ -384,7 +384,7 @@ def get_files_by_filter(filter, page_size, page, sort_direction, sort_conditions
     :return:
     """
     files = Files()
-    print(
+    logging.info(
         files.get_all_paged_files(
             filter, page_size, page, sort_direction, sort_conditions
         )
