@@ -60,7 +60,7 @@ class Files:
         pass
 
     def get_all_paged_files(
-        self, query_filter, page_size, page, sort_direction, sort_conditions
+            self, query_filter, page_size, page, sort_direction, sort_conditions
     ):
         """
          Get all filtered pride submission files
@@ -72,7 +72,7 @@ class Files:
         :return: paged file list on JSON format
         """
         """
-           
+
         """
         request_url = self.API_BASE_URL + "/files?"
 
@@ -80,15 +80,15 @@ class Files:
             request_url = request_url + "filter=" + query_filter + "&"
 
         request_url = (
-            request_url
-            + "pageSize="
-            + str(page_size)
-            + "&page="
-            + str(page)
-            + "&sortDirection="
-            + sort_direction
-            + "&sortConditions="
-            + sort_conditions
+                request_url
+                + "pageSize="
+                + str(page_size)
+                + "&page="
+                + str(page)
+                + "&sortDirection="
+                + sort_direction
+                + "&sortConditions="
+                + sort_conditions
         )
 
         headers = {"Accept": "application/JSON"}
@@ -103,10 +103,10 @@ class Files:
         """
 
         request_url = (
-            self.API_BASE_URL
-            + "/files/byProject?accession="
-            + project_accession
-            + ",fileCategory.value==RAW"
+                self.API_BASE_URL
+                + "/files/byProject?accession="
+                + project_accession
+                + ",fileCategory.value==RAW"
         )
         headers = {"Accept": "application/JSON"}
 
@@ -114,7 +114,7 @@ class Files:
         return response.json()
 
     def download_all_raw_files(
-        self, accession, output_folder, protocol, aspera_maximum_bandwidth: str
+            self, accession, output_folder, protocol, aspera_maximum_bandwidth: str
     ):
         """
         This method will download all the raw files from PRIDE PROJECT
@@ -192,7 +192,7 @@ class Files:
 
     @staticmethod
     def download_files_from_aspera(
-        file_list_json: Dict, output_folder: str, maximum_bandwidth: str = "100M"
+            file_list_json: Dict, output_folder: str, maximum_bandwidth: str = "100M"
     ):
         """
         Download files using aspera transfer url
@@ -353,7 +353,7 @@ class Files:
                         else:
                             logging.error(f"Download failed: {e}")
                             if attempt < 4:
-                                time.sleep(2**attempt)  # Exponential backoff
+                                time.sleep(2 ** attempt)  # Exponential backoff
                                 logging.info(f"Retrying... ({attempt + 1}/5)")
                             else:
                                 raise
@@ -376,14 +376,14 @@ class Files:
         return path_fragment
 
     def download_file_by_name(
-        self,
-        accession,
-        file_name,
-        output_folder,
-        protocol,
-        username,
-        password,
-        aspera_maximum_bandwidth,
+            self,
+            accession,
+            file_name,
+            output_folder,
+            protocol,
+            username,
+            password,
+            aspera_maximum_bandwidth,
     ):
         """
         Download files from url
@@ -453,11 +453,11 @@ class Files:
         :return: file in json format
         """
         request_url = (
-            self.API_BASE_URL
-            + "/files/byProject?accession="
-            + accession
-            + ",fileName=="
-            + file_name
+                self.API_BASE_URL
+                + "/files/byProject?accession="
+                + accession
+                + ",fileName=="
+                + file_name
         )
         headers = {"Accept": "application/JSON"}
         try:
@@ -467,7 +467,7 @@ class Files:
             raise Exception("File not found " + str(e))
 
     def download_private_file_name(
-        self, accession, file_name, output_folder, username, password
+            self, accession, file_name, output_folder, username, password
     ):
         """
         Get the information for a given private file to be downloaded from the api.
@@ -491,9 +491,9 @@ class Files:
         if content.ok and content.status_code == 200:
             json_file = content.json()
             if (
-                "_embedded" in json_file
-                and "files" in json_file["_embedded"]
-                and len(json_file["_embedded"]["files"]) == 1
+                    "_embedded" in json_file
+                    and "files" in json_file["_embedded"]
+                    and len(json_file["_embedded"]["files"]) == 1
             ):
                 download_url = json_file["_embedded"]["files"][0]["_links"]["download"][
                     "href"
@@ -519,18 +519,18 @@ class Files:
                     resume_size = 0
 
                 with session.get(
-                    download_url, stream=True, headers=resume_header, timeout=(10, 60)
+                        download_url, stream=True, headers=resume_header, timeout=(10, 60)
                 ) as r:
                     r.raise_for_status()
                     total_size = int(r.headers.get("content-length", 0)) + resume_size
                     block_size = 1024 * 1024  # 1 MB chunks
 
                     with tqdm(
-                        total=total_size,
-                        unit="B",
-                        unit_scale=True,
-                        desc=new_file_path,
-                        initial=resume_size,
+                            total=total_size,
+                            unit="B",
+                            unit_scale=True,
+                            desc=new_file_path,
+                            initial=resume_size,
                     ) as pbar:
                         with open(new_file_path, mode) as f:
                             for chunk in r.iter_content(chunk_size=block_size):
@@ -582,15 +582,30 @@ class Files:
             raise OSError(f"Unsupported OS or architecture: {os_type}, {arch}")
 
     @staticmethod
+    def save_checksum_file(accession, output_folder):
+        url = f'https://wwwdev.ebi.ac.uk/pride/ws/archive/v3/files/checksum/{accession}'
+        headers = {'accept': 'text/plain'}
+        request = urllib.request.Request(url, headers=headers, method='GET')
+        logging.info(f'calling {url}')
+        with urllib.request.urlopen(request) as response:
+            data = response.read().decode('utf-8')
+            # Save the data to a .tsv file
+            output_path = os.path.join(output_folder, f'{accession}-checksum.tsv')
+            with open(output_path, 'w') as file:
+                file.write(data)
+
+    @staticmethod
     def download_files(
-        file_list_json,
-        output_folder: str,
-        protocol: str = "ftp",
-        aspera_maximum_bandwidth: str = "100M",
+            file_list_json,
+        accession,
+            output_folder: str,
+            protocol: str = "ftp",
+            aspera_maximum_bandwidth: str = "100M",
     ):
         """
         Download files using either FTP or Aspera transfer protocol.
         :param file_list_json: File list in JSON format
+        :param accession:  Project accession
         :param output_folder: Folder to download the files
         :param protocol: ftp, aspera, globus
         :param aspera_maximum_bandwidth: parameter in Aspera sets the maximum bandwidth for the transfer.
@@ -599,7 +614,7 @@ class Files:
         if protocol not in protocols_supported:
             logging.error("Protocol should be either ftp, aspera, globus")
             return
-
+        Files.save_checksum_file(accession, output_folder)
         if protocol == "ftp":
             Files.download_files_from_ftp(file_list_json, output_folder)
         elif protocol == "aspera":
