@@ -35,7 +35,7 @@ def main():
     default="100M",
 )
 def download_all_public_raw_files(
-        accession, protocol, output_folder, aspera_maximum_bandwidth: str = "50M"
+    accession, protocol, output_folder, aspera_maximum_bandwidth: str = "50M"
 ):
     """
     This script download raw files from FTP or copy from the file system
@@ -87,13 +87,13 @@ def download_all_public_raw_files(
     default="100M",
 )
 def download_file_by_name(
-        accession,
-        protocol,
-        file_name,
-        output_folder,
-        username: str = None,
-        password: str = None,
-        aspera_maximum_bandwidth: str = "50M",
+    accession,
+    protocol,
+    file_name,
+    output_folder,
+    username: str = None,
+    password: str = None,
+    aspera_maximum_bandwidth: str = "50M",
 ):
     """
     This script download single file from servers or copy from the file system
@@ -141,7 +141,9 @@ def get_private_files(accession, user, password):
             # Get file size in MB from bytes
             file_size = f["fileSizeBytes"] / (1024 * 1024)
             file_category = f["fileCategory"]["value"]
-            logging.info(f["fileName"] + "\t" + str(file_size) + " MB\t" + file_category)
+            logging.info(
+                f["fileName"] + "\t" + str(file_size) + " MB\t" + file_category
+            )
 
 
 @main.command()
@@ -150,15 +152,15 @@ def get_private_files(accession, user, password):
     "--keyword",
     required=False,
     help="The entered word will be searched among the fields to fetch "
-         "matching pride. The structure of the keyword is : *:*",
+    "matching pride. The structure of the keyword is : *:*",
 )
 @click.option(
     "-f",
     "--filter",
     required=False,
     help="Parameters to filter the search results. The structure of the "
-         "filter is: field1==value1, field2==value2. Example "
-         "accession==PRD000001",
+    "filter is: field1==value1, field2==value2. Example "
+    "accession==PRD000001",
 )
 @click.option(
     "-ps",
@@ -193,11 +195,11 @@ def get_private_files(accession, user, password):
     required=False,
     default="submission_date",
     help="Field(s) for sorting the results on. Default for this "
-         "request is submission_date. More fields can be separated by "
-         "comma and passed. Example: submission_date,project_title",
+    "request is submission_date. More fields can be separated by "
+    "comma and passed. Example: submission_date,project_title",
 )
 def search_projects_by_keywords_and_filters(
-        keyword, filter, page_size, page, date_gap, sort_direction, sort_fields
+    keyword, filter, page_size, page, date_gap, sort_direction, sort_fields
 ):
     """
     search public pride with keywords and filters
@@ -239,8 +241,8 @@ def search_projects_by_keywords_and_filters(
     required=False,
     default="projectAccession",
     help="Field(s) for sorting the results on. Default for this "
-         "request is project_accession. More fields can be separated by "
-         "comma and passed. Example: submission_date,project_title",
+    "request is project_accession. More fields can be separated by "
+    "comma and passed. Example: submission_date,project_title",
 )
 def get_projects(page_size, page, sort_direction, sort_conditions):
     """
@@ -291,8 +293,8 @@ def get_similar_projects_by_accession(accession):
     "--filter",
     required=False,
     help="Parameters to filter the search results. The structure of the "
-         "filter is: field1==value1, field2==value2. Example "
-         "accession==PRD000001",
+    "filter is: field1==value1, field2==value2. Example "
+    "accession==PRD000001",
 )
 @click.option(
     "-ps",
@@ -321,11 +323,11 @@ def get_similar_projects_by_accession(accession):
     required=False,
     default="projectAccession",
     help="Field(s) for sorting the results on. Default for this "
-         "request is project_accession. More fields can be separated by "
-         "comma and passed. Example: submission_date,project_title",
+    "request is project_accession. More fields can be separated by "
+    "comma and passed. Example: submission_date,project_title",
 )
 def get_files_by_project_accession(
-        accession, filter, page_size, page, sort_direction, sort_conditions
+    accession, filter, page_size, page, sort_direction, sort_conditions
 ):
     """
     get files by project accession
@@ -345,8 +347,8 @@ def get_files_by_project_accession(
     "--filter",
     required=False,
     help="Parameters to filter the search results. The structure of the "
-         "filter is: field1==value1, field2==value2. Example "
-         "fileCategory.value==RAW",
+    "filter is: field1==value1, field2==value2. Example "
+    "fileCategory.value==RAW",
 )
 @click.option(
     "-ps",
@@ -375,8 +377,8 @@ def get_files_by_project_accession(
     required=False,
     default="submissionDate",
     help="Field(s) for sorting the results on. Default for this "
-         "request is submissionDate. More fields can be separated by "
-         "comma and passed. Example: submission_date,project_title",
+    "request is submissionDate. More fields can be separated by "
+    "comma and passed. Example: submission_date,project_title",
 )
 def get_files_by_filter(filter, page_size, page, sort_direction, sort_conditions):
     """
