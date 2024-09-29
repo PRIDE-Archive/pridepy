@@ -114,7 +114,7 @@ class Files:
         return response.json()
 
     def download_all_raw_files(
-            self, accession, output_folder, protocol, aspera_maximum_bandwidth: str
+            self, accession, output_folder, protocol, aspera_maximum_bandwidth: str, skip_if_downloaded_already
     ):
         """
         This method will download all the raw files from PRIDE PROJECT
@@ -122,6 +122,7 @@ class Files:
         :param accession: PRIDE accession
         :param protocol: ftp, aspera, globus
         :param aspera_maximum_bandwidth: Aspera maximum bandwidth
+        :param skip_if_downloaded_already: Boolean value to skip the download if the file has already been downloaded.
         :return: None
         """
 
@@ -132,17 +133,20 @@ class Files:
 
         self.download_files(
             response_body,
+            accession,
             output_folder,
             protocol,
+            skip_if_downloaded_already,
             aspera_maximum_bandwidth=aspera_maximum_bandwidth,
         )
 
     @staticmethod
-    def download_files_from_ftp(file_list_json, output_folder):
+    def download_files_from_ftp(file_list_json, output_folder, skip_if_downloaded_already):
         """
         Download files using ftp transfer url with progress bar for each file
         :param file_list_json: file list in json format
         :param output_folder: folder to download the files
+        :param skip_if_downloaded_already: Boolean value to skip the download if the file has already been downloaded.
         """
 
         if not (os.path.isdir(output_folder)):
@@ -160,6 +164,10 @@ class Files:
                 new_file_path = Files.get_output_file_name(
                     download_url, file, output_folder
                 )
+
+                if skip_if_downloaded_already==True and os.path.exists(new_file_path):
+                    logging.info("Skipping download as file already exists")
+                    continue
 
                 # Fetch the total file size from the headers for progress tracking
                 with urllib.request.urlopen(download_url, timeout=30) as response:
@@ -192,13 +200,14 @@ class Files:
 
     @staticmethod
     def download_files_from_aspera(
-            file_list_json: Dict, output_folder: str, maximum_bandwidth: str = "100M"
+            file_list_json: Dict, output_folder: str, skip_if_downloaded_already, maximum_bandwidth: str = "100M"
     ):
         """
         Download files using aspera transfer url
         :param file_list_json: file list in json format
         :param output_folder: folder to download the files
         :param maximum_bandwidth: parameter in Aspera sets the maximum bandwidth for the transfer.
+        :param skip_if_downloaded_already: Boolean value to skip the download if the file has already been downloaded.
         """
         ascp_path = Files.get_ascp_binary()
         key_full_path = importlib.resources.files("pridepy").joinpath(
@@ -216,6 +225,11 @@ class Files:
             new_file_path = Files.get_output_file_name(
                 download_url, file, output_folder
             )
+
+            if skip_if_downloaded_already==True and os.path.exists(new_file_path):
+                logging.info("Skipping download as file already exists")
+                continue
+
             try:
                 # Execute the ascp command using subprocess
                 subprocess.run(
@@ -238,11 +252,12 @@ class Files:
                 logging.error(f"Aspera download failed for {new_file_path}: {str(e)}")
 
     @staticmethod
-    def download_files_from_globus(file_list_json, output_folder):
+    def download_files_from_globus(file_list_json, output_folder, skip_if_downloaded_already):
         """
         Download files using globus transfer url with progress bar for each file
         :param file_list_json: file list in json format
         :param output_folder: folder to download the files
+        :param skip_if_downloaded_already: Boolean value to skip the download if the file has already been downloaded.
         """
 
         if not (os.path.isdir(output_folder)):
@@ -264,6 +279,10 @@ class Files:
                 new_file_path = Files.get_output_file_name(
                     download_url, file, output_folder
                 )
+
+                if skip_if_downloaded_already==True and os.path.exists(new_file_path):
+                    logging.info("Skipping download as file already exists")
+                    continue
 
                 # Get total file size for progress tracking
                 with urllib.request.urlopen(download_url) as response:
@@ -290,11 +309,12 @@ class Files:
                 )
 
     @staticmethod
-    def download_files_from_s3(file_list_json: Dict, output_folder: str):
+    def download_files_from_s3(file_list_json: Dict, output_folder: str, skip_if_downloaded_already):
         """
         Download files using S3 transfer URL with a progress bar and retry logic.
         :param file_list_json: file list in JSON format
         :param output_folder: folder to download the files
+        :param skip_if_downloaded_already: Boolean value to skip the download if the file has already been downloaded.
         """
 
         if not os.path.isdir(output_folder):
@@ -329,6 +349,10 @@ class Files:
                 new_file_path = Files.get_output_file_name(
                     download_url, file, output_folder
                 )
+
+                if skip_if_downloaded_already==True and os.path.exists(new_file_path):
+                    logging.info("Skipping download as file already exists")
+                    continue
 
                 logging.debug(f"Downloading From S3: {s3_path}")
 
@@ -380,6 +404,7 @@ class Files:
             accession,
             file_name,
             output_folder,
+            skip_if_downloaded_already,
             protocol,
             username,
             password,
@@ -393,6 +418,7 @@ class Files:
         :param protocol: ftp, aspera, globus
         :param username: Username for private datasets
         :param password: Password for private datasets
+        :param skip_if_downloaded_already: Boolean value to skip the download if the file has already been downloaded.
         :param aspera_maximum_bandwidth: Aspera maximum bandwidth
         """
 
@@ -420,7 +446,9 @@ class Files:
             response = self.get_file_from_api(accession, file_name)
             self.download_files(
                 response,
+                accession,
                 output_folder,
+                skip_if_downloaded_already,
                 protocol,
                 aspera_maximum_bandwidth=aspera_maximum_bandwidth,
             )
@@ -586,7 +614,7 @@ class Files:
         url = f'https://wwwdev.ebi.ac.uk/pride/ws/archive/v3/files/checksum/{accession}'
         headers = {'accept': 'text/plain'}
         request = urllib.request.Request(url, headers=headers, method='GET')
-        logging.info(f'calling {url}')
+        logging.info(f'Fetching checksum file from {url}')
         with urllib.request.urlopen(request) as response:
             data = response.read().decode('utf-8')
             # Save the data to a .tsv file
@@ -597,10 +625,11 @@ class Files:
     @staticmethod
     def download_files(
             file_list_json,
-        accession,
+            accession,
             output_folder: str,
+            skip_if_downloaded_already,
             protocol: str = "ftp",
-            aspera_maximum_bandwidth: str = "100M",
+            aspera_maximum_bandwidth: str = "100M"
     ):
         """
         Download files using either FTP or Aspera transfer protocol.
@@ -609,6 +638,7 @@ class Files:
         :param output_folder: Folder to download the files
         :param protocol: ftp, aspera, globus
         :param aspera_maximum_bandwidth: parameter in Aspera sets the maximum bandwidth for the transfer.
+        :param skip_if_downloaded_already: Boolean value to skip the download if the file has already been downloaded.
         """
         protocols_supported = ["ftp", "aspera", "globus", "s3"]
         if protocol not in protocols_supported:
@@ -616,14 +646,15 @@ class Files:
             return
         Files.save_checksum_file(accession, output_folder)
         if protocol == "ftp":
-            Files.download_files_from_ftp(file_list_json, output_folder)
+            Files.download_files_from_ftp(file_list_json, output_folder, skip_if_downloaded_already)
         elif protocol == "aspera":
             Files.download_files_from_aspera(
                 file_list_json,
                 output_folder,
+                skip_if_downloaded_already,
                 maximum_bandwidth=aspera_maximum_bandwidth,
             )
         elif protocol == "globus":
-            Files.download_files_from_globus(file_list_json, output_folder)
+            Files.download_files_from_globus(file_list_json, output_folder, skip_if_downloaded_already)
         elif protocol == "s3":
-            Files.download_files_from_s3(file_list_json, output_folder)
+            Files.download_files_from_s3(file_list_json, output_folder, skip_if_downloaded_already)

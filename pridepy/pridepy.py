@@ -29,13 +29,20 @@ def main():
     help="output folder to download or copy raw files",
 )
 @click.option(
+    "-skip",
+    "--skip_if_downloaded_already",
+    required=False,
+    default=True,
+    help="Boolean value to skip the download if the file has already been downloaded.",
+)
+@click.option(
     "--aspera_maximum_bandwidth",
     required=False,
     help="Aspera maximum bandwidth (e.g 50M, 100M, 200M), depending on the user's network bandwidth, default is 100M",
     default="100M",
 )
 def download_all_public_raw_files(
-    accession, protocol, output_folder, aspera_maximum_bandwidth: str = "50M"
+    accession, protocol, output_folder, skip_if_downloaded_already, aspera_maximum_bandwidth: str = "50M"
 ):
     """
     This script download raw files from FTP or copy from the file system
@@ -51,6 +58,7 @@ def download_all_public_raw_files(
     raw_files.download_all_raw_files(
         accession,
         output_folder,
+        skip_if_downloaded_already,
         protocol,
         aspera_maximum_bandwidth=aspera_maximum_bandwidth,
     )
@@ -75,6 +83,13 @@ def download_all_public_raw_files(
     help="output folder to download or copy files",
 )
 @click.option(
+    "-skip",
+    "--skip_if_downloaded_already",
+    required=False,
+    default=True,
+    help="Boolean value to skip the download if the file has already been downloaded.",
+)
+@click.option(
     "--username", required=False, help="PRIDE login username for private files"
 )
 @click.option(
@@ -91,6 +106,7 @@ def download_file_by_name(
     protocol,
     file_name,
     output_folder,
+    skip_if_downloaded_already: bool,
     username: str = None,
     password: str = None,
     aspera_maximum_bandwidth: str = "50M",
@@ -101,6 +117,7 @@ def download_file_by_name(
     :param protocol: Protocol to be used to download files either by ftp or aspera or from globus. Default is ftp
     :param file_name: fileName to be downloaded
     :param output_folder: output folder to download or copy files
+    :param skip_if_downloaded_already: Boolean value to skip the download if the file has already been downloaded.
     :param username: PRIDE login username for private files
     :param password: PRIDE login password for private files
     :param aspera_maximum_bandwidth: Aspera maximum bandwidth (e.g 50M, 100M, 200M), depending on the user's network bandwidth, default is 100M
@@ -117,6 +134,7 @@ def download_file_by_name(
         accession=accession,
         file_name=file_name,
         output_folder=output_folder,
+        skip_if_downloaded_already=skip_if_downloaded_already,
         protocol=protocol,
         username=username,
         password=password,
