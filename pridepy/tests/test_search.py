@@ -75,4 +75,4 @@ class TestSearch(TestCase):
                 raise Exception(
                     "Dataset {} is not present in PRIDE Archive".format(accession)
                 )
-        print(public_project)
+        logging.debug(f"Public project: {public_project}")
