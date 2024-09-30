@@ -21,7 +21,7 @@ $ pip install --upgrade pridepy
 First, clone the repository on your local machine and then install the package using `pip`:
 
 ```bash
-$ git clone https://github.com/bigbio/pridepy 
+$ git clone https://github.com/PRIDE-Archive/pridepy
 $ cd pridepy
 $ pip install .
 ```
@@ -29,7 +29,7 @@ $ pip install .
 Install with setup.py: 
 
 ```bash
-$ git clone https://github.com/bigbio/pridepy 
+$ git clone https://github.com/PRIDE-Archive/pridepy
 $ cd pridepy
 $ python setup.py sdist bdist_wheel 
 $ pip install dist/pridepy-0.0.3.tar.gz
