@@ -1,6 +1,9 @@
 #!/bin/bash
 # Please make sure you have installed pridepy (https://github.com/pride-archive/pridepy)
 
+# Get country/region info using ipinfo.io
+location=$(curl -s https://ipinfo.io/country)
+
 # Define project accessions and filenames in separate arrays
 benchmark_ids=("14M_file" "230M_file" "3G_file" "7G_file")
 accessions=("PXD056312" "PXD056312" "PXD046711" "PXD046711")
@@ -46,24 +49,24 @@ benchmark_download() {
         speed=$(echo "scale=2; $file_size / $duration" | bc)
 
         # Output result for this method
-        echo "$benchmark_id,$method,$speed MB/s,$duration s"
+        echo "$location,$benchmark_id,$method,$speed MB/s,$duration s"
 
         # Append result to the CSV file
-        echo "$benchmark_id,$method,$speed,$duration" >> benchmark_report.csv
+        echo "$location,$benchmark_id,$method,$speed,$duration" >> benchmark_report.csv
 
         # Clean up the downloaded file
         rm -f "$file_name"
     else
         # If the file is not downloaded, log failure
-        echo "$benchmark_id,$method,-,-"
+        echo "$location,$benchmark_id,$method,-,-"
 
         # Append failure result to the CSV file
-        echo "$benchmark_id,$method,-,-" >> benchmark_report.csv
+        echo "$location,$benchmark_id,$method,-,-" >> benchmark_report.csv
     fi
 }
 
 # Generate report header
-echo "Benchmark ID,Method,Average Speed (MB/s),Total Time (s)" > benchmark_report.csv
+echo "Location,Benchmark ID,Method,Average Speed (MB/s),Total Time (s)" > benchmark_report.csv
 
 # Loop through benchmarks and methods
 for i in "${!benchmark_ids[@]}"; do
