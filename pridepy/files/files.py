@@ -115,6 +115,7 @@ class Files:
 
     def download_all_raw_files(
             self, accession, output_folder, skip_if_downloaded_already, protocol, aspera_maximum_bandwidth: str,
+            checksum_check: bool = False
     ):
         """
         This method will download all the raw files from PRIDE PROJECT
@@ -123,6 +124,7 @@ class Files:
         :param accession: PRIDE accession
         :param protocol: ftp, aspera, globus
         :param aspera_maximum_bandwidth: Aspera maximum bandwidth
+        :param checksum_check: Download checksum for a given project.
         :return: None
         """
 
@@ -138,6 +140,7 @@ class Files:
             skip_if_downloaded_already,
             protocol,
             aspera_maximum_bandwidth=aspera_maximum_bandwidth,
+            checksum_check=checksum_check
         )
 
     @staticmethod
@@ -409,6 +412,7 @@ class Files:
             username,
             password,
             aspera_maximum_bandwidth,
+            checksum_check,
     ):
         """
         Download files from url
@@ -420,6 +424,7 @@ class Files:
         :param password: Password for private datasets
         :param skip_if_downloaded_already: Boolean value to skip the download if the file has already been downloaded.
         :param aspera_maximum_bandwidth: Aspera maximum bandwidth
+        :param checksum_check: Download checksum for a given project.
         """
 
         if not (os.path.isdir(output_folder)):
@@ -451,6 +456,7 @@ class Files:
                 skip_if_downloaded_already,
                 protocol,
                 aspera_maximum_bandwidth=aspera_maximum_bandwidth,
+                checksum_check=checksum_check
             )
         elif not public_project and (username is not None and password is not None):
             logging.info("Downloading file from private dataset {}".format(accession))
@@ -629,7 +635,8 @@ class Files:
             output_folder: str,
             skip_if_downloaded_already,
             protocol: str = "ftp",
-            aspera_maximum_bandwidth: str = "100M"
+            aspera_maximum_bandwidth: str = "100M", # Aspera maximum bandwidth
+            checksum_check = False
     ):
         """
         Download files using either FTP or Aspera transfer protocol.
@@ -644,7 +651,10 @@ class Files:
         if protocol not in protocols_supported:
             logging.error("Protocol should be either ftp, aspera, globus")
             return
-        Files.save_checksum_file(accession, output_folder)
+
+        if checksum_check:
+            Files.save_checksum_file(accession, output_folder)
+
         if protocol == "ftp":
             Files.download_files_from_ftp(file_list_json, output_folder, skip_if_downloaded_already)
         elif protocol == "aspera":
