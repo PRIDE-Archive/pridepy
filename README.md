@@ -91,7 +91,7 @@ Please make sure you are using Python3, not Python 2.7 version.
 
 # White paper
 
-A white paper is available at [here](paper/paper.md). We can build it as pdf using pandoc.
+A white paper is available at [here](paper/paper.md). We can build it as PDF using pandoc.
 
 ```bash
 $docker run --rm --platform linux/amd64 -v /Users/yperez/work/pridepy/paper/:/data -w /data openjournals/inara:latest paper.md -p -o pdf
