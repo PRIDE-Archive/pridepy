@@ -26,6 +26,15 @@ $ cd pridepy
 $ pip install .
 ```
 
+Install with setup.py: 
+
+```bash
+$ git clone https://github.com/bigbio/pridepy 
+$ cd pridepy
+$ python setup.py sdist bdist_wheel 
+$ pip install dist/pridepy-0.0.3.tar.gz
+```
+
 # Examples
 
 Download all the raw files from a dataset(eg: PXD012353).
@@ -34,18 +43,13 @@ Warning: Raw files are generally large in size, so it may take some time to down
 `-p`: in download specifies protocol (ftp default): 
    - **ftp**: FTP protocol
    - **aspera**: using the aspera protocol
-   - **s3**: using streaming protocol from PRIDE
    - **globus**: globus protocol
 
 ```bash
 $ pridepy download-all-public-raw-files -a PXD012353 -o /Users/yourname/Downloads/foldername/ -p aspera
 ```
 
-Download single file by name
-
-```bash
-$ pridepy download-file-by-name -a PXD022105 -o /Users/yourname/Downloads/foldername/ -f checksum.txt -p s3
-```
+Download single file by name:
 
 ```bash
 $ pridepy download-file-by-name -a PXD022105 -o /Users/yourname/Downloads/foldername/ -f checksum.txt -p globus
@@ -63,7 +67,7 @@ Search files with filters
 ```bash
 $ pridepy get-files-by-filter --filter fileCategory.value==RAW
 ```
-Use below command to view a list of commands available:
+Use the below command to view a list of commands available:
 
 ```bash
 $ pridepy --help
@@ -87,7 +91,7 @@ Please make sure you are using Python3, not Python 2.7 version.
 
 # White paper
 
-A white paper is available at [here](paper/paper.md). We can build it as pdf using pandoc.
+A white paper is available at [here](paper/paper.md). We can build it as PDF using pandoc.
 
 ```bash
 $docker run --rm --platform linux/amd64 -v /Users/yperez/work/pridepy/paper/:/data -w /data openjournals/inara:latest paper.md -p -o pdf
