@@ -1,4 +1,4 @@
-# pridepy: Python client for PRIDE Archive database
+# pridepy: A Python package to download and search data from PRIDE database
 
 [![Python package](https://github.com/PRIDE-Archive/pridepy/actions/workflows/python-package.yml/badge.svg)](https://github.com/PRIDE-Archive/pridepy/actions/workflows/python-package.yml)
 [![PyPI version](https://badge.fury.io/py/pridepy.svg)](https://badge.fury.io/py/pridepy)
@@ -95,6 +95,6 @@ $docker run --rm --platform linux/amd64 -v /Users/yperez/work/pridepy/paper/:/da
 
 # Citation
 
-Selvakumar Kamatchinathan, Suresh Hewapathirana, Yasset Perez-Riverol. (2021, January 28). pridepy: python client for the PRIDE Archive database (Version v0.0.2). 
+Selvakumar Kamatchinathan, Suresh Hewapathirana, Chakradhar Bandla, Yasset Perez-Riverol. (2021, January 28). pridepy: A Python package to download and search data from PRIDE database (Version v0.0.3). 
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.4475414.svg)](https://doi.org/10.5281/zenodo.4475414)

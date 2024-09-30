@@ -1,5 +1,5 @@
 ---
-title: 'pridepy: A Python package to download and search data from PRIDE Archive'
+title: 'pridepy: A Python package to download and search data from PRIDE database'
 tags:
   - Python
   - proteomics
