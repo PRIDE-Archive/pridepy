@@ -32,10 +32,17 @@ files_7G=("PXD036017,21-Prot-1628_RB6_1_5987.d.rar"
           "PXD009244,20161010_SUVI_OSCC_35.raw.zip"
           "PXD010288,samon_I161214_026.mzXML.gz")
 
-# Function to select random files
+# Function to select random files (Bash alternative to `shuf`)
 select_random_files() {
     category_files=("$@")
-    selected_files=($(shuf -e "${category_files[@]}" -n 3))
+    selected_files=()
+    for i in {1..3}; do
+        # Generate random index
+        rand_index=$((RANDOM % ${#category_files[@]}))
+        selected_files+=("${category_files[$rand_index]}")
+        # Remove the selected file to avoid duplicates
+        category_files=("${category_files[@]:0:$rand_index}" "${category_files[@]:$((rand_index + 1))}")
+    done
     echo "${selected_files[@]}"
 }
 
@@ -79,24 +86,24 @@ benchmark_download() {
         speed=$(echo "scale=2; $file_size / $duration" | bc)
 
         # Output result for this method
-        echo "$location,$benchmark_id,$method,$speed MB/s,$duration s"
+        echo "$location,$benchmark_id,$method,$file_name,$speed MB/s,$duration s"
 
         # Append result to the CSV file
-        echo "$location,$benchmark_id,$method,$speed,$duration" >> benchmark_report.csv
+        echo "$location,$benchmark_id,$method,$file_name,$speed,$duration" >> benchmark_report.csv
 
         # Clean up the downloaded file
         rm -f "$file_name"
     else
         # If the file is not downloaded, log failure
-        echo "$location,$benchmark_id,$method,-,-"
+        echo "$location,$benchmark_id,$method,$file_name,-,-"
 
         # Append failure result to the CSV file
-        echo "$location,$benchmark_id,$method,-,-" >> benchmark_report.csv
+        echo "$location,$benchmark_id,$method,$file_name,-,-" >> benchmark_report.csv
     fi
 }
 
-# Generate report header
-echo "Location,Benchmark ID,Method,Average Speed (MB/s),Total Time (s)" > benchmark_report.csv
+# Generate report header with file name
+echo "Location,Benchmark ID,Method,File Name,Average Speed (MB/s),Total Time (s)" > benchmark_report.csv
 
 # Loop through categories
 for category in "14M" "230M" "3G" "7G"; do
