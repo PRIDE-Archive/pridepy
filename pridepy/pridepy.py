@@ -41,8 +41,15 @@ def main():
     help="Aspera maximum bandwidth (e.g 50M, 100M, 200M), depending on the user's network bandwidth, default is 100M",
     default="100M",
 )
+@click.option(
+    "--checksum_check",
+    required=False,
+    help="Download checksum file for project",
+    is_flag=True,
+    default=False
+)
 def download_all_public_raw_files(
-    accession, protocol, output_folder, skip_if_downloaded_already, aspera_maximum_bandwidth: str = "50M"
+    accession, protocol, output_folder, skip_if_downloaded_already, aspera_maximum_bandwidth: str = "50M", checksum_check: bool = False
 ):
     """
     This script download raw files from FTP or copy from the file system
@@ -61,6 +68,7 @@ def download_all_public_raw_files(
         skip_if_downloaded_already,
         protocol,
         aspera_maximum_bandwidth=aspera_maximum_bandwidth,
+        checksum_check=checksum_check
     )
 
 
@@ -101,6 +109,13 @@ def download_all_public_raw_files(
     help="Aspera maximum bandwidth (e.g 50M, 100M, 200M), depending on the user's network bandwidth, default is 100M",
     default="100M",
 )
+@click.option(
+    "--checksum_check",
+    required=False,
+    help="Download checksum file for project",
+    is_flag=True,
+    default=False
+)
 def download_file_by_name(
     accession,
     protocol,
@@ -110,6 +125,7 @@ def download_file_by_name(
     username: str = None,
     password: str = None,
     aspera_maximum_bandwidth: str = "50M",
+    checksum_check: bool = False
 ):
     """
     This script download single file from servers or copy from the file system
@@ -121,6 +137,7 @@ def download_file_by_name(
     :param username: PRIDE login username for private files
     :param password: PRIDE login password for private files
     :param aspera_maximum_bandwidth: Aspera maximum bandwidth (e.g 50M, 100M, 200M), depending on the user's network bandwidth, default is 100M
+    :param checksum_check: Download checksum file for project.
     """
 
     file_handler = Files()
@@ -139,6 +156,7 @@ def download_file_by_name(
         username=username,
         password=password,
         aspera_maximum_bandwidth=aspera_maximum_bandwidth,
+        checksum_check=checksum_check
     )
 
 @main.command("get-private-files", help="Get private files by project accession")
