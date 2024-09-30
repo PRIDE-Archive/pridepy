@@ -141,7 +141,6 @@ def download_file_by_name(
         aspera_maximum_bandwidth=aspera_maximum_bandwidth,
     )
 
-
 @main.command("get-private-files", help="Get private files by project accession")
 @click.option("-a", "--accession", required=True, help="accession of the project")
 @click.option("-u", "--user", required=True, help="PRIDE login username")
