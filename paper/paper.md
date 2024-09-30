@@ -43,12 +43,14 @@ The client is available on [PyPI](https://pypi.org/project/pridepy/) and can be 
 
 ### Downloading files from PRIDE Archive
 
-By 2024, PRIDE Archive stores the data in two different storage systems (**Figure 1**), one for public data and another for private data. The public data is stored in a S3-like storage system, called FIRE [@Thakur2024-zu], which also includes other major EMBL-EBI archives such as ENA (European Nucleotide Archive) and EGA (European Genome-phenome Archive). FIRE has limited capabilities for data updates and deletions, making it ideal for long-term data storage. In addition, FIRE data is accessible via multiple protocols including FTP, Aspera and Globus. In contrast, private datasets are stored in a different file-system based on NFS which more flexible for data updates and deletion; but it is only accessible via PRIDE streaming protocol.
+By 2024, PRIDE Archive stores the data in two different storage systems (**Figure 1**), one for public data and another for private data. The public data is stored in a S3-like storage system, called FIRE [@Thakur2024-zu], which also includes other major EMBL-EBI archives such as ENA (European Nucleotide Archive) and EGA (European Genome-phenome Archive). FIRE has limited capabilities for data updates and deletions, making it ideal for long-term data storage. FIRE data is accessible via multiple protocols including FTP, Aspera and Globus. In contrast, private datasets are stored in a different file-system based on NFS, which is more flexible for data updates and deletion; but it is only accessible via PRIDE streaming protocol.
 
-The `pridepy` client provides a simple command line interface to download files from PRIDE Archive using these protocols. Each protocol offers different advantages:
+The `pridepy` client provides a simple command line interface to download files from PRIDE Archive using the following protocols. Each protocol offers different advantages:
   - **FTP**: Widely supported and easy to use
   - **Aspera**: High-speed file transfers, especially for large files or over long distances
-  - **Globus**: Reliable transfers for very large datasets.
+  - **Globus**: Reliable transfers for very large datasets
+
+These are currently the only supported protocols for file downloads.
 
 ![Figure 1: Architecture of transfer protocols supported by PRIDE Archive](figure.png){ width=80% }
 
