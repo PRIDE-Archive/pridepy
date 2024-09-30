@@ -1,6 +1,8 @@
 #!/bin/bash
 # Please make sure you have installed pridepy (https://github.com/pride-archive/pridepy)
-# install shuf if not installed
+# install shuf if not installed in mac:
+# brew install coreutils
+# in linux: sudo apt-get install coreutils
 
 # Get country/region info using ipinfo.io
 location=$(curl -s https://ipinfo.io/country)
