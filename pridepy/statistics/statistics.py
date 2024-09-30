@@ -3,7 +3,7 @@ import plotly.graph_objs as go
 
 from pridepy.util.api_handling import Util
 
-base_url = "https://www.ebi.ac.uk/pride/ws/archive/v3/"
+base_url = "https://www.ebi.ac.uk/pride/ws/archive/v2/"
 
 
 class Statistics:

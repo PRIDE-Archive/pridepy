@@ -48,7 +48,7 @@ class Files:
     This class handles PRIDE API files endpoint.
     """
 
-    API_BASE_URL = "https://www.ebi.ac.uk/pride/ws/archive/v3"
+    API_BASE_URL = "https://www.ebi.ac.uk/pride/ws/archive/v2"
     API_PRIVATE_URL = "https://www.ebi.ac.uk/pride/private/ws/archive/v2"
     S3_URL = "https://hh.fire.sdo.ebi.ac.uk"
     S3_BUCKET = "pride-public"
@@ -611,7 +611,7 @@ class Files:
 
     @staticmethod
     def save_checksum_file(accession, output_folder):
-        url = f'https://www.ebi.ac.uk/pride/ws/archive/v3/files/checksum/{accession}'
+        url = f'https://wwwdev.ebi.ac.uk/pride/ws/archive/v3/files/checksum/{accession}'
         headers = {'accept': 'text/plain'}
         request = urllib.request.Request(url, headers=headers, method='GET')
         logging.info(f'Fetching checksum file from {url}')

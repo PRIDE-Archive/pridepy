@@ -8,7 +8,7 @@ class Spectra:
     This class handles PRIDE API Spectra endpoint.
     """
 
-    api_base_url = "https://www.ebi.ac.uk/pride/ws/archive/v3/"
+    api_base_url = "https://www.ebi.ac.uk/pride/ws/archive/v2/"
 
     def __init__(self):
         pass
