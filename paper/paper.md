@@ -37,25 +37,26 @@ The PRIDE Archive storages an extensive collection of proteomics data [@Perez-Ri
 
 # Methods
 
-`pridepy` is built in Python and interacts with the [PRIDE Archive REST API](https://www.ebi.ac.uk/pride/ws/archive/v2/swagger-ui.html). The library and package not only provide data models for eanc data structure of the API but also a set of commandline to facilitate their use by users. The main features of `pridepy` is dataset search and file download. 
+`pridepy` is built in Python and interacts with the [PRIDE Archive REST API](https://www.ebi.ac.uk/pride/ws/archive/v2/swagger-ui.html). The library and package not only provide data models for each data structure of the API but also a set of commandline to facilitate their use by users. The main features of `pridepy` is dataset search and file download. 
 
 The client is available on [PyPI](https://pypi.org/project/pridepy/) and can be installed using `pip`. The source code is hosted on [GitHub](https://github.com/bigbio/pridepy) and is open-source under the Apache 2.0 license. In addition, a conda recipe is available for easy installation in conda environments. The package is continuously tested using GitHub Actions and has been successfully deployed on the EMBL-EBI HPC cluster. 
 
 ### Downloading files from PRIDE Archive
 
-By 2024, PRIDE Archive stores the data in two different storage systems (**Figure 1**), one for public data and another for private data. The public data is stored in a S3-like storage system, called FIRE [@Thakur2024-zu], which also includes other major EMBL-EBI archives such as ENA (European Nucleotide Archive) and EGA (European Genome-phenome Archive). FIRE has limited capabilities for data updates and deletions, making it ideal for long-term data storage. In addition, FIRE data is accessible via multiple protocols including FTP, Aspera, S3 and Globus. In contrast, private datasets are stored in a different file-system based on NFS which more flexible for data updates and deletion; but it is only accessible via PRIDE streaming protocol.
+By 2024, PRIDE Archive stores the data in two different storage systems (**Figure 1**), one for public data and another for private data. The public data is stored in a S3-like storage system, called FIRE [@Thakur2024-zu], which also includes other major EMBL-EBI archives such as ENA (European Nucleotide Archive) and EGA (European Genome-phenome Archive). FIRE has limited capabilities for data updates and deletions, making it ideal for long-term data storage. FIRE data is accessible via multiple protocols including FTP, Aspera and Globus. In contrast, private datasets are stored in a different file-system based on NFS, which is more flexible for data updates and deletion; but it is only accessible via PRIDE streaming protocol.
 
-The `pridepy` client provides a simple command line interface to download files from PRIDE Archive using these protocols. Each protocol offers different advantages:
+The `pridepy` client provides a simple command line interface to download files from PRIDE Archive using the following protocols. Each protocol offers different advantages:
   - **FTP**: Widely supported and easy to use
   - **Aspera**: High-speed file transfers, especially for large files or over long distances
-  - **S3 streaming**: Easy to download private datasets and stream small files. For private datasets protocols is unnecessary to be defined because the PRIDE streaming API is used. 
-  - **Globus**: Reliable transfers for very large datasets.
+  - **Globus**: Reliable transfers for very large datasets
+
+These are currently the only supported protocols for file downloads.
 
 ![Figure 1: Architecture of transfer protocols supported by PRIDE Archive](figure.png){ width=80% }
 
 Users can download files from PRIDE Archive using the following command options:
 - `download-all-public-raw-files`: command downloads all raw files from a dataset, it is useful for large-scale data retrieval and public datasets. 
-- `download-file-by-name`: command downloads a single file by name. Users can specify the output directory, protocol (FTP, Aspera, S3, or Globus), and other options to customize the download process. For private datasets, the user and password are required to access the data.
+- `download-file-by-name`: command downloads a single file by name. Users can specify the output directory, protocol (FTP, Aspera or Globus), and other options to customize the download process. For private datasets, the user and password are required to access the data.
 
 One example of downloading all raw files using Aspera from a dataset is shown below:
 

@@ -25,9 +25,6 @@ benchmark_download() {
         aspera)
             pridepy download-file-by-name -a "$accession" -f "$file_name" -o ./ -p aspera
             ;;
-        s3)
-            pridepy download-file-by-name -a "$accession" -f "$file_name" -o ./ -p s3
-            ;;
         globus)
             pridepy download-file-by-name -a "$accession" -f "$file_name" -o ./ -p globus
             ;;
