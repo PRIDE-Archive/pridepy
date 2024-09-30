@@ -1,13 +1,41 @@
 #!/bin/bash
 # Please make sure you have installed pridepy (https://github.com/pride-archive/pridepy)
+# install shuf if not installed
 
 # Get country/region info using ipinfo.io
 location=$(curl -s https://ipinfo.io/country)
 
-# Define project accessions and filenames in separate arrays
-benchmark_ids=("14M_file" "230M_file" "3G_file" "7G_file")
-accessions=("PXD056312" "PXD056312" "PXD046711" "PXD046711")
-file_names=("Ga13HJH_bjhb1_.prot.xml" "Ga13HJH_bjhb1_8.raw" "Seq66990_HFX.raw" "66957-67016_68923-69012_69619-42.zip")
+# Define the file categories and corresponding file lists
+files_14M=("PXD012474,160219_189_PM_fr14.mgf"
+           "PXD010000,Biodiversity_P_polymyxa_TBS_aerobic_3_17July16_Samwise_16-04-10_msgfplus.pride.mztab.gz"
+           "PXD004499,D2_Control3_TechRep_1.mzid"
+           "PXD017112,Results_MSE_Ssapro_ATCC15305_R3_2.rar"
+           "PXD011349,121225_OV1_SE_Heart_failure_Probe_56_Pat_48_LV.pep.xml")
+
+files_230M=("PXD043205,FB_V_243.raw"
+            "PXD027964,009_3D_C17_CHECK.raw"
+            "PXD006687,4_5.mgf"
+            "PXD006277,20140606AdDocHCN107.raw"
+            "PXD042361,Demongrp_030519_ip_b11.raw")
+
+files_3G=("PXD006475,Ki6028_2.raw"
+          "PXD004694,G2_AV_010712_plus_Fe_1_1_qual_F5.raw.zip"
+          "PXD030764,PO21_2_4.baf"
+          "PXD047912,230911kw_TSeverinPhosDIA25_S3-B2_1_16487.d.zip"
+          "PXD048638,230215_463.rar")
+
+files_7G=("PXD036017,21-Prot-1628_RB6_1_5987.d.rar"
+          "PXD040786,schroeter14683.raw.7z"
+          "PXD036017,21-Prot-1634_RC4_1_5963.d.rar"
+          "PXD009244,20161010_SUVI_OSCC_35.raw.zip"
+          "PXD010288,samon_I161214_026.mzXML.gz")
+
+# Function to select random files
+select_random_files() {
+    category_files=("$@")
+    selected_files=($(shuf -e "${category_files[@]}" -n 3))
+    echo "${selected_files[@]}"
+}
 
 # Function to download and calculate speed for each method
 benchmark_download() {
@@ -68,15 +96,36 @@ benchmark_download() {
 # Generate report header
 echo "Location,Benchmark ID,Method,Average Speed (MB/s),Total Time (s)" > benchmark_report.csv
 
-# Loop through benchmarks and methods
-for i in "${!benchmark_ids[@]}"; do
-    benchmark_id="${benchmark_ids[$i]}"
-    accession="${accessions[$i]}"
-    file_name="${file_names[$i]}"
+# Loop through categories
+for category in "14M" "230M" "3G" "7G"; do
+    case $category in
+        "14M")
+            selected_files=($(select_random_files "${files_14M[@]}"))
+            ;;
+        "230M")
+            selected_files=($(select_random_files "${files_230M[@]}"))
+            ;;
+        "3G")
+            selected_files=($(select_random_files "${files_3G[@]}"))
+            ;;
+        "7G")
+            selected_files=($(select_random_files "${files_7G[@]}"))
+            ;;
+        *)
+            echo "Invalid category!"
+            exit 1
+            ;;
+    esac
 
-    # Loop through the methods
-    for method in ftp aspera s3 globus; do
-        benchmark_download $method $accession $file_name $benchmark_id
+    # Loop through the selected files for each category
+    for file in "${selected_files[@]}"; do
+        # Split the accession and file name
+        IFS=',' read -r accession file_name <<< "$file"
+
+        # Loop through the methods
+        for method in ftp aspera s3 globus; do
+            benchmark_download $method $accession $file_name $category
+        done
     done
 done
 
