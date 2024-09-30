@@ -8,7 +8,7 @@ class Project:
     This class handles PRIDE API Projects endpoint.
     """
 
-    API_BASE_URL = "https://www.ebi.ac.uk/pride/ws/archive/v2/"
+    API_BASE_URL = "https://www.ebi.ac.uk/pride/ws/archive/v3/"
     PRIVATE_API_BASE_URL = "https://www.ebi.ac.uk/pride/private/ws/archive/v2/"
 
     def __init__(self):

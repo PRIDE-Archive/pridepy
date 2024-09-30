@@ -48,7 +48,7 @@ class Files:
     This class handles PRIDE API files endpoint.
     """
 
-    API_BASE_URL = "https://www.ebi.ac.uk/pride/ws/archive/v2"
+    API_BASE_URL = "https://www.ebi.ac.uk/pride/ws/archive/v3"
     API_PRIVATE_URL = "https://www.ebi.ac.uk/pride/private/ws/archive/v2"
     S3_URL = "https://hh.fire.sdo.ebi.ac.uk"
     S3_BUCKET = "pride-public"
