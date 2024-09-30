@@ -611,7 +611,7 @@ class Files:
 
     @staticmethod
     def save_checksum_file(accession, output_folder):
-        url = f'https://wwwdev.ebi.ac.uk/pride/ws/archive/v3/files/checksum/{accession}'
+        url = f'https://www.ebi.ac.uk/pride/ws/archive/v3/files/checksum/{accession}'
         headers = {'accept': 'text/plain'}
         request = urllib.request.Request(url, headers=headers, method='GET')
         logging.info(f'Fetching checksum file from {url}')
