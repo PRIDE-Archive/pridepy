@@ -52,7 +52,7 @@ class Files:
 
     API_BASE_URL = "https://www.ebi.ac.uk/pride/ws/archive/v2"
     API_PRIVATE_URL = "https://www.ebi.ac.uk/pride/private/ws/archive/v2"
-    PRIDE_ARCHIVE_FTP = "ftp://ftp.pride.ebi.ac.uk"
+    PRIDE_ARCHIVE_FTP = "ftp.pride.ebi.ac.uk"
     S3_URL = "https://hh.fire.sdo.ebi.ac.uk"
     S3_BUCKET = "pride-public"
     logging.basicConfig(
