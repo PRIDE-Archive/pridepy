@@ -196,7 +196,7 @@ class Files:
                             continue
 
                         # Extract file path from the download URL
-                        ftp_file_path = download_url.replace(f"ftp://{ftp_host}/", "")
+                        ftp_file_path = download_url.replace(f"ftp://{Files.PRIDE_ARCHIVE_FTP}/", "")
 
                         logging.info(f"Starting FTP download: {ftp_file_path}")
 
