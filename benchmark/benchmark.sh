@@ -36,7 +36,7 @@ files_7G=("PXD036017,21-Prot-1628_RB6_1_5987.d.rar"
 select_random_files() {
     category_files=("$@")
     selected_files=()
-    for i in {1..3}; do
+    for i in {1..2}; do
         # Generate random index
         rand_index=$((RANDOM % ${#category_files[@]}))
         selected_files+=("${category_files[$rand_index]}")
