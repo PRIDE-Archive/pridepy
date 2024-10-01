@@ -46,10 +46,15 @@ def main():
     required=False,
     help="Download checksum file for project",
     is_flag=True,
-    default=False
+    default=False,
 )
 def download_all_public_raw_files(
-    accession, protocol, output_folder, skip_if_downloaded_already, aspera_maximum_bandwidth: str = "50M", checksum_check: bool = False
+    accession,
+    protocol,
+    output_folder,
+    skip_if_downloaded_already,
+    aspera_maximum_bandwidth: str = "50M",
+    checksum_check: bool = False,
 ):
     """
     This script download raw files from FTP or copy from the file system
@@ -68,7 +73,7 @@ def download_all_public_raw_files(
         skip_if_downloaded_already,
         protocol,
         aspera_maximum_bandwidth=aspera_maximum_bandwidth,
-        checksum_check=checksum_check
+        checksum_check=checksum_check,
     )
 
 
@@ -114,7 +119,7 @@ def download_all_public_raw_files(
     required=False,
     help="Download checksum file for project",
     is_flag=True,
-    default=False
+    default=False,
 )
 def download_file_by_name(
     accession,
@@ -125,7 +130,7 @@ def download_file_by_name(
     username: str = None,
     password: str = None,
     aspera_maximum_bandwidth: str = "50M",
-    checksum_check: bool = False
+    checksum_check: bool = False,
 ):
     """
     This script download single file from servers or copy from the file system
@@ -156,8 +161,9 @@ def download_file_by_name(
         username=username,
         password=password,
         aspera_maximum_bandwidth=aspera_maximum_bandwidth,
-        checksum_check=checksum_check
+        checksum_check=checksum_check,
     )
+
 
 @main.command("get-private-files", help="Get private files by project accession")
 @click.option("-a", "--accession", required=True, help="accession of the project")

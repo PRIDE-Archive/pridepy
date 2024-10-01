@@ -36,7 +36,7 @@ files_7G=("PXD036017,21-Prot-1628_RB6_1_5987.d.rar"
 select_random_files() {
     category_files=("$@")
     selected_files=()
-    for i in {1..3}; do
+    for i in {1..2}; do
         # Generate random index
         rand_index=$((RANDOM % ${#category_files[@]}))
         selected_files+=("${category_files[$rand_index]}")
@@ -132,7 +132,7 @@ for category in "14M" "230M" "3G" "7G"; do
         IFS=',' read -r accession file_name <<< "$file"
 
         # Loop through the methods
-        for method in ftp aspera s3 globus; do
+        for method in ftp aspera globus; do
             benchmark_download $method $accession $file_name $category
         done
     done
