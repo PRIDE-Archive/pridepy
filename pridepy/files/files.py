@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-
+import ftplib
 import importlib.resources
 import logging
 import os
@@ -9,9 +9,9 @@ import subprocess
 import urllib
 import urllib.request
 import time
-from ftplib import FTP, error_temp, error_perm
-from socket import socket
+from ftplib import FTP
 from typing import Dict
+import socket
 
 import boto3
 import botocore
@@ -220,7 +220,7 @@ class Files:
 
                                 logging.info(f"Successfully downloaded {new_file_path}")
                                 break  # Exit download retry loop if successful
-                            except (socket.timeout, error_temp, error_perm) as e:
+                            except (socket.timeout, ftplib.error_temp, ftplib.error_perm) as e:
                                 download_attempt += 1
                                 logging.error(
                                     f"Download failed for {new_file_path} (attempt {download_attempt}): {str(e)}")
@@ -228,12 +228,14 @@ class Files:
                                     logging.error(
                                         f"Giving up on {new_file_path} after {max_download_retries} attempts.")
                                     break  # Give up on this file after max retries
+                    except (KeyError, IndexError) as e:
+                        logging.error(f"Failed to process file due to missing data: {str(e)}")
                     except Exception as e:
-                        logging.error(f"Failed to process file: {str(e)}")
+                        logging.error(f"Unexpected error while processing file: {str(e)}")
                 ftp.quit()  # Close FTP connection after all files are downloaded
                 logging.info(f"Disconnected from FTP host: {Files.PRIDE_ARCHIVE_FTP}")
                 break  # Exit connection retry loop if everything was successful
-            except (socket.timeout, error_temp, error_perm, socket.error) as e:
+            except (socket.timeout, ftplib.error_temp, ftplib.error_perm, socket.error) as e:
                 connection_attempt += 1
                 logging.error(f"FTP connection failed (attempt {connection_attempt}): {str(e)}")
                 if connection_attempt < max_connection_retries:
