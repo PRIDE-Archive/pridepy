@@ -9,7 +9,7 @@ import subprocess
 import urllib
 import urllib.request
 import time
-from ftplib import FTP, error_temp
+from ftplib import FTP, error_temp, error_perm
 from socket import socket
 from typing import Dict
 
@@ -52,6 +52,7 @@ class Files:
 
     API_BASE_URL = "https://www.ebi.ac.uk/pride/ws/archive/v2"
     API_PRIVATE_URL = "https://www.ebi.ac.uk/pride/private/ws/archive/v2"
+    PRIDE_ARCHIVE_FTP = "ftp://ftp.pride.ebi.ac.uk"
     S3_URL = "https://hh.fire.sdo.ebi.ac.uk"
     S3_BUCKET = "pride-public"
     logging.basicConfig(
@@ -151,86 +152,96 @@ class Files:
         )
 
     @staticmethod
-    def download_files_from_ftp(
-        file_list_json, output_folder, skip_if_downloaded_already, retry_attempts=3
-    ):
+    def download_files_from_ftp(file_list_json, output_folder, skip_if_downloaded_already, max_connection_retries=3,
+                                max_download_retries=3):
         """
-        Download files using FTP with progress bar for each file.
+        Download files using a single FTP connection with a retry mechanism and a progress bar for each file.
         :param file_list_json: file list in JSON format
         :param output_folder: folder to download the files
         :param skip_if_downloaded_already: Boolean value to skip the download if the file has already been downloaded.
-        :param retry_attempts: Number of retry attempts in case of a failed download
+        :param max_connection_retries: Number of attempts to reconnect to the FTP server if the connection is lost.
+        :param max_download_retries: Number of attempts to retry the download of a file in case of failure.
         """
 
         if not os.path.isdir(output_folder):
             os.makedirs(output_folder)
 
-        for file in file_list_json:
+        def connect_ftp():
+            """Helper function to establish FTP connection."""
+            ftp = FTP(Files.PRIDE_ARCHIVE_FTP, timeout=30)
+            ftp.login()  # Anonymous login
+            ftp.set_pasv(True)  # Enable passive mode
+            logging.info(f"Connected to FTP host: {Files.PRIDE_ARCHIVE_FTP}")
+            return ftp
+
+        connection_attempt = 0
+        while connection_attempt < max_connection_retries:
             try:
-                # Get FTP download URL
-                if file["publicFileLocations"][0]["name"] == "FTP Protocol":
-                    download_url = file["publicFileLocations"][0]["value"]
-                else:
-                    download_url = file["publicFileLocations"][1]["value"]
-
-                logging.debug("ftp_filepath:" + download_url)
-
-                # Get output file path
-                new_file_path = Files.get_output_file_name(
-                    download_url, file, output_folder
-                )
-
-                if skip_if_downloaded_already and os.path.exists(new_file_path):
-                    logging.info("Skipping download as file already exists")
-                    continue
-
-                # Parse FTP URL (ftp://host/path/to/file)
-                url_parts = download_url.replace("ftp://", "").split("/", 1)
-                ftp_host = url_parts[0]
-                ftp_file_path = url_parts[1]
-
-                logging.info(f"Starting FTP download: {ftp_host}/{ftp_file_path}")
-
-                # Download with retries
-                success = False
-                attempt = 0
-                while not success and attempt < retry_attempts:
-                    attempt += 1
+                ftp = connect_ftp()
+                for file in file_list_json:
                     try:
-                        with FTP(ftp_host, timeout=30) as ftp:
-                            ftp.login()  # Anonymous login
-                            ftp.set_pasv(True)
+                        # Get FTP download URL
+                        if file["publicFileLocations"][0]["name"] == "FTP Protocol":
+                            download_url = file["publicFileLocations"][0]["value"]
+                        else:
+                            download_url = file["publicFileLocations"][1]["value"]
 
-                            # Get file size for progress tracking
-                            total_size = ftp.size(ftp_file_path)
-                            logging.info(f"File size: {total_size} bytes")
+                        logging.debug("ftp_filepath:" + download_url)
 
-                            # Initialize progress bar
-                            with open(new_file_path, "wb") as f:
-                                with tqdm(
-                                    total=total_size,
-                                    unit="B",
-                                    unit_scale=True,
-                                    desc=new_file_path,
-                                ) as pbar:
+                        # Get output file path
+                        new_file_path = Files.get_output_file_name(download_url, file, output_folder)
 
-                                    def callback(data):
-                                        f.write(data)
-                                        pbar.update(len(data))
+                        if skip_if_downloaded_already and os.path.exists(new_file_path):
+                            logging.info("Skipping download as file already exists")
+                            continue
 
-                                    # Retrieve the file with progress callback
-                                    ftp.retrbinary(f"RETR {ftp_file_path}", callback)
+                        # Extract file path from the download URL
+                        ftp_file_path = download_url.replace(f"ftp://{ftp_host}/", "")
 
-                            success = True
-                            logging.info(f"Successfully downloaded {new_file_path}")
-                    except (socket.timeout, error_temp) as e:
-                        logging.error(f"Download failed on attempt {attempt}: {str(e)}")
-                        if attempt >= retry_attempts:
-                            logging.error(
-                                f"Giving up on {new_file_path} after {retry_attempts} attempts."
-                            )
-            except Exception as e:
-                logging.error(f"Failed to process file: {str(e)}")
+                        logging.info(f"Starting FTP download: {ftp_file_path}")
+
+                        # Retry download in case of failure
+                        download_attempt = 0
+                        while download_attempt < max_download_retries:
+                            try:
+                                # Get file size for progress tracking
+                                total_size = ftp.size(ftp_file_path)
+                                logging.info(f"File size: {total_size} bytes")
+
+                                # Initialize progress bar
+                                with open(new_file_path, "wb") as f:
+                                    with tqdm(total=total_size, unit="B", unit_scale=True, desc=new_file_path) as pbar:
+                                        def callback(data):
+                                            f.write(data)
+                                            pbar.update(len(data))
+
+                                        # Retrieve the file with progress callback
+                                        ftp.retrbinary(f"RETR {ftp_file_path}", callback)
+
+                                logging.info(f"Successfully downloaded {new_file_path}")
+                                break  # Exit download retry loop if successful
+                            except (socket.timeout, error_temp, error_perm) as e:
+                                download_attempt += 1
+                                logging.error(
+                                    f"Download failed for {new_file_path} (attempt {download_attempt}): {str(e)}")
+                                if download_attempt >= max_download_retries:
+                                    logging.error(
+                                        f"Giving up on {new_file_path} after {max_download_retries} attempts.")
+                                    break  # Give up on this file after max retries
+                    except Exception as e:
+                        logging.error(f"Failed to process file: {str(e)}")
+                ftp.quit()  # Close FTP connection after all files are downloaded
+                logging.info(f"Disconnected from FTP host: {Files.PRIDE_ARCHIVE_FTP}")
+                break  # Exit connection retry loop if everything was successful
+            except (socket.timeout, error_temp, error_perm, socket.error) as e:
+                connection_attempt += 1
+                logging.error(f"FTP connection failed (attempt {connection_attempt}): {str(e)}")
+                if connection_attempt < max_connection_retries:
+                    logging.info("Retrying connection...")
+                    time.sleep(5)  # Optional delay before retrying
+                else:
+                    logging.error(f"Giving up after {max_connection_retries} failed connection attempts.")
+                    break
 
     @staticmethod
     def get_output_file_name(download_url, file, output_folder):
