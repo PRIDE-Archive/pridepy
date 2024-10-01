@@ -5,12 +5,12 @@ channels:
   - conda-forge
 dependencies:
   - requests>=2.32.0
-  - ratelimit~=2.2.1
-  - click~=8.1.7
-  - pytest~=8.0.2
+  - ratelimit
+  - click
+  - pytest
   - setuptools
-  - plotly~=5.22.0
-  - boto3~=1.34.61
-  - botocore~=1.34.74
+  - plotly
+  - boto3
+  - botocore
   - tqdm
   - urllib3
