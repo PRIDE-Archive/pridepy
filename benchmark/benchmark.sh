@@ -132,7 +132,7 @@ for category in "14M" "230M" "3G" "7G"; do
         IFS=',' read -r accession file_name <<< "$file"
 
         # Loop through the methods
-        for method in ftp aspera s3 globus; do
+        for method in ftp aspera globus; do
             benchmark_download $method $accession $file_name $category
         done
     done
