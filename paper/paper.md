@@ -17,8 +17,7 @@ authors:
     affiliation: 1
   - name: Yasset Perez-Riverol
     orcid: 0000-0001-6579-6941
-    affiliation: 1
-    
+    affiliation: 1    
 affiliations:
  - name: European Molecular Biology Laboratory, European Bioinformatics Institute (EMBL-EBI), Wellcome Trust Genome Campus, Hinxton, Cambridge CB10 1SD, UK
    index: 1
@@ -52,7 +51,7 @@ The `pridepy` client provides a simple command line interface to download files 
 
 These are currently the only supported protocols for file downloads.
 
-![Figure 1: Architecture of transfer protocols supported by PRIDE Archive](figure.png){ width=80% }
+![Architecture of transfer protocols supported by PRIDE Archive](figure.png){ width=80% }
 
 Users can download files from PRIDE Archive using the following command options:
 - `download-all-public-raw-files`: command downloads all raw files from a dataset, it is useful for large-scale data retrieval and public datasets. 
@@ -73,11 +72,11 @@ This makes the client suitable for handling large-scale proteomics data in autom
 
 We conducted a benchmark to compare the download speeds of the three protocols supported by the PRIDE Archive. The test was carried out on files of varying sizes (~14MB, ~230MB, ~3GB, and ~7GB). We reached out to several PRIDE users, providing them with a benchmark script (available at https://github.com/PRIDE-Archive/pridepy/tree/master/benchmark), and the benchmark was run across multiple locations, including the USA, UK, Europe, and Asia. The results are presented in Figure 2-3. 
 
-![Figure 2: Benchmark of download speed for different protocols](benchmark.svg){ width=80% }
+![Benchmark of download speed for different protocols](benchmark.svg){ width=80% }
 
 For small files (~14MB), the three have similar performance. For medium (~230MB) and large files (~3G and ~7G), Globus and Aspera outperformed FTP. More importantly, FTP performance can decrease significantly with increasing file size, while Aspera and Globus maintain a more consistent download speed. The newly introduced Globus protocol showed the best performance for large files, making it the preferred choice for large-scale data transfers (Figure 2). In Figure 3 we present the download speed for different file sizes, protocols and locations. 
 
-![Figure 3: Benchmark of download speed for different protocols, file sizes and locations](speed_by_method_location.svg){ width=80% }
+![Benchmark of download speed for different protocols, file sizes and locations](speed_by_method_location.svg){ width=80% }
 
 As file sizes increase, Aspera and Globus consistently deliver the fastest download speeds, especially for larger files (~3GB and ~7GB), making it more efficient for large data transfers. Globus performs well but shows higher variability based on location, while FTP generally exhibits slower speeds, particularly with larger files. The benchmark highlights that both the choice of protocol and geographical location significantly impact download speeds, with Aspera being the most robust option across various conditions.
 
@@ -87,6 +86,6 @@ As file sizes increase, Aspera and Globus consistently deliver the fastest downl
 
 # Acknowledgments
 
-We would like to thank the PRIDE Archive team and contributors to this project for their invaluable input and feedback. The work is supported by core funding from the European Molecular Biology Laboratory (EMBL) and the Wellcome Trust [grant numbers 208391/Z/17/Z and 223745/Z/21/Z], and the BBSRC grant ‘DIA-Exchange’ [BB/X001911/1]. 
+We would like to thank the PRIDE Archive team and contributors to this project for their invaluable input and feedback. The work is supported by core funding from the European Molecular Biology Laboratory (EMBL) and the Wellcome Trust [grant numbers 208391/Z/17/Z and 223745/Z/21/Z], and the BBSRC grant ‘DIA-Exchange’ [BB/X001911/1]. Thanks to Enrique Audain, Jonas Scheid, J. Sebastian Paez, and Dai Chengxin for their contributions to the benchmarking study.  
 
 # References
