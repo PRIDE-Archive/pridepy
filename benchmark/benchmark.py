@@ -36,8 +36,8 @@ ax.set_xticklabels(benchmark_order)
 plt.tight_layout()
 
 # Save the plot to a file
-plt.savefig('benchmark_plot.png', dpi=300, bbox_inches='tight')
-print("Plot saved as 'benchmark_plot.png'")
+plt.savefig('benchmark.svg', format='svg', dpi=300, bbox_inches='tight')
+print("Plot saved as 'benchmark.png'")
 
 # Print the actual x-tick labels after plotting
 print("\nActual x-tick labels:")
@@ -78,10 +78,10 @@ plt.subplots_adjust(top=0.9)
 g.fig.suptitle('Average Speed (MB/s) by Location and Method', fontsize=16)
 
 # Save the plot as a high-resolution SVG image
-plt.savefig('speed_by_method_location_plot_vertical.svg', format='svg', dpi=300, bbox_inches='tight')
+plt.savefig('speed_by_method_location.svg', format='svg', dpi=300, bbox_inches='tight')
 
 # Confirm save and close the plot
-print("Plot saved as 'speed_by_method_location_plot_vertical.svg'")
+print("Plot saved as 'speed_by_method_location.svg'")
 plt.close()
 
 ####################################################################################################
