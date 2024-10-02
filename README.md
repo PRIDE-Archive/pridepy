@@ -43,7 +43,7 @@ Warning: Raw files are generally large in size, so it may take some time to down
 `-p`: in download specifies protocol (ftp default): 
    - **ftp**: FTP protocol
    - **aspera**: using the aspera protocol
-   - **globus**: globus protocol
+   - **globus**: PRIDE globus endpoint (_the data is downloaded through https_)
 
 ```bash
 $ pridepy download-all-public-raw-files -a PXD012353 -o /Users/yourname/Downloads/foldername/ -p aspera

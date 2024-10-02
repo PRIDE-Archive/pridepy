@@ -47,7 +47,7 @@ By 2024, PRIDE Archive stores the data in two different storage systems (**Figur
 The `pridepy` client provides a simple command line interface to download files from PRIDE Archive using the following protocols. Each protocol offers different advantages:
   - **FTP**: Widely supported and easy to use
   - **Aspera**: High-speed file transfers, especially for large files or over long distances
-  - **Globus**: Reliable transfers for very large datasets
+  - **Globus**: Reliable transfers for very large datasets. It is important to notice that in the current implementation, pridepy uses the https endpoint of the Globus service, which means that the data is in fact transfer using the https protocol.
 
 These are currently the only supported protocols for file downloads.
 
