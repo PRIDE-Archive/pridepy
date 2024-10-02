@@ -54,6 +54,7 @@ custom_palette = {
     'GB': '#ff7f0e',  # Orange
     'EBI': '#2ca02c',   # Green
     'US': '#d62728',    # Red
+    'HK': '#9467bd',    # Purple
 }
 
 # Create the FacetGrid with 'Method' as rows
