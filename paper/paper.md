@@ -81,7 +81,7 @@ For small files (~14MB), the three have similar performance. For medium (~230MB)
 
 # Discussion and Future Directions
 
-`pridepy` (https://github.com/PRIDE-Archive/pridepy) successfully simplifies access to the PRIDE Archive data, but future development could focus on improving the handling of large downloads by implementing parallel downloads. Additionally, we will expand the user documentation and examples could help broaden its use within the scientific community; and at the same time produce a group of benchmarks to evaluate the performance of the client in different scenarios. We plat to continue extending the library to support more features of the PRIDE Archive API, such as dataset metadata streaming, and submission of new datasets to the PRIDE Archive.
+`pridepy` (https://github.com/PRIDE-Archive/pridepy) successfully simplifies access to the PRIDE Archive data, but future development could focus on improving the handling of large downloads by implementing parallel downloads. Additionally, we will expand the user documentation and examples could help broaden its use within the scientific community; and at the same time produce a group of benchmarks to evaluate the performance of the client in different scenarios. We are working to implement downloads using Globus protocol using the Globus client and not the https of the EBI Globus collection. We plan to continue extending the library to support more features of the PRIDE Archive API, such as dataset metadata streaming, and submission of new datasets to the PRIDE Archive.
 
 # Acknowledgments
 
