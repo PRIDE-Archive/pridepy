@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-
+import asyncio
 import logging
 import click
 from pridepy.files.files import Files
@@ -253,6 +253,58 @@ def search_projects_by_keywords_and_filters(
         )
     )
 
+
+@main.command()
+@click.option(
+    "-o",
+    "--output_file",
+    required=True,
+    help="output file to save all the projects info",
+)
+def stream_projects_metadata(output_file):
+    """
+    get all projects from PRIDE in JSON format
+    :return:
+    """
+    project = Project()
+    asyncio.run(project.stream_all_projects(output_file))
+
+
+@main.command()
+@click.option(
+    "-a",
+    "--accession",
+    required=True,
+    help="project accession",
+)
+@click.option(
+    "-o",
+    "--output_file",
+    required=True,
+    help="output file to save all the projects info",
+)
+def stream_all_project_files_info(accession, output_file):
+    """
+    get all projects from PRIDE in JSON format
+    :return:
+    """
+    files = Files()
+    asyncio.run(files.stream_all_project_files_info(accession, output_file))
+
+@main.command()
+@click.option(
+    "-o",
+    "--output_file",
+    required=True,
+    help="output file to save all the projects info",
+)
+def stream_all_files_info(output_file):
+    """
+    get all projects from PRIDE in JSON format
+    :return:
+    """
+    files = Files()
+    asyncio.run(files.stream_all_files_info( output_file))
 
 @main.command()
 @click.option(

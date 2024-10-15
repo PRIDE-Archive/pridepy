@@ -1,5 +1,7 @@
 #!/usr/bin/env python
+import sys
 
+import httpx
 import requests
 import logging
 from ratelimit import limits, sleep_and_retry
@@ -29,6 +31,26 @@ class Util:
                 "PRIDE API call {} response: {}".format(url, response.status_code)
             )
         return response
+
+    @staticmethod
+    @sleep_and_retry
+    @limits(calls=1000, period=50)
+    async def stream_response_to_file(out_file, url, headers=None):
+        async with httpx.AsyncClient() as client:
+            # Use a GET request with stream=True to handle streaming responses
+            async with client.stream("GET", url, headers=headers) as response:
+                # Check if the response is successful
+                response.raise_for_status()
+                try:
+                    cfile = open(out_file, 'w')
+                    # Iterate over the streaming content line by line
+                    async for line in response.aiter_lines():
+                        if line:  # Avoid printing empty lines (common with text/event-stream)
+                            cfile.write(line)
+                    cfile.close()
+                except PermissionError as e:
+                    print("[ERROR] No permissions to write to:", out_file)
+                    sys.exit(1)
 
     @staticmethod
     @sleep_and_retry
