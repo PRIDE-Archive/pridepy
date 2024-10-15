@@ -259,11 +259,11 @@ def search_projects_by_keywords_and_filters(
     "-o",
     "--output_file",
     required=True,
-    help="output file to save all the projects info",
+    help="output file to save all the projects metadata",
 )
 def stream_projects_metadata(output_file):
     """
-    get all projects from PRIDE in JSON format
+    Stream all projects metadata in JSON format to a file
     :return:
     """
     project = Project()
@@ -272,39 +272,24 @@ def stream_projects_metadata(output_file):
 
 @main.command()
 @click.option(
+    "-o",
+    "--output_file",
+    required=True,
+    help="output file to save all the files metadata",
+)
+@click.option(
     "-a",
     "--accession",
-    required=True,
+    required=False,
     help="project accession",
 )
-@click.option(
-    "-o",
-    "--output_file",
-    required=True,
-    help="output file to save all the projects info",
-)
-def stream_all_project_files_info(accession, output_file):
+def stream_files_metadata(accession, output_file):
     """
-    get all projects from PRIDE in JSON format
+    Stream all files metadata in JSON format and write it to a file
     :return:
     """
     files = Files()
-    asyncio.run(files.stream_all_project_files_info(accession, output_file))
-
-@main.command()
-@click.option(
-    "-o",
-    "--output_file",
-    required=True,
-    help="output file to save all the projects info",
-)
-def stream_all_files_info(output_file):
-    """
-    get all projects from PRIDE in JSON format
-    :return:
-    """
-    files = Files()
-    asyncio.run(files.stream_all_files_info( output_file))
+    asyncio.run(files.stream_all_files_metadata(output_file, accession))
 
 @main.command()
 @click.option(

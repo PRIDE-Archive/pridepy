@@ -63,21 +63,22 @@ class Files:
     def __init__(self):
         pass
 
-    async def stream_all_files_info(self, accession, output_file):
+    async def stream_all_files_metadata(self, output_file, accession=None):
         """
         get stream all project files from PRIDE API in JSON format
         """
-        request_url = (self.V3_API_BASE_URL + "/files/all")
+        if accession is None:
+            request_url = ("{0}files/all".format(self.V3_API_BASE_URL))
+            count_request_url = ("{0}files/count".format(self.V3_API_BASE_URL))
+        else:
+            request_url = ("{0}projects/{1}/files/all".format(self.V3_API_BASE_URL, accession))
+            count_request_url = ("{0}projects/{1}/files/count".format(self.V3_API_BASE_URL, accession))
         headers = {"Accept": "application/JSON"}
-        await Util.stream_response_to_file(output_file, request_url, headers)
+        response = Util.get_api_call(count_request_url, headers)
+        total_records = response.json()
 
-    async def stream_all_project_files_info(self, accession, output_file):
-        """
-        get stream all project files from PRIDE API in JSON format
-        """
-        request_url = (self.V3_API_BASE_URL + "projects/"+ accession + "/files/all")
-        headers = {"Accept": "application/JSON"}
-        await Util.stream_response_to_file(output_file, request_url, headers)
+        regex_search_pattern = '"fileName"'
+        await Util.stream_response_to_file(output_file, total_records, regex_search_pattern, request_url, headers)
 
     def get_all_paged_files(
         self, query_filter, page_size, page, sort_direction, sort_conditions
