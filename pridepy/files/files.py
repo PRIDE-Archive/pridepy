@@ -68,8 +68,8 @@ class Files:
         get stream all project files from PRIDE API in JSON format
         """
         if accession is None:
-            request_url = ("{0}/files/all".format(self.V3_API_BASE_URL))
-            count_request_url = ("{0}/files/count".format(self.V3_API_BASE_URL))
+            request_url = f"{self.V3_API_BASE_URL}/files/all"
+            count_request_url = f"{self.V3_API_BASE_URL}/files/count"
         else:
             request_url = ("{0}/projects/{1}/files/all".format(self.V3_API_BASE_URL, accession))
             count_request_url = ("{0}/projects/{1}/files/count".format(self.V3_API_BASE_URL, accession))
