@@ -11,4 +11,5 @@ __pycache__
 *.pyo
 *.pyd
 paper/paper.pdf
-/paper/jats/
+paper/jats/
+venv

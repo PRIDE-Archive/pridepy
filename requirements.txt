@@ -8,3 +8,4 @@ boto3
 botocore
 tqdm
 urllib3
+httpx
