@@ -50,7 +50,6 @@ $ pridepy download-all-public-raw-files -a PXD012353 -o /Users/yourname/Download
 ```
 
 Download single file by name:
-
 ```bash
 $ pridepy download-file-by-name -a PXD022105 -o /Users/yourname/Downloads/foldername/ -f checksum.txt -p globus
 ```
@@ -58,15 +57,27 @@ $ pridepy download-file-by-name -a PXD022105 -o /Users/yourname/Downloads/folder
 >**NOTE**: Currently we use Globus URLs (when `-p globus` is used) via HTTPS, not the Globus protocol. For more information about Globus, see [Globus documentation](https://www.globus.org/data-transfer).
 
 Search projects with keywords and filters
-
 ```bash
 $ pridepy search-projects-by-keywords-and-filters --keyword accession:PXD012353
 ```
-Search files with filters
 
+Search files with filters
 ```bash
 $ pridepy get-files-by-filter --filter fileCategory.value==RAW
 ```
+
+Stream metadata of all projects as json and write it to a file
+```bash
+$ pridepy stream-projects-metadata -o all_pride_projects.json
+```
+
+Stream metadata of all files as json and write it to a file. Project accession can be specified as an optional parameter
+```bash
+$ pridepy stream-files-metadata -o all_pride_files.json
+OR
+$ pridepy stream-files-metadata -o PXD005011_files.json -a PXD005011
+```
+
 Use the below command to view a list of commands available:
 
 ```bash
@@ -83,7 +94,10 @@ Commands:
   get-files-by-project-accession  get files by project accession...
   get-private-files               Get private files by project...
   get-projects                    get paged projects :return:
-  get-projects-by-accession       get projects by accession...     
+  get-projects-by-accession       get projects by accession... 
+  stream-files-metadata           Stream all files metadata in...
+  stream-projects-metadata        Stream all projects metadata...
+    
 ```
 # NOTE
 
