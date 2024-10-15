@@ -46,15 +46,14 @@ class Util:
                     # Check if the response is successful
                     response.raise_for_status()
                     try:
-                        cfile = open(out_file, 'w')
-                        # Iterate over the streaming content line by line
-                        async for line in response.aiter_lines():
-                            if line:  # Avoid printing empty lines (common with text/event-stream)
-                                cfile.write(line + "\n")
-                                # Check if the pattern exists in the string
-                                if re.search(regex_search_pattern, line):
-                                    pbar.update(1)  # Update progress bar by 1 for each detection
-                        cfile.close()
+                        with open(out_file, 'w') as cfile:
+                            # Iterate over the streaming content line by line
+                            async for line in response.aiter_lines():
+                                if line:  # Avoid printing empty lines (common with text/event-stream)
+                                    cfile.write(line + "\n")
+                                    # Check if the pattern exists in the string
+                                    if re.search(regex_search_pattern, line):
+                                        pbar.update(1)  # Update progress bar by 1 for each detection
                     except PermissionError as e:
                         print("[ERROR] No permissions to write to:", out_file)
                         sys.exit(1)
