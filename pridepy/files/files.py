@@ -71,8 +71,8 @@ class Files:
             request_url = f"{self.V3_API_BASE_URL}/files/all"
             count_request_url = f"{self.V3_API_BASE_URL}/files/count"
         else:
-            request_url = ("{0}/projects/{1}/files/all".format(self.V3_API_BASE_URL, accession))
-            count_request_url = ("{0}/projects/{1}/files/count".format(self.V3_API_BASE_URL, accession))
+            request_url = f"{self.V3_API_BASE_URL}/projects/{accession}/files/all"
+            count_request_url = f"{self.V3_API_BASE_URL}/projects/{accession}/files/count"
         headers = {"Accept": "application/JSON"}
         response = Util.get_api_call(count_request_url, headers)
         total_records = response.json()
