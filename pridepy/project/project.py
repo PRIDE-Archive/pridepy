@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+
 from pridepy.authentication.authentication import Authentication
 from pridepy.util.api_handling import Util
 
@@ -9,6 +10,7 @@ class Project:
     """
 
     API_BASE_URL = "https://www.ebi.ac.uk/pride/ws/archive/v2/"
+    V3_API_BASE_URL = "https://www.ebi.ac.uk/pride/ws/archive/v3/"
     PRIVATE_API_BASE_URL = "https://www.ebi.ac.uk/pride/private/ws/archive/v2/"
 
     def __init__(self):
@@ -38,6 +40,18 @@ class Project:
         headers = {"Accept": "application/JSON"}
         response = Util.get_api_call(request_url, headers)
         return response.json()
+
+    async def stream_all_projects(self, output_file):
+        """
+        get stream of all projects from PRIDE API in JSON format
+        """
+        request_url = self.V3_API_BASE_URL + "projects/all"
+        count_request_url = self.V3_API_BASE_URL + "projects/count"
+        headers = {"Accept": "application/JSON"}
+        response = Util.get_api_call(count_request_url, headers)
+        total_records = response.json()
+        regex_search_pattern = '"projectDescription"'
+        await Util.stream_response_to_file(output_file, total_records, regex_search_pattern, request_url, headers)
 
     def get_reanalysis_projects_by_accession(self, accession):
         """

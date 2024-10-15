@@ -50,6 +50,7 @@ class Files:
     This class handles PRIDE API files endpoint.
     """
 
+    V3_API_BASE_URL = "https://www.ebi.ac.uk/pride/ws/archive/v3"
     API_BASE_URL = "https://www.ebi.ac.uk/pride/ws/archive/v2"
     API_PRIVATE_URL = "https://www.ebi.ac.uk/pride/private/ws/archive/v2"
     PRIDE_ARCHIVE_FTP = "ftp.pride.ebi.ac.uk"
@@ -61,6 +62,23 @@ class Files:
 
     def __init__(self):
         pass
+
+    async def stream_all_files_metadata(self, output_file, accession=None):
+        """
+        get stream all project files from PRIDE API in JSON format
+        """
+        if accession is None:
+            request_url = f"{self.V3_API_BASE_URL}/files/all"
+            count_request_url = f"{self.V3_API_BASE_URL}/files/count"
+        else:
+            request_url = f"{self.V3_API_BASE_URL}/projects/{accession}/files/all"
+            count_request_url = f"{self.V3_API_BASE_URL}/projects/{accession}/files/count"
+        headers = {"Accept": "application/JSON"}
+        response = Util.get_api_call(count_request_url, headers)
+        total_records = response.json()
+
+        regex_search_pattern = '"fileName"'
+        await Util.stream_response_to_file(output_file, total_records, regex_search_pattern, request_url, headers)
 
     def get_all_paged_files(
         self, query_filter, page_size, page, sort_direction, sort_conditions
