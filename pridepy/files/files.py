@@ -50,7 +50,7 @@ class Files:
     This class handles PRIDE API files endpoint.
     """
 
-    V3_API_BASE_URL = "https://www.ebi.ac.uk/pride/ws/archive/v3/"
+    V3_API_BASE_URL = "https://www.ebi.ac.uk/pride/ws/archive/v3"
     API_BASE_URL = "https://www.ebi.ac.uk/pride/ws/archive/v2"
     API_PRIVATE_URL = "https://www.ebi.ac.uk/pride/private/ws/archive/v2"
     PRIDE_ARCHIVE_FTP = "ftp.pride.ebi.ac.uk"
@@ -68,11 +68,11 @@ class Files:
         get stream all project files from PRIDE API in JSON format
         """
         if accession is None:
-            request_url = ("{0}files/all".format(self.V3_API_BASE_URL))
-            count_request_url = ("{0}files/count".format(self.V3_API_BASE_URL))
+            request_url = ("{0}/files/all".format(self.V3_API_BASE_URL))
+            count_request_url = ("{0}/files/count".format(self.V3_API_BASE_URL))
         else:
-            request_url = ("{0}projects/{1}/files/all".format(self.V3_API_BASE_URL, accession))
-            count_request_url = ("{0}projects/{1}/files/count".format(self.V3_API_BASE_URL, accession))
+            request_url = ("{0}/projects/{1}/files/all".format(self.V3_API_BASE_URL, accession))
+            count_request_url = ("{0}/projects/{1}/files/count".format(self.V3_API_BASE_URL, accession))
         headers = {"Accept": "application/JSON"}
         response = Util.get_api_call(count_request_url, headers)
         total_records = response.json()
