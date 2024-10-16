@@ -17,8 +17,9 @@ build:
 
 requirements:
   host:
-    - python >=3.8,<4.0
+    - python >=3.9
     - pip
+    - setuptools
   run:
     - requests~=2.31.0
     - ratelimit~=2.2.1
@@ -29,6 +30,7 @@ requirements:
     - boto3~=1.34.61
     - botocore~=1.34.74
     - tqdm
+    - httpx
 
 test:
   imports:
