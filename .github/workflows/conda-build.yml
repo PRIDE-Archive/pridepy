@@ -47,6 +47,6 @@ jobs:
 
     - name: Test download file with aspera from conda
       run: |
-        conda activate pridepy
+        source $CONDA/etc/profile.d/conda.sh
         pridepy download-file-by-name -a PXD022105 -o ./ -f checksum.txt -p aspera
       shell: bash -l {0}
