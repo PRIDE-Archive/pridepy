@@ -31,26 +31,17 @@ jobs:
         conda install conda-forge::mamba conda-forge::boa conda-forge::conda-build anaconda-client
       shell: bash -l {0}
 
-    - name: Create conda environment
-      run: conda env create -f environment.yml
-
-    - name: Activate conda environment and build package
+    - name: Build package
       run: |
         source $CONDA/etc/profile.d/conda.sh
         conda mambabuild recipe
         mamba install --use-local pridepy
-      shell: bash -l {0}
-
-    - name: Output package info
-      run: |
-        source $CONDA/etc/profile.d/conda.sh
-        conda activate pridepy
-        conda list
+        pridepy --help
       shell: bash -l {0}
 
     - name: Test the installed package
       run: |
-        conda activate pridepy
+        source $CONDA/etc/profile.d/conda.sh
         pridepy --help
       shell: bash -l {0}
 
