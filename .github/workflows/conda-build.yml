@@ -43,7 +43,6 @@ jobs:
     - name: Install the built package
       run: |
         source $CONDA/etc/profile.d/conda.sh
-        conda activate pridepy
         mamba install --use-local pridepy
       shell: bash -l {0}
 
