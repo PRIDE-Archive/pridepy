@@ -26,6 +26,7 @@ setup(
         "tqdm",
         "boto3",
         "botocore",
+        "httpx",
     ],
     include_package_data=True,
     package_data={
