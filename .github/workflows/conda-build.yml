@@ -38,11 +38,6 @@ jobs:
       run: |
         source $CONDA/etc/profile.d/conda.sh
         conda mambabuild recipe
-      shell: bash -l {0}
-
-    - name: Install the built package
-      run: |
-        source $CONDA/etc/profile.d/conda.sh
         mamba install --use-local pridepy
       shell: bash -l {0}
 
