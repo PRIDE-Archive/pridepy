@@ -37,7 +37,6 @@ jobs:
     - name: Activate conda environment and build package
       run: |
         source $CONDA/etc/profile.d/conda.sh
-        conda activate pridepy
         conda mambabuild recipe
       shell: bash -l {0}
 
