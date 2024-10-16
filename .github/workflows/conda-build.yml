@@ -28,7 +28,7 @@ jobs:
     - name: Install mamba, boa and conda-build
       run: |
         source $CONDA/etc/profile.d/conda.sh
-        conda install conda-forge::mamba conda-forge::boa conda-forge::conda-build==24.9.0 anaconda-client
+        conda install conda-forge::mamba conda-forge::boa conda-forge::conda-build anaconda-client
       shell: bash -l {0}
 
     - name: Create conda environment
