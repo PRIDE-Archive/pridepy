@@ -365,7 +365,7 @@ def get_similar_projects_by_accession(accession):
 
 
 @main.command()
-@click.option("-a", "--accession", required=False, help="accession of the project")
+@click.option("-a", "--accession", required=True, help="accession of the project")
 @click.option(
     "-f",
     "--filter",

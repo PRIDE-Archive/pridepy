@@ -78,6 +78,8 @@ OR
 $ pridepy stream-files-metadata -o PXD005011_files.json -a PXD005011
 ```
 
+This Python CLI tool, built using the Click module, 
+already provides detailed usage instructions for each command. To avoid redundancy and potential clutter in this README, you can access the usage instructions directly from the CLI
 Use the below command to view a list of commands available:
 
 ```bash
@@ -110,6 +112,18 @@ A white paper is available at [here](paper/paper.md). We can build it as PDF usi
 ```bash
 $docker run --rm --platform linux/amd64 -v /Users/yperez/work/pridepy/paper/:/data -w /data openjournals/inara:latest paper.md -p -o pdf
 ```
+
+# Contributing
+
+Contributions are what make the open source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
+
+If you have a suggestion that would make this better, please fork the repo and create a pull request. You can also simply open an issue with the tag "enhancement".
+
+1. Fork the Project
+2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the Branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
 # Citation
 
