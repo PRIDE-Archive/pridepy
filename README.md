@@ -127,6 +127,6 @@ If you have a suggestion that would make this better, please fork the repo and c
 
 # Citation
 
-Selvakumar Kamatchinathan, Suresh Hewapathirana, Chakradhar Bandla, Yasset Perez-Riverol. (2021, January 28). pridepy: A Python package to download and search data from PRIDE database (Version v0.0.3). 
+Selvakumar Kamatchinathan, Suresh Hewapathirana, Chakradhar Bandla, Juan Antonio Vizcaíno, Yasset Perez-Riverol. (2021, January 28). pridepy: A Python package to download and search data from PRIDE database (Version v0.0.3). 
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.4475414.svg)](https://doi.org/10.5281/zenodo.4475414)

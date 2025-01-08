@@ -15,6 +15,9 @@ authors:
   - name: Chakradhar Bandla
     orcid: 0000-0001-6392-3759
     affiliation: 1
+  - name: Juan Antonio Vizcaíno
+    orcid: 0000-0002-3905-4335
+    affiliation: 1
   - name: Yasset Perez-Riverol
     orcid: 0000-0001-6579-6941
     affiliation: 1    
@@ -32,7 +35,7 @@ The Proteomics Identification Database (PRIDE) [@Perez-Riverol2022-ow] is the wo
 
 # Statement of Need
 
-The PRIDE Archive storages an extensive collection of proteomics data [@Perez-Riverol2022-ow], but manually accessing this data can be inefficient and time-consuming. With the growing need for cloud-based [@Dai2024-yc] and HPC bioinformatics tools [@Mehta2023-og], command-line utilities that seamlessly interact with the PRIDE API are increasingly important. `pridepy` addresses this by enabling researchers to programmatically access PRIDE using Python, a widely adopted language. It allows efficient dataset integration into automated workflows, with support for large-scale data transfers via [Aspera](https://www.ibm.com/products/aspera), [Globus](https://www.globus.org/data-transfer), FTP, and HTTPS, making it ideal for scalable, reproducible pipelines.
+The PRIDE Archive hosts an extensive collection of proteomics data [@Perez-Riverol2022-ow], but manual access to this data can be inefficient and time-consuming. With the increasing demand for cloud-based [@Dai2024-yc] and HPC bioinformatics tools [@Mehta2023-og], command-line utilities that integrate seamlessly with the PRIDE API are becoming essential. pridepy addresses this need by enabling researchers to programmatically access PRIDE using Python, a widely adopted programming language. It facilitates efficient integration of datasets into automated workflows and supports large-scale data transfers via [Aspera](https://www.ibm.com/products/aspera), [Globus](https://www.globus.org/data-transfer), FTP, and HTTPS, making it ideal for scalable and reproducible pipelines. Unlike other tools such as ppx [@Fondrie2021-xk], which primarily support data downloads from ProteomeXchange databases using the HTTP protocol, pridepy provides advanced functionality by leveraging multiple protocols and the latest PRIDE API to access both public and private datasets.
 
 # Methods
 
