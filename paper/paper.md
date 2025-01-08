@@ -15,6 +15,9 @@ authors:
   - name: Chakradhar Bandla
     orcid: 0000-0001-6392-3759
     affiliation: 1
+  - name: Juan Antonio Vizcaíno
+    orcid: 0000-0002-3905-4335
+    affiliation: 1
   - name: Yasset Perez-Riverol
     orcid: 0000-0001-6579-6941
     affiliation: 1    
