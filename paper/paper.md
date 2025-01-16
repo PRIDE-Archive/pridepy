@@ -15,6 +15,9 @@ authors:
   - name: Chakradhar Bandla
     orcid: 0000-0001-6392-3759
     affiliation: 1
+  - name: Santiago Insua
+    orcid: 0000-0002-9247-243X
+    affiliation: 1
   - name: Juan Antonio Vizcaíno
     orcid: 0000-0002-3905-4335
     affiliation: 1
@@ -77,7 +80,7 @@ We conducted a benchmark to compare the download speeds of the three protocols s
 
 ![Benchmark of download speed for different protocols](benchmark.svg){ width=80% }
 
-For small files (~14MB), the three have similar performance. For medium (~230MB) and large files (~3G and ~7G), FTP can perform better than Aspera and Globus (https), but the standard deviation is higher, which means that for some file downloads it performs poorly (Figure 2). Aspera, is the most stable protocol (the lowest standard deviation) for all file sizes; for example; on big files (~7G), the median transfer speed is similar to Aspera (~ 10MB/s), but it can perform for some files and locations under 5 MB/s. In Figure 3 we present the download speed for different file sizes, protocols and locations. Aspera and Globus (https) performs similar in all locations, but FTP show a higher variability across locations and file sizes. For example, in US and Hong Kong, the download speed is higher than in Europe and UK, but the standard deviation is higher (Figure 2-3).
+For small files (~14MB), the three have similar performance. For medium (~230MB) and large files (~3G and ~7G), FTP can perform better than Aspera and Globus (https), but the standard deviation is higher, which means that for some file downloads it performs poorly (Figure 2). Aspera, is the most stable protocol (the lowest standard deviation) for all file sizes; for example; on big files (~7G), the median transfer speed is similar to Aspera (~ 10MB/s), but it can perform for some files and locations under 5 MB/s. In Figure 3 we present the download speed for different file sizes, protocols and locations. Aspera and Globus (https) performs similar in all locations, but FTP show a higher variability across locations and file sizes. For example, in US and Hong Kong, the download speed is higher than in Europe and UK, but the standard deviation is higher (**Figure 2-3**).
 
 ![Benchmark of download speed for different protocols, file sizes and locations](speed_by_method_location.svg){ width=80% }
 
@@ -88,6 +91,6 @@ For small files (~14MB), the three have similar performance. For medium (~230MB)
 
 # Acknowledgments
 
-We would like to thank the PRIDE Archive team and contributors to this project for their invaluable input and feedback. The work is supported by core funding from the European Molecular Biology Laboratory (EMBL) and the Wellcome Trust [grant numbers 208391/Z/17/Z and 223745/Z/21/Z], and the BBSRC grant ‘DIA-Exchange’ [BB/X001911/1]. Thanks to Enrique Audain, Jonas Scheid, J. Sebastian Paez, and Dai Chengxin for their contributions to the benchmarking study. Thanks to Santiago Insua from an EBI instrastructure team for his support deploying multiple AWS machines in different locations for the benchmark.
+We would like to thank the PRIDE Archive team and contributors to this project for their invaluable input and feedback. The work is supported by core funding from the European Molecular Biology Laboratory (EMBL) and the Wellcome Trust [grant numbers 208391/Z/17/Z and 223745/Z/21/Z], and the BBSRC grant ‘DIA-Exchange’ [BB/X001911/1]. Thanks to Enrique Audain, Jonas Scheid, J. Sebastian Paez, and Dai Chengxin for their contributions to the benchmarking study.
 
 # References
