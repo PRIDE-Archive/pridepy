@@ -345,17 +345,6 @@ def get_projects_by_accession(accession):
 
 @main.command()
 @click.option("-a", "--accession", required=False, help="accession of the project")
-def get_reanalysis_projects_by_accession(accession):
-    """
-    get reanalysis projects by accession
-    :return:
-    """
-    project = Project()
-    logging.info(project.get_reanalysis_projects_by_accession(accession))
-
-
-@main.command()
-@click.option("-a", "--accession", required=False, help="accession of the project")
 def get_similar_projects_by_accession(accession):
     """
     get similar projects by accession
