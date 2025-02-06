@@ -8,6 +8,7 @@ tags:
   - big data
 authors:
   - name: Selvakumar Kamatchinathan
+    orcid: 0009-0001-3644-2586
     affiliation: 1
   - name: Suresh Hewapathirana
     orcid: 0000-0002-7862-5022
@@ -42,7 +43,7 @@ The PRIDE Archive hosts an extensive collection of proteomics data [@Perez-River
 
 # Methods
 
-`pridepy` is built in Python and interacts with the [PRIDE Archive REST API](https://www.ebi.ac.uk/pride/ws/archive/v2/swagger-ui.html). The library and package not only provide data models for each data structure of the API but also a set of commandline to facilitate their use by users. The main features of `pridepy` is dataset search and file download. 
+`pridepy` is built in Python and interacts with the [PRIDE Archive REST API](https://www.ebi.ac.uk/pride/ws/archive/v3/webjars/swagger-ui/index.html). The library and package not only provide data models for each data structure of the API but also a set of commandline to facilitate their use by users. The main features of `pridepy` is dataset search and file download. 
 
 The client is available on [PyPI](https://pypi.org/project/pridepy/) and can be installed using `pip`. The source code is hosted on [GitHub](https://github.com/bigbio/pridepy) and is open-source under the Apache 2.0 license. In addition, a conda recipe is available for easy installation in conda environments. The package is continuously tested using GitHub Actions and has been successfully deployed on the EMBL-EBI HPC cluster. 
 
