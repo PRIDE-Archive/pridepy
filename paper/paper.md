@@ -8,6 +8,7 @@ tags:
   - big data
 authors:
   - name: Selvakumar Kamatchinathan
+    orcid: 0009-0001-3644-2586
     affiliation: 1
   - name: Suresh Hewapathirana
     orcid: 0000-0002-7862-5022
