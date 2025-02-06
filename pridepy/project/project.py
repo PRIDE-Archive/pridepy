@@ -11,7 +11,7 @@ class Project:
 
     API_BASE_URL = "https://www.ebi.ac.uk/pride/ws/archive/v3/"
     V3_API_BASE_URL = "https://www.ebi.ac.uk/pride/ws/archive/v3/"
-    PRIVATE_API_BASE_URL = "https://www.ebi.ac.uk/pride/private/ws/archive/v2/"
+    PRIVATE_API_BASE_URL = "https://www.ebi.ac.uk/pride/private/ws/archive/v3/"
 
     def __init__(self):
         pass

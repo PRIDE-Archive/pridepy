@@ -10,7 +10,7 @@ class Authentication:
     This class holds authentication related methods including issuing and validating access token.
     """
 
-    base_url = "https://www.ebi.ac.uk/pride/private/ws/archive/v2"
+    base_url = "https://www.ebi.ac.uk/pride/private/ws/archive/v3"
 
     def __init__(self):
         pass
