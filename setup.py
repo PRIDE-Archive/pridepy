@@ -6,7 +6,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name="pridepy",
-    version="0.0.6",
+    version="0.0.7",
     author="PRIDE Team",
     author_email="pride-support@ebi.ac.uk",
     description="Python Client library for PRIDE Rest API",

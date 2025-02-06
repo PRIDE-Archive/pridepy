@@ -1,7 +1,7 @@
 # recipe/meta.yaml
 package:
   name: pridepy
-  version: "0.0.6"
+  version: "0.0.7"
 
 source:
   path: ../
