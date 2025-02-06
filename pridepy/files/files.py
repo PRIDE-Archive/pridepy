@@ -10,7 +10,7 @@ import urllib
 import urllib.request
 import time
 from ftplib import FTP
-from typing import Dict
+from typing import Dict, List
 import socket
 
 import boto3
@@ -72,7 +72,9 @@ class Files:
             count_request_url = f"{self.V3_API_BASE_URL}/files/count"
         else:
             request_url = f"{self.V3_API_BASE_URL}/projects/{accession}/files/all"
-            count_request_url = f"{self.V3_API_BASE_URL}/projects/{accession}/files/count"
+            count_request_url = (
+                f"{self.V3_API_BASE_URL}/projects/{accession}/files/count"
+            )
         headers = {"Accept": "application/JSON"}
         response = Util.get_api_call(count_request_url, headers)
         total_records = response.json()
@@ -80,41 +82,14 @@ class Files:
         regex_search_pattern = '"fileName"'
         await Util.stream_response_to_file(output_file, total_records, regex_search_pattern, request_url, headers)
 
-    def get_all_paged_files(
-        self, query_filter, page_size, page, sort_direction, sort_conditions
-    ):
+    def stream_all_files_by_project(self, accession) -> List[Dict]:
         """
-         Get all filtered pride submission files
-        :param query_filter: Parameters to filter the search results
-        :param page_size: Number of results to fetch in a page
-        :param page: Identifies which page of results to fetch
-        :param sort_direction: Sorting direction: ASC or DESC
-        :param sort_conditions: Field(s) for sorting the results on
-        :return: paged file list on JSON format
+        get stream all project files from PRIDE API in JSON format
         """
-        """
-
-        """
-        request_url = self.API_BASE_URL + "/files?"
-
-        if query_filter:
-            request_url = request_url + "filter=" + query_filter + "&"
-
-        request_url = (
-            request_url
-            + "pageSize="
-            + str(page_size)
-            + "&page="
-            + str(page)
-            + "&sortDirection="
-            + sort_direction
-            + "&sortConditions="
-            + sort_conditions
-        )
-
+        request_url = f"{self.V3_API_BASE_URL}/projects/{accession}/files/all"
         headers = {"Accept": "application/JSON"}
-        response = Util.get_api_call(request_url, headers)
-        return response.json()
+        record_files = Util.read_json_stream(api_url=request_url, headers = headers)
+        return record_files
 
     def get_all_raw_file_list(self, project_accession):
         """
@@ -123,16 +98,11 @@ class Files:
         :return: raw file list in JSON format
         """
 
-        request_url = (
-            self.API_BASE_URL
-            + "/files/byProject?accession="
-            + project_accession
-            + ",fileCategory.value==RAW"
-        )
-        headers = {"Accept": "application/JSON"}
+        record_files = self.stream_all_files_by_project(project_accession)
 
-        response = Util.get_api_call(request_url, headers)
-        return response.json()
+        # Filter projects by fileCategory = RAW
+        raw_files = [file for file in record_files if file["fileCategory"]["value"] == "RAW"]
+        return raw_files
 
     def download_all_raw_files(
         self,
@@ -170,8 +140,13 @@ class Files:
         )
 
     @staticmethod
-    def download_files_from_ftp(file_list_json, output_folder, skip_if_downloaded_already, max_connection_retries=3,
-                                max_download_retries=3):
+    def download_files_from_ftp(
+        file_list_json,
+        output_folder,
+        skip_if_downloaded_already,
+        max_connection_retries=3,
+        max_download_retries=3,
+    ):
         """
         Download files using a single FTP connection with a retry mechanism and a progress bar for each file.
         :param file_list_json: file list in JSON format
@@ -207,14 +182,18 @@ class Files:
                         logging.debug("ftp_filepath:" + download_url)
 
                         # Get output file path
-                        new_file_path = Files.get_output_file_name(download_url, file, output_folder)
+                        new_file_path = Files.get_output_file_name(
+                            download_url, file, output_folder
+                        )
 
                         if skip_if_downloaded_already and os.path.exists(new_file_path):
                             logging.info("Skipping download as file already exists")
                             continue
 
                         # Extract file path from the download URL
-                        ftp_file_path = download_url.replace(f"ftp://{Files.PRIDE_ARCHIVE_FTP}/", "")
+                        ftp_file_path = download_url.replace(
+                            f"ftp://{Files.PRIDE_ARCHIVE_FTP}/", ""
+                        )
 
                         logging.info(f"Starting FTP download: {ftp_file_path}")
 
@@ -228,39 +207,66 @@ class Files:
 
                                 # Initialize progress bar
                                 with open(new_file_path, "wb") as f:
-                                    with tqdm(total=total_size, unit="B", unit_scale=True, desc=new_file_path) as pbar:
+                                    with tqdm(
+                                        total=total_size,
+                                        unit="B",
+                                        unit_scale=True,
+                                        desc=new_file_path,
+                                    ) as pbar:
+
                                         def callback(data):
                                             f.write(data)
                                             pbar.update(len(data))
 
                                         # Retrieve the file with progress callback
-                                        ftp.retrbinary(f"RETR {ftp_file_path}", callback)
+                                        ftp.retrbinary(
+                                            f"RETR {ftp_file_path}", callback
+                                        )
 
                                 logging.info(f"Successfully downloaded {new_file_path}")
                                 break  # Exit download retry loop if successful
-                            except (socket.timeout, ftplib.error_temp, ftplib.error_perm) as e:
+                            except (
+                                socket.timeout,
+                                ftplib.error_temp,
+                                ftplib.error_perm,
+                            ) as e:
                                 download_attempt += 1
                                 logging.error(
-                                    f"Download failed for {new_file_path} (attempt {download_attempt}): {str(e)}")
+                                    f"Download failed for {new_file_path} (attempt {download_attempt}): {str(e)}"
+                                )
                                 if download_attempt >= max_download_retries:
                                     logging.error(
-                                        f"Giving up on {new_file_path} after {max_download_retries} attempts.")
+                                        f"Giving up on {new_file_path} after {max_download_retries} attempts."
+                                    )
                                     break  # Give up on this file after max retries
                     except (KeyError, IndexError) as e:
-                        logging.error(f"Failed to process file due to missing data: {str(e)}")
+                        logging.error(
+                            f"Failed to process file due to missing data: {str(e)}"
+                        )
                     except Exception as e:
-                        logging.error(f"Unexpected error while processing file: {str(e)}")
+                        logging.error(
+                            f"Unexpected error while processing file: {str(e)}"
+                        )
                 ftp.quit()  # Close FTP connection after all files are downloaded
                 logging.info(f"Disconnected from FTP host: {Files.PRIDE_ARCHIVE_FTP}")
                 break  # Exit connection retry loop if everything was successful
-            except (socket.timeout, ftplib.error_temp, ftplib.error_perm, socket.error) as e:
+            except (
+                socket.timeout,
+                ftplib.error_temp,
+                ftplib.error_perm,
+                socket.error,
+            ) as e:
                 connection_attempt += 1
-                logging.error(f"FTP connection failed (attempt {connection_attempt}): {str(e)}")
+                logging.error(
+                    f"FTP connection failed (attempt {connection_attempt}): {str(e)}"
+                )
                 if connection_attempt < max_connection_retries:
                     logging.info("Retrying connection...")
                     time.sleep(5)  # Optional delay before retrying
                 else:
-                    logging.error(f"Giving up after {max_connection_retries} failed connection attempts.")
+                    logging.error(
+                        f"Giving up after {max_connection_retries} failed connection attempts."
+                    )
                     break
 
     @staticmethod

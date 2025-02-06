@@ -51,17 +51,9 @@ class Project:
         response = Util.get_api_call(count_request_url, headers)
         total_records = response.json()
         regex_search_pattern = '"projectDescription"'
-        await Util.stream_response_to_file(output_file, total_records, regex_search_pattern, request_url, headers)
-
-    def get_reanalysis_projects_by_accession(self, accession):
-        """
-        search PRIDE projects by reanalysis accession
-        :return: project list on JSON format
-        """
-        request_url = self.API_BASE_URL + "projects/reanalysis/" + accession
-        headers = {"Accept": "application/JSON"}
-        response = Util.get_api_call(request_url, headers)
-        return response.json()
+        await Util.stream_response_to_file(
+            output_file, total_records, regex_search_pattern, request_url, headers
+        )
 
     def get_by_accession(self, accession):
         """
@@ -75,38 +67,16 @@ class Project:
         return response.json()
 
     def get_files_by_accession(
-        self, accession, query_filter, page_size, page, sort_direction, sort_conditions
+        self, accession
     ):
         """
         search PRIDE project's files by accession
         :param accession: PRIDE project accession
-        :param query_filter: Parameters to filter the search results
-        :param page_size: Number of results to fetch in a page
-        :param page: Identifies which page of results to fetch
-        :param sort_direction: Sorting direction: ASC or DESC
-        :param sort_conditions: Field(s) for sorting the results on
         :return: PRIDE project files
         """
         request_url = self.API_BASE_URL + "projects/" + accession + "/files?"
-
-        if query_filter:
-            request_url = request_url + "filter=" + query_filter + "&"
-
-        request_url = (
-            request_url
-            + "pageSize="
-            + str(page_size)
-            + "&page="
-            + str(page)
-            + "&sortDirection="
-            + sort_direction
-            + "&sortConditions="
-            + sort_conditions
-        )
-
         headers = {"Accept": "application/JSON"}
-        response = Util.get_api_call(request_url, headers)
-        return response.json()
+        return Util.read_json_stream(request_url, headers)
 
     def get_private_files_by_accession(self, accession, user, passwd):
 

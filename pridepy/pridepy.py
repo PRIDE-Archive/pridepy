@@ -291,6 +291,7 @@ def stream_files_metadata(accession, output_file):
     files = Files()
     asyncio.run(files.stream_all_files_metadata(output_file, accession))
 
+
 @main.command()
 @click.option(
     "-ps",
@@ -367,14 +368,6 @@ def get_similar_projects_by_accession(accession):
 @main.command()
 @click.option("-a", "--accession", required=True, help="accession of the project")
 @click.option(
-    "-f",
-    "--filter",
-    required=False,
-    help="Parameters to filter the search results. The structure of the "
-    "filter is: field1==value1, field2==value2. Example "
-    "accession==PRD000001",
-)
-@click.option(
     "-ps",
     "--page_size",
     required=False,
@@ -415,58 +408,6 @@ def get_files_by_project_accession(
     logging.info(
         project.get_files_by_accession(
             accession, filter, page_size, page, sort_direction, sort_conditions
-        )
-    )
-
-
-@main.command()
-@click.option(
-    "-f",
-    "--filter",
-    required=False,
-    help="Parameters to filter the search results. The structure of the "
-    "filter is: field1==value1, field2==value2. Example "
-    "fileCategory.value==RAW",
-)
-@click.option(
-    "-ps",
-    "--page_size",
-    required=False,
-    default=100,
-    help="Number of results to fetch in a page",
-)
-@click.option(
-    "-p",
-    "--page",
-    required=False,
-    default=0,
-    help="Identifies which page of results to fetch",
-)
-@click.option(
-    "-sd",
-    "--sort_direction",
-    required=False,
-    default="DESC",
-    help="Sorting direction: ASC or DESC",
-)
-@click.option(
-    "-sc",
-    "--sort_conditions",
-    required=False,
-    default="submissionDate",
-    help="Field(s) for sorting the results on. Default for this "
-    "request is submissionDate. More fields can be separated by "
-    "comma and passed. Example: submission_date,project_title",
-)
-def get_files_by_filter(filter, page_size, page, sort_direction, sort_conditions):
-    """
-    get paged files
-    :return:
-    """
-    files = Files()
-    logging.info(
-        files.get_all_paged_files(
-            filter, page_size, page, sort_direction, sort_conditions
         )
     )
 
