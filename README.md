@@ -61,11 +61,6 @@ Search projects with keywords and filters
 $ pridepy search-projects-by-keywords-and-filters --keyword accession:PXD012353
 ```
 
-Search files with filters
-```bash
-$ pridepy get-files-by-filter --filter fileCategory.value==RAW
-```
-
 Stream metadata of all projects as json and write it to a file
 ```bash
 $ pridepy stream-projects-metadata -o all_pride_projects.json

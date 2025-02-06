@@ -42,7 +42,7 @@ class Util:
     @sleep_and_retry
     @limits(calls=1000, period=50)
     async def stream_response_to_file(
-        out_file, total_records, regex_search_pattern, url, headers=None
+            out_file, total_records, regex_search_pattern, url, headers=None
     ):
         # Initialize the progress bar
         with tqdm(total=total_records, unit_scale=True) as pbar:
@@ -56,7 +56,7 @@ class Util:
                             # Iterate over the streaming content line by line
                             async for line in response.aiter_lines():
                                 if (
-                                    line
+                                        line
                                 ):  # Avoid printing empty lines (common with text/event-stream)
                                     cfile.write(line + "\n")
                                     # Check if the pattern exists in the string
@@ -67,13 +67,14 @@ class Util:
                     except PermissionError as e:
                         print("[ERROR] No permissions to write to:", out_file)
                         sys.exit(1)
+
     @staticmethod
     @sleep_and_retry
     @limits(calls=1000, period=50)
     def read_json_stream(
-        api_url: str,
-        headers: Optional[Dict[str, str]] = None,
-        params: Optional[Dict[str, str]] = None,
+            api_url: str,
+            headers: Optional[Dict[str, str]] = None,
+            params: Optional[Dict[str, str]] = None,
     ) -> Optional[List[Dict[str, Any]]]:
         """
         Read a JSON stream from the given API URL.
@@ -85,7 +86,7 @@ class Util:
         try:
             lines = []  # List to store lines for decoding
             with get(
-                api_url, headers=headers, params=params, stream=True, timeout=30
+                    api_url, headers=headers, params=params, stream=True, timeout=30
             ) as response:
                 response.raise_for_status()  # Raise an HTTPError for bad responses
                 print("Connected to the streaming API. Fetching data...")
