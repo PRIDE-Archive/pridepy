@@ -127,10 +127,10 @@ class Files:
         if not (os.path.isdir(output_folder)):
             os.mkdir(output_folder)
 
-        response_body = self.get_all_raw_file_list(accession)
+        raw_files = self.get_all_raw_file_list(accession)
 
         self.download_files(
-            response_body,
+            raw_files,
             accession,
             output_folder,
             skip_if_downloaded_already,
@@ -278,7 +278,7 @@ class Files:
 
     @staticmethod
     def download_files_from_aspera(
-        file_list_json: Dict,
+        file_list_json: List[Dict],
         output_folder: str,
         skip_if_downloaded_already,
         maximum_bandwidth: str = "100M",
@@ -334,7 +334,7 @@ class Files:
 
     @staticmethod
     def download_files_from_globus(
-        file_list_json, output_folder, skip_if_downloaded_already
+        file_list_json: List[Dict], output_folder, skip_if_downloaded_already
     ):
         """
         Download files using globus transfer url with progress bar for each file
@@ -393,7 +393,7 @@ class Files:
 
     @staticmethod
     def download_files_from_s3(
-        file_list_json: Dict, output_folder: str, skip_if_downloaded_already
+        file_list_json: List[Dict], output_folder: str, skip_if_downloaded_already
     ):
         """
         Download files using S3 transfer URL with a progress bar and retry logic.
@@ -561,24 +561,18 @@ class Files:
                 )
             )
 
-    def get_file_from_api(self, accession, file_name):
+    def get_file_from_api(self, accession, file_name) -> List[Dict]:
         """
         Fetches file from API
         :param accession: PRIDE accession
         :param file_name: file name
         :return: file in json format
         """
-        request_url = (
-            self.API_BASE_URL
-            + "/files/byProject?accession="
-            + accession
-            + ",fileName=="
-            + file_name
-        )
-        headers = {"Accept": "application/JSON"}
+
         try:
-            response = Util.get_api_call(request_url, headers)
-            return response.json()
+            files = self.stream_all_files_by_project(accession)
+            file = [f for f in files if f["fileName"] == file_name]
+            return file
         except Exception as e:
             raise Exception("File not found " + str(e))
 
@@ -712,7 +706,7 @@ class Files:
 
     @staticmethod
     def download_files(
-        file_list_json,
+        file_list_json: List[Dict],
         accession,
         output_folder: str,
         skip_if_downloaded_already,
@@ -744,16 +738,17 @@ class Files:
 
         elif protocol == "aspera":
             Files.download_files_from_aspera(
-                file_list_json,
-                output_folder,
-                skip_if_downloaded_already,
-                maximum_bandwidth=aspera_maximum_bandwidth,
-            )
+                    file_list_json,
+                    output_folder,
+                    skip_if_downloaded_already,
+                    maximum_bandwidth=aspera_maximum_bandwidth,
+                )
+
         elif protocol == "globus":
             Files.download_files_from_globus(
-                file_list_json, output_folder, skip_if_downloaded_already
-            )
+                    file_list_json, output_folder, skip_if_downloaded_already
+                )
         elif protocol == "s3":
             Files.download_files_from_s3(
                 file_list_json, output_folder, skip_if_downloaded_already
-            )
+                )
