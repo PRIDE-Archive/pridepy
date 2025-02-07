@@ -17,6 +17,11 @@ class TestSearch(TestCase):
         """
         project = Project()
 
+        result = project.search_by_keywords_and_filters(keyword="PXD009476",query_filter="",
+                                                        page_size=100,page=0 , sort_direction="DESC",
+                                                        sort_fields="accession")
+        assert len(result) == 2
+
         result = project.get_projects(77, 0, "ASC", "submission_date")
         assert len(result) == 77
 
