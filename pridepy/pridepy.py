@@ -192,6 +192,7 @@ def get_private_files(accession, user, password):
     "-k",
     "--keyword",
     required=False,
+    default="",
     help="The entered word will be searched among the fields to fetch "
     "matching pride. The structure of the keyword is : *:*",
 )
@@ -246,6 +247,7 @@ def search_projects_by_keywords_and_filters(
     search public pride with keywords and filters
     :return:
     """
+    print(keyword)
     project = Project()
     logging.info(
         project.search_by_keywords_and_filters(
