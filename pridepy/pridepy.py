@@ -192,6 +192,7 @@ def get_private_files(accession, user, password):
     "-k",
     "--keyword",
     required=False,
+    default="",
     help="The entered word will be searched among the fields to fetch "
     "matching pride. The structure of the keyword is : *:*",
 )

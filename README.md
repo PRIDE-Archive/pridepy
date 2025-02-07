@@ -58,7 +58,9 @@ $ pridepy download-file-by-name -a PXD022105 -o /Users/yourname/Downloads/folder
 
 Search projects with keywords and filters
 ```bash
-$ pridepy search-projects-by-keywords-and-filters --keyword accession:PXD012353
+$ pridepy search-projects-by-keywords-and-filters --filter accession==PXD012353
+
+$ pridepy search-projects-by-keywords-and-filters --keyword PXD012353
 ```
 
 Stream metadata of all projects as json and write it to a file
