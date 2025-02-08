@@ -122,7 +122,6 @@ class Project:
         query_filter,
         page_size,
         page,
-        date_gap,
         sort_direction,
         sort_fields,
     ):
@@ -145,9 +144,6 @@ class Project:
         request_url = (
             request_url + "pageSize=" + str(page_size) + "&page=" + str(page) + "&"
         )
-
-        if date_gap != "":
-            request_url = request_url + "dateGap=" + str(date_gap) + "&"
 
         request_url = (
             request_url

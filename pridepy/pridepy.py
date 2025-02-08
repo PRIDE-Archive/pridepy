@@ -219,12 +219,6 @@ def get_private_files(accession, user, password):
     help="Identifies which page of results to fetch",
 )
 @click.option(
-    "-dg",
-    "--date_gap",
-    required=False,
-    help="A date range field with possible values of +1MONTH, +1YEAR",
-)
-@click.option(
     "-sd",
     "--sort_direction",
     required=False,
@@ -250,7 +244,7 @@ def search_projects_by_keywords_and_filters(
     project = Project()
     logging.info(
         project.search_by_keywords_and_filters(
-            keyword, filter, page_size, page, date_gap, sort_direction, sort_fields
+            keyword, filter, page_size, page, sort_direction, sort_fields
         )
     )
 
