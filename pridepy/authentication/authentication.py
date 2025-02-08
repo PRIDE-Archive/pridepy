@@ -27,11 +27,7 @@ class Authentication:
         url = self.base_url + "/login"
         headers = {"Content-type": "application/json", "Accept": "text/plain"}
         credentials = (
-            '{"Credentials":{"username":"'
-            + username
-            + '", "password":"'
-            + password
-            + '"}}'
+            '{"Credentials":{"username":"' + username + '", "password":"' + password + '"}}'
         )
 
         response = requests.post(url, data=credentials, headers=headers)
@@ -55,8 +51,4 @@ class Authentication:
 
         response = requests.post(url, headers=headers)
 
-        return (
-            response.ok
-            and response.status_code == 200
-            and response.text == "Token Valid"
-        )
+        return response.ok and response.status_code == 200 and response.text == "Token Valid"

@@ -57,7 +57,15 @@ def download_all_public_raw_files(
     checksum_check: bool = False,
 ):
     """
-    This script download raw files from FTP or copy from the file system
+    Command to download all public raw files from a specified PRIDE project.
+
+    Parameters:
+        accession (str): PRIDE project accession.
+        protocol (str): Protocol for downloading files (ftp, aspera, globus). Default is ftp.
+        output_folder (str): Directory to save downloaded raw files.
+        skip_if_downloaded_already (bool): Skip download if files already exist. Default is True.
+        aspera_maximum_bandwidth (str): Maximum bandwidth for Aspera protocol. Default is 100M.
+        checksum_check (bool): Flag to download checksum file for the project. Default is False.
     """
 
     raw_files = Files()
@@ -74,6 +82,90 @@ def download_all_public_raw_files(
         protocol,
         aspera_maximum_bandwidth=aspera_maximum_bandwidth,
         checksum_check=checksum_check,
+    )
+
+
+@main.command(
+    "download-all-public-category-files",
+    help="Download all public files of specific category from a given PRIDE public project",
+)
+@click.option("-a", "--accession", required=True, help="PRIDE project accession")
+@click.option(
+    "-p",
+    "--protocol",
+    default="ftp",
+    help="Protocol to be used to download files either by ftp or aspera or from globus. Default is ftp",
+)
+@click.option(
+    "-o",
+    "--output_folder",
+    required=True,
+    help="output folder to download or copy raw files",
+)
+@click.option(
+    "-skip",
+    "--skip_if_downloaded_already",
+    required=False,
+    default=True,
+    help="Boolean value to skip the download if the file has already been downloaded.",
+)
+@click.option(
+    "--aspera_maximum_bandwidth",
+    required=False,
+    help="Aspera maximum bandwidth (e.g 50M, 100M, 200M), depending on the user's network bandwidth, default is 100M",
+    default="100M",
+)
+@click.option(
+    "--checksum_check",
+    required=False,
+    help="Download checksum file for project",
+    is_flag=True,
+    default=False,
+)
+@click.option(
+    "-c",
+    "--category",
+    required=True,
+    help="Category of the files to be downloaded",
+    type=click.Choice("RAW,PEAK,SEARCH,RESULT,SPECTRUM_LIBRARY,OTHER, FASTA".split(",")),
+)
+def download_all_public_category_files(
+    accession: str,
+    protocol: str,
+    output_folder: str,
+    skip_if_downloaded_already: bool,
+    aspera_maximum_bandwidth: str = "50M",
+    checksum_check: bool = False,
+    category: str = "RAW",
+):
+    """
+    Command to download all public files of a specified category from a given PRIDE public project.
+
+    Parameters:
+        accession (str): The PRIDE project accession identifier.
+        protocol (str): The protocol to use for downloading files (ftp, aspera, globus).
+        output_folder (str): The directory where the files will be downloaded.
+        skip_if_downloaded_already (bool): If True, skips downloading files that already exist.
+        aspera_maximum_bandwidth (str): Maximum bandwidth for Aspera transfers.
+        checksum_check (bool): If True, downloads the checksum file for the project.
+        category (str): The category of files to download.
+    """
+
+    raw_files = Files()
+    logging.info("accession: " + accession)
+    logging.info(f"Data will be downloaded from {protocol}")
+
+    if protocol == "aspera":
+        logging.info(f"Aspera maximum bandwidth: {aspera_maximum_bandwidth}")
+
+    raw_files.download_all_category_files(
+        accession,
+        output_folder,
+        skip_if_downloaded_already,
+        protocol,
+        aspera_maximum_bandwidth=aspera_maximum_bandwidth,
+        checksum_check=checksum_check,
+        category=category,
     )
 
 
@@ -102,12 +194,8 @@ def download_all_public_raw_files(
     default=True,
     help="Boolean value to skip the download if the file has already been downloaded.",
 )
-@click.option(
-    "--username", required=False, help="PRIDE login username for private files"
-)
-@click.option(
-    "--password", required=False, help="PRIDE login password for private files"
-)
+@click.option("--username", required=False, help="PRIDE login username for private files")
+@click.option("--password", required=False, help="PRIDE login password for private files")
 @click.option(
     "--aspera_maximum_bandwidth",
     required=False,
@@ -165,11 +253,11 @@ def download_file_by_name(
     )
 
 
-@main.command("get-private-files", help="Get private files by project accession")
+@main.command("list-private-files", help="List private files by project accession")
 @click.option("-a", "--accession", required=True, help="accession of the project")
 @click.option("-u", "--user", required=True, help="PRIDE login username")
-@click.option("-p", "--password", required=True, help="PRiDE login password")
-def get_private_files(accession, user, password):
+@click.option("-p", "--password", required=True, help="PRIDE login password")
+def list_private_files(accession, user, password):
     """
     get files by project accession
     :return:
@@ -182,9 +270,7 @@ def get_private_files(accession, user, password):
             # Get file size in MB from bytes
             file_size = f["fileSizeBytes"] / (1024 * 1024)
             file_category = f["fileCategory"]["value"]
-            logging.info(
-                f["fileName"] + "\t" + str(file_size) + " MB\t" + file_category
-            )
+            logging.info(f["fileName"] + "\t" + str(file_size) + " MB\t" + file_category)
 
 
 @main.command()

@@ -66,9 +66,7 @@ class Project:
         response = Util.get_api_call(request_url, headers)
         return response.json()
 
-    def get_files_by_accession(
-        self, accession
-    ):
+    def get_files_by_accession(self, accession):
         """
         search PRIDE project's files by accession
         :param accession: PRIDE project accession
@@ -141,16 +139,10 @@ class Project:
         if query_filter:
             request_url = request_url + "filter=" + query_filter + "&"
 
-        request_url = (
-            request_url + "pageSize=" + str(page_size) + "&page=" + str(page) + "&"
-        )
+        request_url = request_url + "pageSize=" + str(page_size) + "&page=" + str(page) + "&"
 
         request_url = (
-            request_url
-            + "sortDirection="
-            + sort_direction
-            + "&sortFields="
-            + sort_fields
+            request_url + "sortDirection=" + sort_direction + "&sortFields=" + sort_fields
         )
 
         headers = {"Accept": "application/JSON"}
@@ -164,8 +156,6 @@ class Project:
         if user and password:
             files = self.get_private_files_by_accession(accession, user, password)
         else:
-            files = self.get_files_by_accession(
-                accession, "", 100, 0, "ASC", "fileName"
-            )["list"]
+            files = self.get_files_by_accession(accession, "", 100, 0, "ASC", "fileName")["list"]
 
         return [file["fileName"] for file in files]

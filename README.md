@@ -93,22 +93,66 @@ $ pridepy download-file-by-name -a PXD022105 -o /Users/yourname/Downloads/folder
 
 Please be aware that the additional parameters are the same as the previous command [Downloading a project from PRIDE Archive](#downloading-a-project-from-pride-archive).
 
-Search projects with keywords and filters
-```bash
-$ pridepy search-projects-by-keywords-and-filters --filter accession==PXD012353
+## Download project files by category
 
-$ pridepy search-projects-by-keywords-and-filters --keyword PXD012353
+Users may be interested in downloading files by category. Here is how to download files by category. The different categories are available in the PRIDE Archive: 
+
+- RAW: Raw data files  
+- PEAK: Peak list files 
+- SEARCH: Search engine output files 
+- OTHER: Other files
+- RESULT: Result files
+- SPECTRUM LIBRARIES: Spectrum libraries
+- FASTA: FASTA files
+
+```bash
+$ pridepy download-files-by-category -a PXD022105 -o /Users/yourname/Downloads/foldername/ -c RAW -p ftp
 ```
 
-Stream metadata of all projects as json and write it to a file
+Please be aware that the additional parameters are the same as the previous command [Downloading a project from PRIDE Archive](#downloading-a-project-from-pride-archive).
+
+>[!IMPORTANT]
+> We also implemented a direct command to download RAW files from a project which is the most common use case.
+
+## Download private files
+
+Users and especially reviewers may be interested in downloading private files. Here is how to download private files. 
+
+First, the user can list the private files of a project:
+
+```bash
+$ pridepy list-private-files -a PXD022105 -u yourusername -p yourpassword
+```
+
+This command will list the private files of the project PXD022105. Including the file name, file size, and download link.
+
+Then the user can download the private files:
+
+```bash
+$ pridepy download-file-by-name -a PXD022105 -o /Users/yourname/Downloads/foldername/ --username yourusername --password yourpassword -f checksum.txt 
+```
+
+>[!WARNING]
+> To download preivate files, the user should use the same command as downloading a single file by name. The only difference is that the user should provide the username and password. However, protocol in this case is unnecessary as the tool will use the https protocol to download the files. At the moment we only allow this protocol because of the infrastructure of PRIDE private files (read the whitepaper for more information).
+
+## Streamming metadata
+
+One of the great features of PRIDE and pridepy is the ability to stream metadata of all projects and files. This is useful for users who want to analyze the metadata of all projects and files, locally.
+
+Stream metadata of all projects as JSON and write it to a file: 
+
 ```bash
 $ pridepy stream-projects-metadata -o all_pride_projects.json
 ```
 
-Stream metadata of all files as json and write it to a file. Project accession can be specified as an optional parameter
+Stream all files metadata in a specific project as JSON and write it to a file: 
+
 ```bash
-$ pridepy stream-files-metadata -o all_pride_files.json
-OR
+$ pridepy stream-files-metadata -o all_pride_files_metadata.json
+```
+Stream the files metadata of a specific project as JSON and write it to a file: 
+
+```bash
 $ pridepy stream-files-metadata -o PXD005011_files.json -a PXD005011
 ```
 

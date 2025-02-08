@@ -13,3 +13,5 @@ __pycache__
 paper/paper.pdf
 paper/jats/
 venv
+
+.qodo
