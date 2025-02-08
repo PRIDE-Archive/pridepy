@@ -323,7 +323,7 @@ def search_projects_by_keywords_and_filters(
     """
     TODO: @selva this function and command line should be reimplemented.
     TODO: The idea is that the user can type a keyword or keywords and filters and get all the files projects in
-    TODO: JSON.
+    TODO: JSON. Please remember to update the README.
     """
     project = Project()
     logging.info(
