@@ -31,7 +31,7 @@ Install with setup.py:
 ```bash
 $ git clone https://github.com/PRIDE-Archive/pridepy
 $ cd pridepy
-$ python pyproject.toml sdist bdist_wheel 
+$ poetry build
 $ pip install dist/pridepy-{version}.tar.gz
 ```
 
