@@ -10,7 +10,6 @@ from pridepy.project.project import Project
 def main():
     pass
 
-
 @main.command(
     "download-all-public-raw-files",
     help="Download all public raw files from a given PRIDE public project",
@@ -272,69 +271,6 @@ def list_private_files(accession, user, password):
             file_category = f["fileCategory"]["value"]
             logging.info(f["fileName"] + "\t" + str(file_size) + " MB\t" + file_category)
 
-
-@main.command()
-@click.option(
-    "-k",
-    "--keyword",
-    required=False,
-    default="",
-    help="The entered word will be searched among the fields to fetch "
-    "matching pride. The structure of the keyword is : *:*",
-)
-@click.option(
-    "-f",
-    "--filter",
-    required=False,
-    help="Parameters to filter the search results. The structure of the "
-    "filter is: field1==value1, field2==value2. Example "
-    "accession==PRD000001",
-)
-@click.option(
-    "-ps",
-    "--page_size",
-    required=False,
-    default=100,
-    help="Number of results to fetch in a page",
-)
-@click.option(
-    "-p",
-    "--page",
-    required=False,
-    default=0,
-    help="Identifies which page of results to fetch",
-)
-@click.option(
-    "-sd",
-    "--sort_direction",
-    required=False,
-    default="DESC",
-    help="Sorting direction: ASC or DESC",
-)
-@click.option(
-    "-sf",
-    "--sort_fields",
-    required=False,
-    default="submission_date",
-    help="Field(s) for sorting the results on. Default for this "
-    "request is submission_date. More fields can be separated by "
-    "comma and passed. Example: submission_date,project_title",
-)
-def search_projects_by_keywords_and_filters(
-    keyword, filter, page_size, page, date_gap, sort_direction, sort_fields
-):
-    """
-    search public pride with keywords and filters
-    :return:
-    """
-    project = Project()
-    logging.info(
-        project.search_by_keywords_and_filters(
-            keyword, filter, page_size, page, sort_direction, sort_fields
-        )
-    )
-
-
 @main.command()
 @click.option(
     "-o",
@@ -372,114 +308,30 @@ def stream_files_metadata(accession, output_file):
     files = Files()
     asyncio.run(files.stream_all_files_metadata(output_file, accession))
 
-
 @main.command()
 @click.option(
-    "-ps",
-    "--page_size",
+    "-k",
+    "--keyword",
     required=False,
-    default=100,
-    help="Number of results to fetch in a page",
+    default="",
+    help="The entered word will be searched among the fields to fetch "
+    "matching pride. The structure of the keyword is : *:*",
 )
-@click.option(
-    "-p",
-    "--page",
-    required=False,
-    default=0,
-    help="Identifies which page of results to fetch",
-)
-@click.option(
-    "-sd",
-    "--sort_direction",
-    required=False,
-    default="DESC",
-    help="Sorting direction: ASC or DESC",
-)
-@click.option(
-    "-sc",
-    "--sort_conditions",
-    required=False,
-    default="projectAccession",
-    help="Field(s) for sorting the results on. Default for this "
-    "request is project_accession. More fields can be separated by "
-    "comma and passed. Example: submission_date,project_title",
-)
-def get_projects(page_size, page, sort_direction, sort_conditions):
-    """
-    get paged projects
-    :return:
-    """
-    project = Project()
-    logging.info(project.get_projects(page_size, page, sort_direction, sort_conditions))
-
-
-@main.command()
-@click.option("-a", "--accession", required=False, help="accession of the project")
-def get_projects_by_accession(accession):
-    """
-    get projects by accession
-    :return:
-    """
-    project = Project()
-    logging.info(project.get_by_accession(accession))
-
-
-@main.command()
-@click.option("-a", "--accession", required=False, help="accession of the project")
-def get_similar_projects_by_accession(accession):
-    """
-    get similar projects by accession
-    :return:
-    """
-    project = Project()
-    logging.info(project.get_similar_projects_by_accession(accession))
-
-
-@main.command()
-@click.option("-a", "--accession", required=True, help="accession of the project")
-@click.option(
-    "-ps",
-    "--page_size",
-    required=False,
-    default=100,
-    help="Number of results to fetch in a page",
-)
-@click.option(
-    "-p",
-    "--page",
-    required=False,
-    default=0,
-    help="Identifies which page of results to fetch",
-)
-@click.option(
-    "-sd",
-    "--sort_direction",
-    required=False,
-    default="DESC",
-    help="Sorting direction: ASC or DESC",
-)
-@click.option(
-    "-sc",
-    "--sort_conditions",
-    required=False,
-    default="projectAccession",
-    help="Field(s) for sorting the results on. Default for this "
-    "request is project_accession. More fields can be separated by "
-    "comma and passed. Example: submission_date,project_title",
-)
-def get_files_by_project_accession(
-    accession, filter, page_size, page, sort_direction, sort_conditions
+def search_projects_by_keywords_and_filters(
+    keyword, filter, page_size, page, date_gap, sort_direction, sort_fields
 ):
     """
-    get files by project accession
-    :return:
+    TODO: @selva this function and command line should be reimplemented.
+    TODO: The idea is that the user can type a keyword or keywords and filters and get all the files projects in
+    TODO: JSON.
     """
     project = Project()
     logging.info(
-        project.get_files_by_accession(
-            accession, filter, page_size, page, sort_direction, sort_conditions
+        project.search_by_keywords_and_filters(
+            keyword, filter, page_size, page, sort_direction, sort_fields
         )
     )
+
 
 
 if __name__ == "__main__":
