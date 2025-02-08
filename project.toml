@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pridepy"
+version = "0.0.7"
+description = "Python Client library for PRIDE Rest API"
+authors = [
+    {name = "PRIDE Team", email = "pride-support@ebi.ac.uk"},
+]
+readme = "README.md"
+requires-python = ">=3.7"
+keywords = ["PRIDE", "python", "client", "REST", "API"]
+license = {text = "Apache-2.0", file = "LICENSE"}
+dependencies = [
+    "requests",
+    "ratelimit",
+    "click",
+    "pytest",
+    "setuptools",
+    "plotly",
+    "tqdm",
+    "boto3",
+    "botocore",
+    "httpx",
+]
+
+[project.urls]
+Homepage = "https://github.com/PRIDE-Archive/pridepy"
+
+[project.scripts]
+pridepy = "pridepy:main"
+
+[tool.setuptools]
+packages = ["pridepy"]
+py-modules = ["pridepy"]
+
+[tool.setuptools.package-data]
+"*" = ["*.txt", "*.md"]
+"aspera" = ["**/*"]

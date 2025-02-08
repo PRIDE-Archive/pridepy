@@ -19,7 +19,7 @@ requirements:
   host:
     - python >=3.9
     - pip
-    - setuptools
+    - poetry-core >=1.2.0
   run:
     - requests~=2.31.0
     - ratelimit~=2.2.1
