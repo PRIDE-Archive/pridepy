@@ -12,7 +12,7 @@ authors = [
 readme = "README.md"
 requires-python = ">=3.7"
 keywords = ["PRIDE", "python", "client", "REST", "API"]
-license = {text = "Apache-2.0", file = "LICENSE"}
+license = "Apache-2.0"
 dependencies = [
     "requests",
     "ratelimit",
