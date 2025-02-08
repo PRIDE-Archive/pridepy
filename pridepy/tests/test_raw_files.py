@@ -28,3 +28,12 @@ class TestRawFiles(TestCase):
         """
         raw = Files()
         assert raw.get_submitted_file_path_prefix("PXD008644") == "2018/10/PXD008644"
+
+    def test_get_all_category_file_list(self):
+
+        raw = Files()
+        result = raw.get_all_category_file_list("PXD008644", "RAW")
+        assert len(result) == 2
+
+        result = raw.get_all_category_file_list("PXD008644", "SEARCH")
+        assert len(result) == 2

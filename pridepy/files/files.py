@@ -56,9 +56,7 @@ class Files:
     PRIDE_ARCHIVE_FTP = "ftp.pride.ebi.ac.uk"
     S3_URL = "https://hh.fire.sdo.ebi.ac.uk"
     S3_BUCKET = "pride-public"
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-    )
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
     def __init__(self):
         pass
@@ -72,15 +70,15 @@ class Files:
             count_request_url = f"{self.V3_API_BASE_URL}/files/count"
         else:
             request_url = f"{self.V3_API_BASE_URL}/projects/{accession}/files/all"
-            count_request_url = (
-                f"{self.V3_API_BASE_URL}/projects/{accession}/files/count"
-            )
+            count_request_url = f"{self.V3_API_BASE_URL}/projects/{accession}/files/count"
         headers = {"Accept": "application/JSON"}
         response = Util.get_api_call(count_request_url, headers)
         total_records = response.json()
 
         regex_search_pattern = '"fileName"'
-        await Util.stream_response_to_file(output_file, total_records, regex_search_pattern, request_url, headers)
+        await Util.stream_response_to_file(
+            output_file, total_records, regex_search_pattern, request_url, headers
+        )
 
     def stream_all_files_by_project(self, accession) -> List[Dict]:
         """
@@ -88,7 +86,7 @@ class Files:
         """
         request_url = f"{self.V3_API_BASE_URL}/projects/{accession}/files/all"
         headers = {"Accept": "application/JSON"}
-        record_files = Util.read_json_stream(api_url=request_url, headers = headers)
+        record_files = Util.read_json_stream(api_url=request_url, headers=headers)
         return record_files
 
     def get_all_raw_file_list(self, project_accession):
@@ -219,9 +217,7 @@ class Files:
                                             pbar.update(len(data))
 
                                         # Retrieve the file with progress callback
-                                        ftp.retrbinary(
-                                            f"RETR {ftp_file_path}", callback
-                                        )
+                                        ftp.retrbinary(f"RETR {ftp_file_path}", callback)
 
                                 logging.info(f"Successfully downloaded {new_file_path}")
                                 break  # Exit download retry loop if successful
@@ -240,13 +236,9 @@ class Files:
                                     )
                                     break  # Give up on this file after max retries
                     except (KeyError, IndexError) as e:
-                        logging.error(
-                            f"Failed to process file due to missing data: {str(e)}"
-                        )
+                        logging.error(f"Failed to process file due to missing data: {str(e)}")
                     except Exception as e:
-                        logging.error(
-                            f"Unexpected error while processing file: {str(e)}"
-                        )
+                        logging.error(f"Unexpected error while processing file: {str(e)}")
                 ftp.quit()  # Close FTP connection after all files are downloaded
                 logging.info(f"Disconnected from FTP host: {Files.PRIDE_ARCHIVE_FTP}")
                 break  # Exit connection retry loop if everything was successful
@@ -257,9 +249,7 @@ class Files:
                 socket.error,
             ) as e:
                 connection_attempt += 1
-                logging.error(
-                    f"FTP connection failed (attempt {connection_attempt}): {str(e)}"
-                )
+                logging.error(f"FTP connection failed (attempt {connection_attempt}): {str(e)}")
                 if connection_attempt < max_connection_retries:
                     logging.info("Retrying connection...")
                     time.sleep(5)  # Optional delay before retrying
@@ -303,9 +293,7 @@ class Files:
 
             # Create a clean filename to save the downloaded file
             logging.debug(f"Downloading via Aspera: {download_url}")
-            new_file_path = Files.get_output_file_name(
-                download_url, file, output_folder
-            )
+            new_file_path = Files.get_output_file_name(download_url, file, output_folder)
 
             if skip_if_downloaded_already == True and os.path.exists(new_file_path):
                 logging.info("Skipping download as file already exists")
@@ -359,9 +347,7 @@ class Files:
                 download_url = download_url.replace(ftp_base_url, globus_base_url)
 
                 # Create a clean filename to save the downloaded file
-                new_file_path = Files.get_output_file_name(
-                    download_url, file, output_folder
-                )
+                new_file_path = Files.get_output_file_name(download_url, file, output_folder)
 
                 if skip_if_downloaded_already == True and os.path.exists(new_file_path):
                     logging.info("Skipping download as file already exists")
@@ -378,18 +364,14 @@ class Files:
                 urllib.request.urlretrieve(
                     download_url,
                     new_file_path,
-                    reporthook=lambda blocks, block_size, total_size: progress(
-                        block_size
-                    ),
+                    reporthook=lambda blocks, block_size, total_size: progress(block_size),
                 )
 
                 progress.close()
                 logging.info(f"Successfully downloaded {new_file_path}")
 
             except Exception as e:
-                logging.error(
-                    f"Download from Globus failed for {new_file_path}: {str(e)}"
-                )
+                logging.error(f"Download from Globus failed for {new_file_path}: {str(e)}")
 
     @staticmethod
     def download_files_from_s3(
@@ -431,9 +413,7 @@ class Files:
 
                 ftp_base_url = "ftp://ftp.pride.ebi.ac.uk/pride/data/archive/"
                 s3_path = download_url.replace(ftp_base_url, "")
-                new_file_path = Files.get_output_file_name(
-                    download_url, file, output_folder
-                )
+                new_file_path = Files.get_output_file_name(download_url, file, output_folder)
 
                 if skip_if_downloaded_already == True and os.path.exists(new_file_path):
                     logging.info("Skipping download as file already exists")
@@ -514,9 +494,7 @@ class Files:
 
         ## Check type of project
         public_project = False
-        project_status = Util.get_api_call(
-            self.API_BASE_URL + "/status/{}".format(accession)
-        )
+        project_status = Util.get_api_call(self.API_BASE_URL + "/status/{}".format(accession))
 
         if project_status.status_code == 200:
             if project_status.text == "PRIVATE":
@@ -524,9 +502,7 @@ class Files:
             elif project_status.text == "PUBLIC":
                 public_project = True
             else:
-                raise Exception(
-                    "Dataset {} is not present in PRIDE Archive".format(accession)
-                )
+                raise Exception("Dataset {} is not present in PRIDE Archive".format(accession))
 
         if public_project:
             logging.info("Downloading file from public dataset {}".format(accession))
@@ -576,9 +552,7 @@ class Files:
         except Exception as e:
             raise Exception("File not found " + str(e))
 
-    def download_private_file_name(
-        self, accession, file_name, output_folder, username, password
-    ):
+    def download_private_file_name(self, accession, file_name, output_folder, username, password):
         """
         Get the information for a given private file to be downloaded from the api.
         :param accession: Project accession
@@ -592,12 +566,8 @@ class Files:
         validate_token = auth.validate_token(auth_token)
         logging.info("Valid token after login: {}".format(validate_token))
 
-        url = self.API_PRIVATE_URL + "/projects/{}/files?search={}".format(
-            accession, file_name
-        )
-        content = requests.get(
-            url, headers={"Authorization": "Bearer {}".format(auth_token)}
-        )
+        url = self.API_PRIVATE_URL + "/projects/{}/files?search={}".format(accession, file_name)
+        content = requests.get(url, headers={"Authorization": "Bearer {}".format(auth_token)})
         if content.ok and content.status_code == 200:
             json_file = content.json()
             if (
@@ -605,22 +575,16 @@ class Files:
                 and "files" in json_file["_embedded"]
                 and len(json_file["_embedded"]["files"]) == 1
             ):
-                download_url = json_file["_embedded"]["files"][0]["_links"]["download"][
-                    "href"
-                ]
+                download_url = json_file["_embedded"]["files"][0]["_links"]["download"]["href"]
                 logging.info(download_url)
 
                 # Create a clean filename to save the downloaded file
                 new_file_path = os.path.join(output_folder, f"{file_name}")
 
-                session = (
-                    Util.create_session_with_retries()
-                )  # Create session with retries
+                session = Util.create_session_with_retries()  # Create session with retries
                 # Check if the file already exists
                 if os.path.exists(new_file_path):
-                    resume_header = {
-                        "Range": f"bytes={os.path.getsize(new_file_path)}-"
-                    }
+                    resume_header = {"Range": f"bytes={os.path.getsize(new_file_path)}-"}
                     mode = "ab"  # Append to file
                     resume_size = os.path.getsize(new_file_path)
                 else:
@@ -738,17 +702,61 @@ class Files:
 
         elif protocol == "aspera":
             Files.download_files_from_aspera(
-                    file_list_json,
-                    output_folder,
-                    skip_if_downloaded_already,
-                    maximum_bandwidth=aspera_maximum_bandwidth,
-                )
+                file_list_json,
+                output_folder,
+                skip_if_downloaded_already,
+                maximum_bandwidth=aspera_maximum_bandwidth,
+            )
 
         elif protocol == "globus":
             Files.download_files_from_globus(
-                    file_list_json, output_folder, skip_if_downloaded_already
-                )
-        elif protocol == "s3":
-            Files.download_files_from_s3(
                 file_list_json, output_folder, skip_if_downloaded_already
-                )
+            )
+        elif protocol == "s3":
+            Files.download_files_from_s3(file_list_json, output_folder, skip_if_downloaded_already)
+
+    def download_all_category_files(
+        self,
+        accession: str,
+        output_folder: str,
+        skip_if_downloaded_already: bool,
+        protocol: str,
+        aspera_maximum_bandwidth: str,
+        checksum_check: bool,
+        category: str,
+    ):
+        """
+        Download all files of a specified category from a PRIDE project.
+
+        :param accession: The PRIDE project accession identifier.
+        :param output_folder: The directory where the files will be downloaded.
+        :param skip_if_downloaded_already: If True, skips downloading files that already exist.
+        :param protocol: The transfer protocol to use (e.g., ftp, aspera, globus, s3).
+        :param aspera_maximum_bandwidth: Maximum bandwidth for Aspera transfers.
+        :param checksum_check: If True, downloads the checksum file for the project.
+        :param category: The category of files to download.
+        """
+        raw_files = self.get_all_category_file_list(accession, category)
+        self.download_files(
+            raw_files,
+            accession,
+            output_folder,
+            skip_if_downloaded_already,
+            protocol,
+            aspera_maximum_bandwidth=aspera_maximum_bandwidth,
+            checksum_check=checksum_check,
+        )
+
+    def get_all_category_file_list(self, accession: str, category: str):
+        """
+        Retrieve a list of files from a specific project that belong to a given category.
+
+        :param accession: The PRIDE project accession identifier.
+        :param category: The category of files to filter by.
+        :return: A list of files in the specified category.
+        """
+        record_files = self.stream_all_files_by_project(accession)
+        category_files = [
+            file for file in record_files if file["fileCategory"]["value"] == category
+        ]
+        return category_files
