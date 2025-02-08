@@ -70,9 +70,18 @@ The main purpose of this tool is to download data from the PRIDE Archive. Here, 
 ```bash
 $ pridepy download-all-public-raw-files -a PXD012353 -o /Users/yourname/Downloads/foldername/ -p aspera
 ```
+- `-a` flag is used to specify the project accession number.
+- `-o` flag is used to specify the output directory. 
+- `-p` flag is used to specify the protocol (**aspera, ftp, globus**)
 
 > [!IMPORTANT]
-> The `-a` flag is used to specify the project accession number, `-o` flag is used to specify the output directory, and `-p` flag is used to specify the protocol (aspera, ftp, globus). Read the whitepaper to know more about the performance of each protocol.
+> Currently, pridepy supports multiple protocols for downloading including ftp, aspera, globus, s3. ftp, aspera uses those protocols to download the files; the pridepy includes the aspera client. For globus and s3, the tool uses https of both services endpoints. Read the whitepaper to know more about the performance of each protocol.
+
+Additional options: 
+
+- `-skip` flag is used to skip the download of files that already exist in the output directory.
+- `--aspera_maximum_bandwidth` flag is used to specify the maximum bandwidth for the Aspera download. The default value is 100M.
+- `--checksum_check` flag is used to check the checksum of the downloaded files. The default value is False.
 
 ## Download single file by name
 
