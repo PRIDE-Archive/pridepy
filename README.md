@@ -85,11 +85,13 @@ Additional options:
 
 ## Download single file by name
 
+Users instead of downloading an entire project files may be interested in downloading a single file if they know it by name. Here is how to download a single file by name.
+
 ```bash
 $ pridepy download-file-by-name -a PXD022105 -o /Users/yourname/Downloads/foldername/ -f checksum.txt -p globus
 ```
 
->**NOTE**: Currently we use Globus URLs (when `-p globus` is used) via HTTPS, not the Globus protocol. For more information about Globus, see [Globus documentation](https://www.globus.org/data-transfer).
+Please be aware that the additional parameters are the same as the previous command [Downloading a project from PRIDE Archive](#downloading-a-project-from-pride-archive).
 
 Search projects with keywords and filters
 ```bash
