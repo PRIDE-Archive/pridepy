@@ -20,8 +20,8 @@ class TestSearch(TestCase):
         result = project.search_by_keywords_and_filters(keyword="PXD009476",query_filter="",
                                                         page_size=100,page=0 , sort_direction="DESC",
                                                         sort_fields="accession")
-        assert (len(result) > 0, "Search should return at least one result")
-        assert (any(r["accession"] == "PXD009476" for r in result), "Search should return the queried project")
+        assert len(result) > 0  # Search should return at least one result
+        assert any(r["accession"] == "PXD009476" for r in result)  # Search should return the queried project
 
         result = project.get_projects(77, 0, "ASC", "submission_date")
         assert len(result) == 77
