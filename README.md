@@ -137,7 +137,7 @@ $ pridepy download-file-by-name -a PXD022105 -o /Users/yourname/Downloads/folder
 
 ## Streamming metadata
 
-One of the great features of PRIDE and pridepy is the ability to stream metadata of all projects and files. This is useful for users who want to analyze the metadata of all projects and files, locally.
+One of the great features of PRIDE and pridepy is the ability to stream metadata of all projects and files. This is useful for users who want to analyze the metadata of all projects and files locally.
 
 Stream metadata of all projects as JSON and write it to a file: 
 
