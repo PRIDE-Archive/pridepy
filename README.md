@@ -23,7 +23,8 @@ First, clone the repository on your local machine and then install the package u
 ```bash
 $ git clone https://github.com/PRIDE-Archive/pridepy
 $ cd pridepy
-$ pip install .
+$ poetry build
+$ pip install dist/*.whl
 ```
 
 Install with setup.py: 
@@ -34,46 +35,7 @@ $ cd pridepy
 $ poetry build
 $ pip install dist/pridepy-{version}.tar.gz
 ```
-
-# Examples
-
-Download all the raw files from a dataset(eg: PXD012353).
-Warning: Raw files are generally large in size, so it may take some time to download depending on the number of files and file sizes.
-
-`-p`: in download specifies protocol (ftp default): 
-   - **ftp**: FTP protocol
-   - **aspera**: using the aspera protocol
-   - **globus**: PRIDE globus endpoint (_the data is downloaded through https_)
-
-```bash
-$ pridepy download-all-public-raw-files -a PXD012353 -o /Users/yourname/Downloads/foldername/ -p aspera
-```
-
-Download single file by name:
-```bash
-$ pridepy download-file-by-name -a PXD022105 -o /Users/yourname/Downloads/foldername/ -f checksum.txt -p globus
-```
-
->**NOTE**: Currently we use Globus URLs (when `-p globus` is used) via HTTPS, not the Globus protocol. For more information about Globus, see [Globus documentation](https://www.globus.org/data-transfer).
-
-Search projects with keywords and filters
-```bash
-$ pridepy search-projects-by-keywords-and-filters --filter accession==PXD012353
-
-$ pridepy search-projects-by-keywords-and-filters --keyword PXD012353
-```
-
-Stream metadata of all projects as json and write it to a file
-```bash
-$ pridepy stream-projects-metadata -o all_pride_projects.json
-```
-
-Stream metadata of all files as json and write it to a file. Project accession can be specified as an optional parameter
-```bash
-$ pridepy stream-files-metadata -o all_pride_files.json
-OR
-$ pridepy stream-files-metadata -o PXD005011_files.json -a PXD005011
-```
+# Usage and Documentation
 
 This Python CLI tool, built using the Click module, 
 already provides detailed usage instructions for each command. To avoid redundancy and potential clutter in this README, you can access the usage instructions directly from the CLI
@@ -98,9 +60,46 @@ Commands:
   stream-projects-metadata        Stream all projects metadata...
     
 ```
-# NOTE
+> [!NOTE]
+> Please make sure you are using Python3, not Python 2.7 version.
 
-Please make sure you are using Python3, not Python 2.7 version.
+## Downloading a project from PRIDE Archive
+
+The main purpose of this tool is to download data from the PRIDE Archive. Here, how to download all the raw files from a dataset(eg: PXD012353).
+
+```bash
+$ pridepy download-all-public-raw-files -a PXD012353 -o /Users/yourname/Downloads/foldername/ -p aspera
+```
+
+> [!IMPORTANT]
+> The `-a` flag is used to specify the project accession number, `-o` flag is used to specify the output directory, and `-p` flag is used to specify the protocol (aspera, ftp, globus). Read the whitepaper to know more about the performance of each protocol.
+
+## Download single file by name
+
+```bash
+$ pridepy download-file-by-name -a PXD022105 -o /Users/yourname/Downloads/foldername/ -f checksum.txt -p globus
+```
+
+>**NOTE**: Currently we use Globus URLs (when `-p globus` is used) via HTTPS, not the Globus protocol. For more information about Globus, see [Globus documentation](https://www.globus.org/data-transfer).
+
+Search projects with keywords and filters
+```bash
+$ pridepy search-projects-by-keywords-and-filters --filter accession==PXD012353
+
+$ pridepy search-projects-by-keywords-and-filters --keyword PXD012353
+```
+
+Stream metadata of all projects as json and write it to a file
+```bash
+$ pridepy stream-projects-metadata -o all_pride_projects.json
+```
+
+Stream metadata of all files as json and write it to a file. Project accession can be specified as an optional parameter
+```bash
+$ pridepy stream-files-metadata -o all_pride_files.json
+OR
+$ pridepy stream-files-metadata -o PXD005011_files.json -a PXD005011
+```
 
 # White paper
 
