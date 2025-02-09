@@ -58,6 +58,7 @@ Commands:
   get-projects-by-accession       get projects by accession... 
   stream-files-metadata           Stream all files metadata in...
   stream-projects-metadata        Stream all projects metadata...
+  search-projects-by-keywords-and-filters Search all projects by keywords...
     
 ```
 > [!NOTE]
@@ -135,7 +136,7 @@ $ pridepy download-file-by-name -a PXD022105 -o /Users/yourname/Downloads/folder
 >[!WARNING]
 > To download preivate files, the user should use the same command as downloading a single file by name. The only difference is that the user should provide the username and password. However, protocol in this case is unnecessary as the tool will use the https protocol to download the files. At the moment we only allow this protocol because of the infrastructure of PRIDE private files (read the whitepaper for more information).
 
-## Streamming metadata
+## Streaming metadata
 
 One of the great features of PRIDE and pridepy is the ability to stream metadata of all projects and files. This is useful for users who want to analyze the metadata of all projects and files locally.
 
@@ -154,6 +155,14 @@ Stream the files metadata of a specific project as JSON and write it to a file:
 
 ```bash
 $ pridepy stream-files-metadata -o PXD005011_files.json -a PXD005011
+```
+
+## Search projects by keywords and filters
+
+Get the Project metadata by keywords and filters
+
+```bash
+$  python -m pridepy.pridepy search-projects-by-keywords-and-filters -f projectTags==Proteometools,organismsPart==Pancreas -k human -sd DESC -sf accession -sf submissionDate
 ```
 
 # White paper
