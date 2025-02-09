@@ -349,7 +349,7 @@ def stream_files_metadata(accession, output_file):
     "-sf",
     "--sort_fields",
     required=False,
-    default="submission_date",
+    default=["submission_date"],
     multiple=True,
     help="Field(s) for sorting the results on. Default for this "
     "request is submission_date. More fields can be separated by "
