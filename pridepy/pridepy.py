@@ -126,7 +126,7 @@ def download_all_public_raw_files(
     "--category",
     required=True,
     help="Category of the files to be downloaded",
-    type=click.Choice("RAW,PEAK,SEARCH,RESULT,SPECTRUM_LIBRARY,OTHER, FASTA".split(",")),
+    type=click.Choice("RAW,PEAK,SEARCH,RESULT,SPECTRUM_LIBRARY,OTHER,FASTA".split(",")),
 )
 def download_all_public_category_files(
     accession: str,
