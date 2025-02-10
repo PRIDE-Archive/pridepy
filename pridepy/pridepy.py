@@ -10,6 +10,7 @@ from pridepy.project.project import Project
 def main():
     pass
 
+
 @main.command(
     "download-all-public-raw-files",
     help="Download all public raw files from a given PRIDE public project",
@@ -271,6 +272,7 @@ def list_private_files(accession, user, password):
             file_category = f["fileCategory"]["value"]
             logging.info(f["fileName"] + "\t" + str(file_size) + " MB\t" + file_category)
 
+
 @main.command()
 @click.option(
     "-o",
@@ -308,13 +310,13 @@ def stream_files_metadata(accession, output_file):
     files = Files()
     asyncio.run(files.stream_all_files_metadata(output_file, accession))
 
+
 @main.command()
 @click.option(
     "-k",
     "--keyword",
     required=True,
-    help="The entered word will be searched among the fields to fetch "
-    "matching pride."
+    help="The entered word will be searched among the fields to fetch " "matching pride.",
 )
 @click.option(
     "-f",
@@ -356,8 +358,10 @@ def stream_files_metadata(accession, output_file):
     help="Field(s) for sorting the results on. Default for this "
     "request is submission_date. More fields can be separated by "
     "comma and passed. Example: submissionDate,accession",
-    type=click.Choice("accession,submissionDate,diseases,organismsPart,organisms,instruments,softwares,"
-                      "avgDownloadsPerFile,downloadCount,publicationDate".split(",")),
+    type=click.Choice(
+        "accession,submissionDate,diseases,organismsPart,organisms,instruments,softwares,"
+        "avgDownloadsPerFile,downloadCount,publicationDate".split(",")
+    ),
 )
 def search_projects_by_keywords_and_filters(
     keyword, filter, page_size, page, sort_direction, sort_fields
@@ -373,13 +377,12 @@ def search_projects_by_keywords_and_filters(
         sort_fields (str): field to sort the results by.
     """
     project = Project()
-    sf = ', '.join(sort_fields)
+    sf = ", ".join(sort_fields)
     logging.info(
         project.search_by_keywords_and_filters(
             keyword, filter, page_size, page, sort_direction, sf
         )
     )
-
 
 
 if __name__ == "__main__":
