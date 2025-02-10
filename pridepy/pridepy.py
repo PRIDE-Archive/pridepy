@@ -126,7 +126,7 @@ def download_all_public_raw_files(
     "--category",
     required=True,
     help="Category of the files to be downloaded",
-    type=click.Choice("RAW,PEAK,SEARCH,RESULT,SPECTRUM_LIBRARY,OTHER, FASTA".split(",")),
+    type=click.Choice("RAW,PEAK,SEARCH,RESULT,SPECTRUM_LIBRARY,OTHER,FASTA".split(",")),
 )
 def download_all_public_category_files(
     accession: str,
@@ -312,23 +312,71 @@ def stream_files_metadata(accession, output_file):
 @click.option(
     "-k",
     "--keyword",
-    required=False,
-    default="",
+    required=True,
     help="The entered word will be searched among the fields to fetch "
-    "matching pride. The structure of the keyword is : *:*",
+    "matching pride."
+)
+@click.option(
+    "-f",
+    "--filter",
+    required=False,
+    help="Parameters to filter the search results. The structure of the "
+    "filter is: field1==value1, field2==value2. Example "
+    "accession==PRD000001",
+)
+@click.option(
+    "-ps",
+    "--page_size",
+    required=False,
+    default=100,
+    type=click.IntRange(min=1, max=1000),
+    help="Number of results to fetch in a page",
+)
+@click.option(
+    "-p",
+    "--page",
+    required=False,
+    default=0,
+    type=click.IntRange(min=0),
+    help="Identifies which page of results to fetch",
+)
+@click.option(
+    "-sd",
+    "--sort_direction",
+    required=False,
+    default="DESC",
+    help="Sorting direction: ASC or DESC",
+)
+@click.option(
+    "-sf",
+    "--sort_fields",
+    required=False,
+    default=["submission_date"],
+    multiple=True,
+    help="Field(s) for sorting the results on. Default for this "
+    "request is submission_date. More fields can be separated by "
+    "comma and passed. Example: submissionDate,accession",
+    type=click.Choice("accession,submissionDate,diseases,organismsPart,organisms,instruments,softwares,"
+                      "avgDownloadsPerFile,downloadCount,publicationDate".split(",")),
 )
 def search_projects_by_keywords_and_filters(
-    keyword, filter, page_size, page, date_gap, sort_direction, sort_fields
+    keyword, filter, page_size, page, sort_direction, sort_fields
 ):
     """
-    TODO: @selva this function and command line should be reimplemented.
-    TODO: The idea is that the user can type a keyword or keywords and filters and get all the files projects in
-    TODO: JSON. Please remember to update the README.
+    Search all projects by keywords and filters
+    Parameters:
+        keyword (str): keyword to search in entire project.
+        filter (str): filter the search results. field1==value1
+        page_size (int): no of records or projects per page
+        page (int): Page number
+        sort_direction (str): sort direction of the results based on sortfield
+        sort_fields (str): field to sort the results by.
     """
     project = Project()
+    sf = ', '.join(sort_fields)
     logging.info(
         project.search_by_keywords_and_filters(
-            keyword, filter, page_size, page, sort_direction, sort_fields
+            keyword, filter, page_size, page, sort_direction, sf
         )
     )
 
