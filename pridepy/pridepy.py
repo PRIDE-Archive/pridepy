@@ -329,6 +329,7 @@ def stream_files_metadata(accession, output_file):
     "--page_size",
     required=False,
     default=100,
+    type=click.IntRange(min=1, max=1000),
     help="Number of results to fetch in a page",
 )
 @click.option(
@@ -336,6 +337,7 @@ def stream_files_metadata(accession, output_file):
     "--page",
     required=False,
     default=0,
+    type=click.IntRange(min=0),
     help="Identifies which page of results to fetch",
 )
 @click.option(
