@@ -26,7 +26,7 @@ authors:
     orcid: 0000-0001-6579-6941
     affiliation: 1    
 affiliations:
- - name: European Molecular Biology Laboratory, European Bioinformatics Institute (EMBL-EBI), Wellcome Trust Genome Campus, Hinxton, Cambridge CB10 1SD, UK
+ - name: European Molecular Biology Laboratory, European Bioinformatics Institute (EMBL-EBI), Wellcome Trust Genome Campus, Hinxton, Cambridge CB10 1SD, United Kingdom
    index: 1
 repository: https://github.com/PRIDE-Archive/pridepy   
 date: 26 September 2024
