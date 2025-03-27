@@ -177,7 +177,7 @@ $docker run --rm --platform linux/amd64 -v /Users/yperez/work/pridepy/paper/:/da
 
 Contributions are what make the open source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
 
-If you have a suggestion that would make this better, please fork the repo and create a pull request. You can also simply open an issue with the tag "enhancement".
+If you have a suggestion that would make this better, please fork the repo and create a pull request. You can also simply open an issue with the tag "enhancement."
 
 1. Fork the Project
 2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
@@ -187,6 +187,7 @@ If you have a suggestion that would make this better, please fork the repo and c
 
 # Citation
 
-Selvakumar Kamatchinathan, Suresh Hewapathirana, Chakradhar Bandla, Juan Antonio Vizcaíno, Yasset Perez-Riverol. (2021, January 28). pridepy: A Python package to download and search data from PRIDE database (Version v0.0.3). 
+Kamatchinathan, S., Hewapathirana, S., Bandla, C., Insua, S., Vizcaíno, J. A., & Perez-Riverol, Y. (2025). pridepy: A Python package to download and search data from PRIDE database. Journal of Open Source Software, 10(107), 7563. doi:10.21105/joss.07563
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.4475414.svg)](https://doi.org/10.5281/zenodo.4475414)
+[![Zenodo](https://zenodo.org/badge/DOI/10.5281/zenodo.4475414.svg)](https://doi.org/10.5281/zenodo.4475414)
+[![DOI](https://joss.theoj.org/papers/10.21105/joss.07563/status.svg)](https://doi.org/10.21105/joss.07563)

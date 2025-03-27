@@ -1,0 +1,43 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as follows."
+authors:
+  - family-names: Kamatchinathan
+    given-names: Selvakumar
+  - family-names: Hewapathirana
+    given-names: Suresh
+  - family-names: Bandla
+    given-names: Chakradhar
+  - family-names: Insua
+    given-names: Santiago
+  - family-names: Vizcaíno
+    given-names: Juan Antonio
+  - family-names: Perez-Riverol
+    given-names: Yasset
+title: "pridepy: A Python package to download and search data from PRIDE database"
+version: "10.0.107"
+doi: "10.21105/joss.07563"
+date-released: "2025-01-01"
+repository-code: "https://github.com/your-repo/pridepy"
+preferred-citation:
+  type: article
+  authors:
+    - family-names: Kamatchinathan
+      given-names: Selvakumar
+    - family-names: Hewapathirana
+      given-names: Suresh
+    - family-names: Bandla
+      given-names: Chakradhar
+    - family-names: Insua
+      given-names: Santiago
+    - family-names: Vizcaíno
+      given-names: Juan Antonio
+    - family-names: Perez-Riverol
+      given-names: Yasset
+  title: "pridepy: A Python package to download and search data from PRIDE database"
+  journal: "Journal of Open Source Software"
+  volume: "10"
+  issue: "107"
+  year: "2025"
+  pages: "7563"
+  doi: "10.21105/joss.07563"
+  url: "https://doi.org/10.21105/joss.07563"
