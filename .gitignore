@@ -15,3 +15,8 @@ paper/jats/
 venv
 
 .qodo
+
+
+#Ignore cursor AI rules
+.cursor/rules/codacy.mdc
+.DS_Store
