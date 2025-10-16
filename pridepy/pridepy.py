@@ -281,7 +281,7 @@ def download_file_by_name(
 def download_px_raw_files(accession: str, output_folder: str, skip_if_downloaded_already: bool):
     """CLI wrapper to download raw files via ProteomeXchange XML."""
     files = Files()
-    logging.info(f"PX accession: {accession}")
+    logging.info(f"PX accession/URL: {accession}")
     files.download_px_raw_files(accession, output_folder, skip_if_downloaded_already)
 
 
