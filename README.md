@@ -84,6 +84,17 @@ Additional options:
 - `--aspera_maximum_bandwidth` flag is used to specify the maximum bandwidth for the Aspera download. The default value is 100M.
 - `--checksum_check` flag is used to check the checksum of the downloaded files. The default value is False.
 
+## Downloading raw files from ProteomeXchange (PX)
+
+You can download all raw files referenced by a ProteomeXchange dataset by passing only the accession:
+
+```bash
+$ pridepy download-px-raw-files -a PXD039236 -o /Users/yourname/Downloads/foldername/
+```
+
+- The tool resolves the ProteomeXchange XML and downloads via FTP when available, otherwise HTTP(S).
+- Resume and skip-if-already-downloaded are supported by default.
+
 ## Download single file by name
 
 Users instead of downloading an entire project files may be interested in downloading a single file if they know it by name. Here is how to download a single file by name.
