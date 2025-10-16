@@ -12,6 +12,8 @@ import time
 from ftplib import FTP
 from typing import Dict, List
 import socket
+from urllib.parse import urlparse
+import xml.etree.ElementTree as ET
 
 import boto3
 import botocore
@@ -760,3 +762,239 @@ class Files:
             file for file in record_files if file["fileCategory"]["value"] == category
         ]
         return category_files
+
+    # -------------------------------
+    # ProteomeXchange support
+    # -------------------------------
+
+    @staticmethod
+    def _normalize_px_xml_url(px_id_or_url: str) -> str:
+        """
+        Build the ProteomeXchange XML endpoint from a dataset accession or a dataset web URL.
+        Examples accepted:
+          - PXD039236
+          - https://proteomecentral.proteomexchange.org/cgi/GetDataset?ID=PXD039236
+          - https://proteomecentral.proteomexchange.org/cgi/GetDataset?ID=PXD039236&anything
+        """
+        if px_id_or_url.startswith("http://") or px_id_or_url.startswith("https://"):
+            parsed = urlparse(px_id_or_url)
+            # keep the ID param value if present; otherwise fallback to the path tail
+            query = parsed.query or ""
+            if "ID=" in query:
+                id_value = [q.split("=", 1)[1] for q in query.split("&") if q.startswith("ID=")]
+                if id_value:
+                    return (
+                        f"https://proteomecentral.proteomexchange.org/cgi/GetDataset?ID={id_value[0]}&outputMode=XML&test=no"
+                    )
+            # If the input URL already requests XML, just ensure flags
+            if parsed.path.endswith("/cgi/GetDataset"):
+                return (
+                    f"https://proteomecentral.proteomexchange.org/cgi/GetDataset?{query}&outputMode=XML&test=no"
+                )
+        # Assume it's a plain accession if not a URL
+        return (
+            f"https://proteomecentral.proteomexchange.org/cgi/GetDataset?ID={px_id_or_url}&outputMode=XML&test=no"
+        )
+
+    @staticmethod
+    def _parse_px_xml_for_raw_file_urls(px_xml_url: str) -> List[str]:
+        """
+        Parse the PX XML and return a list of associated raw file URIs.
+        We extract cvParam with name "Associated raw file URI" under each DatasetFile.
+        """
+        headers = {"Accept": "application/xml"}
+        response = Util.get_api_call(px_xml_url, headers)
+        response.raise_for_status()
+        root = ET.fromstring(response.content)
+
+        urls: List[str] = []
+        # The XML namespace is often absent in PX XML; access elements directly
+        for dataset_file in root.iter("DatasetFile"):
+            for cv in dataset_file.findall("cvParam"):
+                name = cv.attrib.get("name")
+                value = cv.attrib.get("value")
+                if name == "Associated raw file URI" and value:
+                    urls.append(value)
+        return urls
+
+    def download_px_raw_files(
+        self,
+        px_id_or_url: str,
+        output_folder: str,
+        skip_if_downloaded_already: bool = True,
+    ) -> None:
+        """
+        Download all raw files referenced by a ProteomeXchange dataset.
+        Prefer FTP when the URL is ftp://, otherwise use HTTP(S). Supports resume and skip.
+        """
+        if not os.path.isdir(output_folder):
+            os.makedirs(output_folder, exist_ok=True)
+
+        px_xml_url = self._normalize_px_xml_url(px_id_or_url)
+        logging.info(f"Fetching PX XML: {px_xml_url}")
+        urls = self._parse_px_xml_for_raw_file_urls(px_xml_url)
+        if not urls:
+            logging.info("No Associated raw file URIs found in PX XML")
+            return
+
+        ftp_urls = [u for u in urls if u.lower().startswith("ftp://")]
+        http_urls = [u for u in urls if u.lower().startswith("http://") or u.lower().startswith("https://")]
+
+        if ftp_urls:
+            self.download_ftp_urls(ftp_urls, output_folder, skip_if_downloaded_already)
+        if http_urls:
+            self.download_http_urls(http_urls, output_folder, skip_if_downloaded_already)
+
+    @staticmethod
+    def _local_path_for_url(download_url: str, output_folder: str) -> str:
+        filename = os.path.basename(urlparse(download_url).path)
+        return os.path.join(output_folder, filename)
+
+    @staticmethod
+    def download_ftp_urls(
+        ftp_urls: List[str],
+        output_folder: str,
+        skip_if_downloaded_already: bool,
+        max_connection_retries: int = 3,
+        max_download_retries: int = 3,
+    ) -> None:
+        """
+        Download a list of FTP URLs using a single connection, with retries and progress bars.
+        """
+        if not os.path.isdir(output_folder):
+            os.makedirs(output_folder, exist_ok=True)
+
+        def connect_ftp(host: str):
+            ftp = FTP(host, timeout=30)
+            ftp.login()
+            ftp.set_pasv(True)
+            logging.info(f"Connected to FTP host: {host}")
+            return ftp
+
+        # Group URLs by host to reuse connections efficiently
+        host_to_paths: Dict[str, List[str]] = {}
+        for url in ftp_urls:
+            parsed = urlparse(url)
+            host_to_paths.setdefault(parsed.hostname, []).append(parsed.path.lstrip("/"))
+
+        for host, paths in host_to_paths.items():
+            connection_attempt = 0
+            while connection_attempt < max_connection_retries:
+                try:
+                    ftp = connect_ftp(host)
+                    for ftp_path in paths:
+                        try:
+                            local_path = os.path.join(output_folder, os.path.basename(ftp_path))
+                            if skip_if_downloaded_already and os.path.exists(local_path):
+                                logging.info("Skipping download as file already exists")
+                                continue
+
+                            logging.info(f"Starting FTP download: {host}/{ftp_path}")
+                            download_attempt = 0
+                            while download_attempt < max_download_retries:
+                                try:
+                                    total_size = ftp.size(ftp_path)
+                                    # Try to resume using REST if partial file exists
+                                    if os.path.exists(local_path):
+                                        current_size = os.path.getsize(local_path)
+                                        mode = "ab"
+                                    else:
+                                        current_size = 0
+                                        mode = "wb"
+
+                                    with open(local_path, mode) as f, tqdm(
+                                        total=total_size,
+                                        unit="B",
+                                        unit_scale=True,
+                                        desc=local_path,
+                                        initial=current_size,
+                                    ) as pbar:
+                                        def callback(data):
+                                            f.write(data)
+                                            pbar.update(len(data))
+
+                                        if current_size:
+                                            try:
+                                                ftp.sendcmd(f"REST {current_size}")
+                                            except Exception:
+                                                # If REST not supported, fall back to full download
+                                                current_size = 0
+                                                f.seek(0)
+                                                f.truncate()
+                                        ftp.retrbinary(f"RETR {ftp_path}", callback)
+                                    logging.info(f"Successfully downloaded {local_path}")
+                                    break
+                                except (socket.timeout, ftplib.error_temp, ftplib.error_perm) as e:
+                                    download_attempt += 1
+                                    logging.error(
+                                        f"Download failed for {local_path} (attempt {download_attempt}): {str(e)}"
+                                    )
+                                    if download_attempt >= max_download_retries:
+                                        logging.error(
+                                            f"Giving up on {local_path} after {max_download_retries} attempts."
+                                        )
+                                        break
+                        except Exception as e:
+                            logging.error(f"Unexpected error while processing FTP path {ftp_path}: {str(e)}")
+                    ftp.quit()
+                    logging.info(f"Disconnected from FTP host: {host}")
+                    break
+                except (socket.timeout, ftplib.error_temp, ftplib.error_perm, socket.error) as e:
+                    connection_attempt += 1
+                    logging.error(f"FTP connection failed (attempt {connection_attempt}): {str(e)}")
+                    if connection_attempt < max_connection_retries:
+                        logging.info("Retrying connection...")
+                        time.sleep(5)
+                    else:
+                        logging.error(
+                            f"Giving up after {max_connection_retries} failed connection attempts to {host}."
+                        )
+
+    @staticmethod
+    def download_http_urls(
+        http_urls: List[str],
+        output_folder: str,
+        skip_if_downloaded_already: bool,
+    ) -> None:
+        """
+        Download a list of HTTP(S) URLs with resume support and progress bars.
+        """
+        if not os.path.isdir(output_folder):
+            os.makedirs(output_folder, exist_ok=True)
+
+        session = Util.create_session_with_retries()
+        for url in http_urls:
+            try:
+                local_path = Files._local_path_for_url(url, output_folder)
+                if skip_if_downloaded_already and os.path.exists(local_path):
+                    logging.info("Skipping download as file already exists")
+                    continue
+
+                if os.path.exists(local_path):
+                    resume_size = os.path.getsize(local_path)
+                    headers = {"Range": f"bytes={resume_size}-"}
+                    mode = "ab"
+                else:
+                    resume_size = 0
+                    headers = {}
+                    mode = "wb"
+
+                with session.get(url, stream=True, headers=headers, timeout=(10, 60)) as r:
+                    r.raise_for_status()
+                    total_size = int(r.headers.get("content-length", 0)) + resume_size
+                    block_size = 1024 * 1024
+                    with tqdm(
+                        total=total_size,
+                        unit="B",
+                        unit_scale=True,
+                        desc=local_path,
+                        initial=resume_size,
+                    ) as pbar:
+                        with open(local_path, mode) as f:
+                            for chunk in r.iter_content(chunk_size=block_size):
+                                if chunk:
+                                    f.write(chunk)
+                                    pbar.update(len(chunk))
+                logging.info(f"Successfully downloaded {local_path}")
+            except Exception as e:
+                logging.error(f"HTTP download failed for {url}: {str(e)}")

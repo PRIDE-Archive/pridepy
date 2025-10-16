@@ -253,6 +253,38 @@ def download_file_by_name(
     )
 
 
+@main.command(
+    "download-px-raw-files",
+    help="Download all raw files referenced by a ProteomeXchange dataset (PX URL or accession)",
+)
+@click.option(
+    "-a",
+    "--accession",
+    "--px",
+    "accession",
+    required=True,
+    help="ProteomeXchange accession (e.g. PXD039236). --px is deprecated.",
+)
+@click.option(
+    "-o",
+    "--output_folder",
+    required=True,
+    help="output folder to download files",
+)
+@click.option(
+    "-skip",
+    "--skip_if_downloaded_already",
+    required=False,
+    default=True,
+    help="Boolean to skip a file if it already exists",
+)
+def download_px_raw_files(accession: str, output_folder: str, skip_if_downloaded_already: bool):
+    """CLI wrapper to download raw files via ProteomeXchange XML."""
+    files = Files()
+    logging.info(f"PX accession/URL: {accession}")
+    files.download_px_raw_files(accession, output_folder, skip_if_downloaded_already)
+
+
 @main.command("list-private-files", help="List private files by project accession")
 @click.option("-a", "--accession", required=True, help="accession of the project")
 @click.option("-u", "--user", required=True, help="PRIDE login username")
@@ -320,7 +352,7 @@ def stream_files_metadata(accession, output_file):
 )
 @click.option(
     "-f",
-    "--filter",
+    "--filters",
     required=False,
     help="Parameters to filter the search results. The structure of the "
     "filter is: field1==value1, field2==value2. Example "
@@ -364,7 +396,7 @@ def stream_files_metadata(accession, output_file):
     ),
 )
 def search_projects_by_keywords_and_filters(
-    keyword, filter, page_size, page, sort_direction, sort_fields
+    keyword, filters, page_size, page, sort_direction, sort_fields
 ):
     """
     Search all projects by keywords and filters
@@ -380,7 +412,7 @@ def search_projects_by_keywords_and_filters(
     sf = ", ".join(sort_fields)
     logging.info(
         project.search_by_keywords_and_filters(
-            keyword, filter, page_size, page, sort_direction, sf
+            keyword, filters, page_size, page, sort_direction, sf
         )
     )
 
