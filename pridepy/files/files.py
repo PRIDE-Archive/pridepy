@@ -284,7 +284,7 @@ class Files:
         """
         ascp_path = Files.get_ascp_binary()
         key_full_path = importlib.resources.files("pridepy").joinpath(
-            "aspera/key/asperaweb_id_dsa.openssh"
+            "aspera/key/aspera_tokenauth_id_rsa"
         )
         key_path = os.path.abspath(key_full_path)
         for file in file_list_json:
