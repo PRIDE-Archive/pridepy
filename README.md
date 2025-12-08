@@ -80,7 +80,7 @@ $ pridepy download-all-public-raw-files -a PXD012353 -o /Users/yourname/Download
 
 Additional options: 
 
-- `-skip` flag is used to skip the download of files that already exist in the output directory.
+- `--skip-if-downloaded-already` / `--no-skip-if-downloaded-already` flag is used to control whether to skip files that already exist in the output directory. By default, files are skipped if they already exist. Use `--no-skip-if-downloaded-already` to force re-download.
 - `--aspera_maximum_bandwidth` flag is used to specify the maximum bandwidth for the Aspera download. The default value is 100M.
 - `--checksum_check` flag is used to check the checksum of the downloaded files. The default value is False.
 
