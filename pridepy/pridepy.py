@@ -29,11 +29,10 @@ def main():
     help="output folder to download or copy raw files",
 )
 @click.option(
-    "-skip",
-    "--skip_if_downloaded_already",
-    required=False,
+    "--skip-if-downloaded-already/--no-skip-if-downloaded-already",
+    is_flag=True,
     default=True,
-    help="Boolean value to skip the download if the file has already been downloaded.",
+    help="Skip the download if the file has already been downloaded. Default is to skip.",
 )
 @click.option(
     "--aspera_maximum_bandwidth",
@@ -103,11 +102,10 @@ def download_all_public_raw_files(
     help="output folder to download or copy raw files",
 )
 @click.option(
-    "-skip",
-    "--skip_if_downloaded_already",
-    required=False,
+    "--skip-if-downloaded-already/--no-skip-if-downloaded-already",
+    is_flag=True,
     default=True,
-    help="Boolean value to skip the download if the file has already been downloaded.",
+    help="Skip the download if the file has already been downloaded. Default is to skip.",
 )
 @click.option(
     "--aspera_maximum_bandwidth",
@@ -188,11 +186,10 @@ def download_all_public_category_files(
     help="output folder to download or copy files",
 )
 @click.option(
-    "-skip",
-    "--skip_if_downloaded_already",
-    required=False,
+    "--skip-if-downloaded-already/--no-skip-if-downloaded-already",
+    is_flag=True,
     default=True,
-    help="Boolean value to skip the download if the file has already been downloaded.",
+    help="Skip the download if the file has already been downloaded. Default is to skip.",
 )
 @click.option("--username", required=False, help="PRIDE login username for private files")
 @click.option("--password", required=False, help="PRIDE login password for private files")
@@ -272,11 +269,10 @@ def download_file_by_name(
     help="output folder to download files",
 )
 @click.option(
-    "-skip",
-    "--skip_if_downloaded_already",
-    required=False,
+    "--skip-if-downloaded-already/--no-skip-if-downloaded-already",
+    is_flag=True,
     default=True,
-    help="Boolean to skip a file if it already exists",
+    help="Skip a file if it already exists. Default is to skip.",
 )
 def download_px_raw_files(accession: str, output_folder: str, skip_if_downloaded_already: bool):
     """CLI wrapper to download raw files via ProteomeXchange XML."""
