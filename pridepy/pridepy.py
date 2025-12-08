@@ -272,7 +272,7 @@ def download_file_by_name(
     "--skip-if-downloaded-already/--no-skip-if-downloaded-already",
     is_flag=True,
     default=True,
-    help="Skip a file if it already exists. Default is to skip.",
+    help="Skip the download if the file has already been downloaded. Default is to skip.",
 )
 def download_px_raw_files(accession: str, output_folder: str, skip_if_downloaded_already: bool):
     """CLI wrapper to download raw files via ProteomeXchange XML."""
