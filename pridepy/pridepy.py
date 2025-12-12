@@ -24,24 +24,24 @@ def main():
 )
 @click.option(
     "-o",
-    "--output_folder",
+    "--output-folder",
     required=True,
     help="output folder to download or copy raw files",
 )
 @click.option(
-    "--skip_if_downloaded_already/--no-skip_if_downloaded_already",
+    "--skip-if-downloaded-already/--no-skip-if-downloaded-already",
     is_flag=True,
     default=True,
     help="Skip the download if the file has already been downloaded. Default is to skip.",
 )
 @click.option(
-    "--aspera_maximum_bandwidth",
+    "--aspera-maximum-bandwidth",
     required=False,
     help="Aspera maximum bandwidth (e.g 50M, 100M, 200M), depending on the user's network bandwidth, default is 100M",
     default="100M",
 )
 @click.option(
-    "--checksum_check",
+    "--checksum-check",
     required=False,
     help="Download checksum file for project",
     is_flag=True,
@@ -97,7 +97,7 @@ def download_all_public_raw_files(
 )
 @click.option(
     "-o",
-    "--output_folder",
+    "--output-folder",
     required=True,
     help="output folder to download or copy raw files",
 )
@@ -108,13 +108,13 @@ def download_all_public_raw_files(
     help="Skip the download if the file has already been downloaded. Default is to skip.",
 )
 @click.option(
-    "--aspera_maximum_bandwidth",
+    "--aspera-maximum-bandwidth",
     required=False,
     help="Aspera maximum bandwidth (e.g 50M, 100M, 200M), depending on the user's network bandwidth, default is 100M",
     default="100M",
 )
 @click.option(
-    "--checksum_check",
+    "--checksum-check",
     required=False,
     help="Download checksum file for project",
     is_flag=True,
@@ -178,15 +178,15 @@ def download_all_public_category_files(
     default="ftp",
     help="Protocol to be used to download files either by ftp or aspera or from globus. Default is ftp",
 )
-@click.option("-f", "--file_name", required=True, help="fileName to be downloaded")
+@click.option("-f", "--file-name", required=True, help="fileName to be downloaded")
 @click.option(
     "-o",
-    "--output_folder",
+    "--output-folder",
     required=True,
     help="output folder to download or copy files",
 )
 @click.option(
-    "--skip_if_downloaded_already/--no-skip_if_downloaded_already",
+    "--skip-if-downloaded-already/--no-skip-if-downloaded-already",
     is_flag=True,
     default=True,
     help="Skip the download if the file has already been downloaded. Default is to skip.",
@@ -194,13 +194,13 @@ def download_all_public_category_files(
 @click.option("--username", required=False, help="PRIDE login username for private files")
 @click.option("--password", required=False, help="PRIDE login password for private files")
 @click.option(
-    "--aspera_maximum_bandwidth",
+    "--aspera-maximum-bandwidth",
     required=False,
     help="Aspera maximum bandwidth (e.g 50M, 100M, 200M), depending on the user's network bandwidth, default is 100M",
     default="100M",
 )
 @click.option(
-    "--checksum_check",
+    "--checksum-check",
     required=False,
     help="Download checksum file for project",
     is_flag=True,
@@ -264,12 +264,12 @@ def download_file_by_name(
 )
 @click.option(
     "-o",
-    "--output_folder",
+    "--output-folder",
     required=True,
     help="output folder to download files",
 )
 @click.option(
-    "--skip_if_downloaded_already/--no-skip_if_downloaded_already",
+    "--skip-if-downloaded-already/--no-skip-if-downloaded-already",
     is_flag=True,
     default=True,
     help="Skip the download if the file has already been downloaded. Default is to skip.",
@@ -304,7 +304,7 @@ def list_private_files(accession, user, password):
 @main.command()
 @click.option(
     "-o",
-    "--output_file",
+    "--output-file",
     required=True,
     help="output file to save all the projects metadata",
 )
@@ -320,7 +320,7 @@ def stream_projects_metadata(output_file):
 @main.command()
 @click.option(
     "-o",
-    "--output_file",
+    "--output-file",
     required=True,
     help="output file to save all the files metadata",
 )
@@ -356,7 +356,7 @@ def stream_files_metadata(accession, output_file):
 )
 @click.option(
     "-ps",
-    "--page_size",
+    "--page-size",
     required=False,
     default=100,
     type=click.IntRange(min=1, max=1000),
@@ -372,14 +372,14 @@ def stream_files_metadata(accession, output_file):
 )
 @click.option(
     "-sd",
-    "--sort_direction",
+    "--sort-direction",
     required=False,
     default="DESC",
     help="Sorting direction: ASC or DESC",
 )
 @click.option(
     "-sf",
-    "--sort_fields",
+    "--sort-fields",
     required=False,
     default=["submission_date"],
     multiple=True,
