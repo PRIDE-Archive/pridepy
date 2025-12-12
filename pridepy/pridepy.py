@@ -29,7 +29,7 @@ def main():
     help="output folder to download or copy raw files",
 )
 @click.option(
-    "--skip-if-downloaded-already/--no-skip-if-downloaded-already",
+    "--skip_if_downloaded_already/--no-skip_if_downloaded_already",
     is_flag=True,
     default=True,
     help="Skip the download if the file has already been downloaded. Default is to skip.",
