@@ -143,7 +143,7 @@ def download_all_public_category_files(
         accession (str): The PRIDE project accession identifier.
         protocol (str): The protocol to use for downloading files (ftp, aspera, globus).
         output_folder (str): The directory where the files will be downloaded.
-        skip_if_downloaded_already (bool): If True, skips downloading files that already exist.
+        skip_if_downloaded_already (bool): If True, skips downloading files that already exist. Default is False.
         aspera_maximum_bandwidth (str): Maximum bandwidth for Aspera transfers.
         checksum_check (bool): If True, downloads the checksum file for the project.
         category (str): The category of files to download.
@@ -223,7 +223,7 @@ def download_file_by_name(
     :param protocol: Protocol to be used to download files either by ftp or aspera or from globus. Default is ftp
     :param file_name: fileName to be downloaded
     :param output_folder: output folder to download or copy files
-    :param skip_if_downloaded_already: Boolean value to skip the download if the file has already been downloaded.
+    :param skip_if_downloaded_already: Boolean value to skip the download if the file has already been downloaded. Default is False.
     :param username: PRIDE login username for private files
     :param password: PRIDE login password for private files
     :param aspera_maximum_bandwidth: Aspera maximum bandwidth (e.g 50M, 100M, 200M), depending on the user's network bandwidth, default is 100M
