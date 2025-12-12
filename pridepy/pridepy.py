@@ -29,10 +29,10 @@ def main():
     help="output folder to download or copy raw files",
 )
 @click.option(
-    "--skip-if-downloaded-already/--no-skip-if-downloaded-already",
+    "--skip-if-downloaded-already",
     is_flag=True,
-    default=True,
-    help="Skip the download if the file has already been downloaded. Default is to skip.",
+    default=False,
+    help="Skip the download if the file has already been downloaded.",
 )
 @click.option(
     "--aspera-maximum-bandwidth",
@@ -62,7 +62,7 @@ def download_all_public_raw_files(
         accession (str): PRIDE project accession.
         protocol (str): Protocol for downloading files (ftp, aspera, globus). Default is ftp.
         output_folder (str): Directory to save downloaded raw files.
-        skip_if_downloaded_already (bool): Skip download if files already exist. Default is True.
+        skip_if_downloaded_already (bool): Skip download if files already exist. Default is False.
         aspera_maximum_bandwidth (str): Maximum bandwidth for Aspera protocol. Default is 100M.
         checksum_check (bool): Flag to download checksum file for the project. Default is False.
     """
@@ -102,10 +102,10 @@ def download_all_public_raw_files(
     help="output folder to download or copy raw files",
 )
 @click.option(
-    "--skip-if-downloaded-already/--no-skip-if-downloaded-already",
+    "--skip-if-downloaded-already",
     is_flag=True,
-    default=True,
-    help="Skip the download if the file has already been downloaded. Default is to skip.",
+    default=False,
+    help="Skip the download if the file has already been downloaded.",
 )
 @click.option(
     "--aspera-maximum-bandwidth",
@@ -143,7 +143,7 @@ def download_all_public_category_files(
         accession (str): The PRIDE project accession identifier.
         protocol (str): The protocol to use for downloading files (ftp, aspera, globus).
         output_folder (str): The directory where the files will be downloaded.
-        skip_if_downloaded_already (bool): If True, skips downloading files that already exist.
+        skip_if_downloaded_already (bool): If True, skips downloading files that already exist. Default is False.
         aspera_maximum_bandwidth (str): Maximum bandwidth for Aspera transfers.
         checksum_check (bool): If True, downloads the checksum file for the project.
         category (str): The category of files to download.
@@ -186,10 +186,10 @@ def download_all_public_category_files(
     help="output folder to download or copy files",
 )
 @click.option(
-    "--skip-if-downloaded-already/--no-skip-if-downloaded-already",
+    "--skip-if-downloaded-already",
     is_flag=True,
-    default=True,
-    help="Skip the download if the file has already been downloaded. Default is to skip.",
+    default=False,
+    help="Skip the download if the file has already been downloaded.",
 )
 @click.option("--username", required=False, help="PRIDE login username for private files")
 @click.option("--password", required=False, help="PRIDE login password for private files")
@@ -223,7 +223,7 @@ def download_file_by_name(
     :param protocol: Protocol to be used to download files either by ftp or aspera or from globus. Default is ftp
     :param file_name: fileName to be downloaded
     :param output_folder: output folder to download or copy files
-    :param skip_if_downloaded_already: Boolean value to skip the download if the file has already been downloaded.
+    :param skip_if_downloaded_already: Boolean value to skip the download if the file has already been downloaded. Default is False.
     :param username: PRIDE login username for private files
     :param password: PRIDE login password for private files
     :param aspera_maximum_bandwidth: Aspera maximum bandwidth (e.g 50M, 100M, 200M), depending on the user's network bandwidth, default is 100M
@@ -269,10 +269,10 @@ def download_file_by_name(
     help="output folder to download files",
 )
 @click.option(
-    "--skip-if-downloaded-already/--no-skip-if-downloaded-already",
+    "--skip-if-downloaded-already",
     is_flag=True,
-    default=True,
-    help="Skip the download if the file has already been downloaded. Default is to skip.",
+    default=False,
+    help="Skip the download if the file has already been downloaded.",
 )
 def download_px_raw_files(accession: str, output_folder: str, skip_if_downloaded_already: bool):
     """CLI wrapper to download raw files via ProteomeXchange XML."""
