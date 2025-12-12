@@ -186,7 +186,7 @@ def download_all_public_category_files(
     help="output folder to download or copy files",
 )
 @click.option(
-    "--skip-if-downloaded-already/--no-skip-if-downloaded-already",
+    "--skip_if_downloaded_already/--no-skip_if_downloaded_already",
     is_flag=True,
     default=True,
     help="Skip the download if the file has already been downloaded. Default is to skip.",
