@@ -80,9 +80,9 @@ $ pridepy download-all-public-raw-files -a PXD012353 -o /Users/yourname/Download
 
 Additional options: 
 
-- `-skip` flag is used to skip the download of files that already exist in the output directory.
-- `--aspera_maximum_bandwidth` flag is used to specify the maximum bandwidth for the Aspera download. The default value is 100M.
-- `--checksum_check` flag is used to check the checksum of the downloaded files. The default value is False.
+- `--skip-if-downloaded-already` flag is used to skip files that already exist in the output directory. By default, files are re-downloaded even if they already exist. Use this flag to avoid re-downloading existing files.
+- `--aspera-maximum-bandwidth` flag is used to specify the maximum bandwidth for the Aspera download. The default value is 100M.
+- `--checksum-check` flag is used to check the checksum of the downloaded files. The default value is False.
 
 ## Downloading raw files from ProteomeXchange (PX)
 
@@ -93,7 +93,7 @@ $ pridepy download-px-raw-files -a PXD039236 -o /Users/yourname/Downloads/folder
 ```
 
 - The tool resolves the ProteomeXchange XML and downloads via FTP when available, otherwise HTTP(S).
-- Resume and skip-if-already-downloaded are supported by default.
+- Resume is supported. Use `--skip-if-downloaded-already` flag to skip files that have already been downloaded.
 
 ## Download single file by name
 
