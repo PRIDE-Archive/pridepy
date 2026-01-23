@@ -9,7 +9,6 @@ dependencies:
   - click
   - pytest
   - setuptools
-  - plotly
   - boto3
   - botocore
   - tqdm

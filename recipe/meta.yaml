@@ -26,7 +26,6 @@ requirements:
     - click~=8.1.7
     - pytest~=8.0.2
     - setuptools
-    - plotly~=5.22.0
     - boto3~=1.34.61
     - botocore~=1.34.74
     - tqdm
