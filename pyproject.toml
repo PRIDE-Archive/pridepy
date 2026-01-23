@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pridepy"
-version = "0.0.11"
+version = "0.0.12"
 description = "Python Client library for PRIDE Rest API"
 authors = [
     "PRIDE Team <pride-support@ebi.ac.uk>",
