@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pridepy"
-version = "0.0.10"
+version = "0.0.12"
 description = "Python Client library for PRIDE Rest API"
 authors = [
     "PRIDE Team <pride-support@ebi.ac.uk>",
@@ -48,7 +48,6 @@ python = "^3.9"
 requests = "^2.31.0"
 ratelimit = "^2.2.1"
 click = "^8.1.7"
-plotly = "^5.18.0"
 tqdm = "^4.66.1"
 boto3 = "^1.34.0"
 botocore = "^1.34.0"
