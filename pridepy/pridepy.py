@@ -124,8 +124,8 @@ def download_all_public_raw_files(
     "-c",
     "--category",
     required=True,
-    help="Category of the files to be downloaded",
-    type=click.Choice("RAW,PEAK,SEARCH,RESULT,SPECTRUM_LIBRARY,OTHER,FASTA".split(",")),
+    help="Comma-separated categories of files to download (e.g. RAW or RAW,SEARCH). "
+    "Valid values: RAW, PEAK, SEARCH, RESULT, SPECTRUM_LIBRARY, OTHER, FASTA",
 )
 def download_all_public_category_files(
     accession: str,
@@ -146,8 +146,17 @@ def download_all_public_category_files(
         skip_if_downloaded_already (bool): If True, skips downloading files that already exist. Default is False.
         aspera_maximum_bandwidth (str): Maximum bandwidth for Aspera transfers.
         checksum_check (bool): If True, downloads the checksum file for the project.
-        category (str): The category of files to download.
+        category (str): Comma-separated categories of files to download (e.g. RAW or RAW,SEARCH).
     """
+
+    valid_categories = {"RAW", "PEAK", "SEARCH", "RESULT", "SPECTRUM_LIBRARY", "OTHER", "FASTA"}
+    categories = [c.strip().upper() for c in category.split(",")]
+    invalid = set(categories) - valid_categories
+    if invalid:
+        raise click.BadParameter(
+            f"Invalid category: {', '.join(invalid)}. "
+            f"Valid values: {', '.join(sorted(valid_categories))}"
+        )
 
     raw_files = Files()
     logging.info("accession: " + accession)
@@ -163,7 +172,7 @@ def download_all_public_category_files(
         protocol,
         aspera_maximum_bandwidth=aspera_maximum_bandwidth,
         checksum_check=checksum_check,
-        category=category,
+        categories=categories,
     )
 
 

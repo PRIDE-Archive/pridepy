@@ -725,10 +725,11 @@ class Files:
         protocol: str,
         aspera_maximum_bandwidth: str,
         checksum_check: bool,
-        category: str,
+        categories: List[str] = None,
+        category: str = None,
     ):
         """
-        Download all files of a specified category from a PRIDE project.
+        Download all files of specified categories from a PRIDE project.
 
         :param accession: The PRIDE project accession identifier.
         :param output_folder: The directory where the files will be downloaded.
@@ -736,9 +737,12 @@ class Files:
         :param protocol: The transfer protocol to use (e.g., ftp, aspera, globus, s3).
         :param aspera_maximum_bandwidth: Maximum bandwidth for Aspera transfers.
         :param checksum_check: If True, downloads the checksum file for the project.
-        :param category: The category of files to download.
+        :param categories: List of file categories to download.
+        :param category: Single file category (deprecated, use categories instead).
         """
-        raw_files = self.get_all_category_file_list(accession, category)
+        if categories is None:
+            categories = [category] if category else ["RAW"]
+        raw_files = self.get_all_category_file_list(accession, categories)
         self.download_files(
             raw_files,
             accession,
@@ -749,17 +753,22 @@ class Files:
             checksum_check=checksum_check,
         )
 
-    def get_all_category_file_list(self, accession: str, category: str):
+    def get_all_category_file_list(
+        self, accession: str, categories: "str | List[str]"
+    ) -> List[Dict]:
         """
-        Retrieve a list of files from a specific project that belong to a given category.
+        Retrieve a list of files from a specific project that belong to given categories.
 
         :param accession: The PRIDE project accession identifier.
-        :param category: The category of files to filter by.
-        :return: A list of files in the specified category.
+        :param categories: A single category string or list of categories to filter by.
+        :return: A list of files matching the specified categories.
         """
         record_files = self.stream_all_files_by_project(accession)
+        if isinstance(categories, str):
+            categories = [categories]
+        category_set = set(categories)
         category_files = [
-            file for file in record_files if file["fileCategory"]["value"] == category
+            file for file in record_files if file["fileCategory"]["value"] in category_set
         ]
         return category_files
 

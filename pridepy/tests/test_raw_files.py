@@ -37,3 +37,16 @@ class TestRawFiles(TestCase):
 
         result = raw.get_all_category_file_list("PXD008644", "SEARCH")
         assert len(result) == 2
+
+    def test_get_all_category_file_list_multiple(self):
+        """
+        Test filtering by multiple categories at once.
+        PXD008644 has 2 RAW + 2 SEARCH = 4 files combined.
+        """
+        raw = Files()
+        result = raw.get_all_category_file_list("PXD008644", ["RAW", "SEARCH"])
+        assert len(result) == 4
+
+        # Verify both categories are present
+        categories = {file["fileCategory"]["value"] for file in result}
+        assert categories == {"RAW", "SEARCH"}
