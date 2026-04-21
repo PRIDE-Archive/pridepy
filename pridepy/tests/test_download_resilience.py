@@ -39,8 +39,8 @@ class TestDownloadResilience(TestCase):
             assert "checksum mismatch" in reason
 
     def test_protocol_sequence_prefers_requested_then_fallback(self):
-        assert Files._protocol_sequence("auto") == ["aspera", "s3", "ftp", "globus"]
         assert Files._protocol_sequence("ftp") == ["ftp", "aspera", "s3", "globus"]
+        assert Files._protocol_sequence("aspera") == ["aspera", "s3", "ftp", "globus"]
 
     def test_download_with_fallback_switches_protocol_after_invalid_file(self):
         handler = Files()
@@ -88,5 +88,5 @@ class TestDownloadResilience(TestCase):
                         accession="PXD000000",
                         output_folder=tmp_dir,
                         skip_if_downloaded_already=False,
-                        protocol="auto",
+                        protocol="ftp",
                     )

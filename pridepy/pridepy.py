@@ -5,7 +5,7 @@ import click
 from pridepy.files.files import Files
 from pridepy.project.project import Project
 
-PROTOCOL_CHOICES = click.Choice(["auto", "ftp", "aspera", "globus", "s3"], case_sensitive=False)
+PROTOCOL_CHOICES = click.Choice(["ftp", "aspera", "globus", "s3"], case_sensitive=False)
 
 
 @click.group()
@@ -21,9 +21,9 @@ def main():
 @click.option(
     "-p",
     "--protocol",
-    default="auto",
+    default="ftp",
     type=PROTOCOL_CHOICES,
-    help="Protocol to use for download: auto, ftp, aspera, globus, s3. Default is auto with automatic fallback.",
+    help="Protocol to use for download: ftp, aspera, globus, s3. Default is ftp with fallback enabled.",
 )
 @click.option(
     "-o",
@@ -63,7 +63,7 @@ def download_all_public_raw_files(
 
     Parameters:
         accession (str): PRIDE project accession.
-        protocol (str): Protocol for downloading files (auto, ftp, aspera, globus, s3). Default is auto.
+        protocol (str): Protocol for downloading files (ftp, aspera, globus, s3). Default is ftp.
         output_folder (str): Directory to save downloaded raw files.
         skip_if_downloaded_already (bool): Skip download if files already exist. Default is False.
         aspera_maximum_bandwidth (str): Maximum bandwidth for Aspera protocol. Default is 100M.
@@ -95,9 +95,9 @@ def download_all_public_raw_files(
 @click.option(
     "-p",
     "--protocol",
-    default="auto",
+    default="ftp",
     type=PROTOCOL_CHOICES,
-    help="Protocol to use for download: auto, ftp, aspera, globus, s3. Default is auto with automatic fallback.",
+    help="Protocol to use for download: ftp, aspera, globus, s3. Default is ftp with fallback enabled.",
 )
 @click.option(
     "-o",
@@ -145,7 +145,7 @@ def download_all_public_category_files(
 
     Parameters:
         accession (str): The PRIDE project accession identifier.
-        protocol (str): The protocol to use for downloading files (auto, ftp, aspera, globus, s3).
+        protocol (str): The protocol to use for downloading files (ftp, aspera, globus, s3).
         output_folder (str): The directory where the files will be downloaded.
         skip_if_downloaded_already (bool): If True, skips downloading files that already exist. Default is False.
         aspera_maximum_bandwidth (str): Maximum bandwidth for Aspera transfers.
@@ -188,9 +188,9 @@ def download_all_public_category_files(
 @click.option(
     "-p",
     "--protocol",
-    default="auto",
+    default="ftp",
     type=PROTOCOL_CHOICES,
-    help="Protocol to use for download: auto, ftp, aspera, globus, s3. Default is auto with automatic fallback.",
+    help="Protocol to use for download: ftp, aspera, globus, s3. Default is ftp with fallback enabled.",
 )
 @click.option("-f", "--file-name", required=True, help="fileName to be downloaded")
 @click.option(
@@ -234,7 +234,7 @@ def download_file_by_name(
     """
     This script download single file from servers or copy from the file system
     :param accession: PRIDE project accession
-    :param protocol: Protocol to use for download: auto, ftp, aspera, globus, s3. Default is auto.
+    :param protocol: Protocol to use for download: ftp, aspera, globus, s3. Default is ftp.
     :param file_name: fileName to be downloaded
     :param output_folder: output folder to download or copy files
     :param skip_if_downloaded_already: Boolean value to skip the download if the file has already been downloaded. Default is False.

@@ -13,8 +13,8 @@ You can:
 - search projects by keyword and filters
 - download raw files from ProteomeXchange XML metadata
 
-The downloader supports `auto`, `aspera`, `s3`, `ftp`, and `globus`.  
-With `auto`, it tries multiple protocols with fallback and validates downloaded files (non-empty, and checksum validation when enabled).
+The downloader supports `ftp`, `aspera`, `s3`, and `globus`.  
+By default it starts with FTP, falls back across the remaining protocols when needed, and validates downloaded files (non-empty, and checksum validation when enabled).
 
 ## Requirements
 
@@ -61,12 +61,11 @@ uv run pridepy --help
 pridepy download-all-public-raw-files \
   -a PXD008644 \
   -o ./downloads/PXD008644 \
-  -p auto \
   --checksum-check
 ```
 
 What this does:
-- `-p auto` enables protocol fallback (`aspera -> s3 -> ftp -> globus`)
+- default `ftp` starts with FTP and falls back (`ftp -> aspera -> s3 -> globus`)
 - `--checksum-check` downloads project checksums and validates files
 - empty/corrupt files are retried automatically
 
@@ -77,7 +76,6 @@ pridepy download-all-public-raw-files \
   -a PXD008644 \
   -o ./downloads/PXD008644 \
   --skip-if-downloaded-already \
-  -p auto \
   --checksum-check
 ```
 
@@ -87,8 +85,7 @@ pridepy download-all-public-raw-files \
 pridepy download-all-public-category-files \
   -a PXD022105 \
   -o ./downloads/PXD022105 \
-  -c RAW,SEARCH \
-  -p auto
+  -c RAW,SEARCH
 ```
 
 ### 4) Download one file by name
@@ -98,7 +95,6 @@ pridepy download-file-by-name \
   -a PXD022105 \
   -f checksum.txt \
   -o ./downloads/PXD022105 \
-  -p auto \
   --checksum-check
 ```
 

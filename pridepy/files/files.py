@@ -203,8 +203,6 @@ class Files:
         """
         Build the ordered list of protocols to try for a requested download mode.
         """
-        if protocol == "auto":
-            return list(Files.PROTOCOL_ORDER)
         if protocol not in Files.PROTOCOL_ORDER:
             return []
         return [protocol] + [p for p in Files.PROTOCOL_ORDER if p != protocol]
@@ -938,7 +936,7 @@ class Files:
         accession,
         output_folder: str,
         skip_if_downloaded_already,
-        protocol: str = "auto",
+        protocol: str = "ftp",
         aspera_maximum_bandwidth: str = "100M",  # Aspera maximum bandwidth
         checksum_check=False,
     ):
@@ -951,9 +949,9 @@ class Files:
         :param aspera_maximum_bandwidth: parameter in Aspera sets the maximum bandwidth for the transfer.
         :param skip_if_downloaded_already: Boolean value to skip the download if the file has already been downloaded.
         """
-        protocols_supported = ["ftp", "aspera", "globus", "s3", "auto"]
+        protocols_supported = ["ftp", "aspera", "globus", "s3"]
         if protocol not in protocols_supported:
-            logging.error("Protocol should be one of ftp, aspera, globus, s3, auto")
+            logging.error("Protocol should be one of ftp, aspera, globus, s3")
             return
 
         os.makedirs(output_folder, exist_ok=True)
