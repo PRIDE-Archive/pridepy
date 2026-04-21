@@ -1,15 +1,16 @@
-[tool.poetry]
+[project]
 name = "pridepy"
 version = "0.0.12"
 description = "Python Client library for PRIDE Rest API"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "Apache-2.0" }
 authors = [
-    "PRIDE Team <pride-support@ebi.ac.uk>",
+    { name = "PRIDE Team", email = "pride-support@ebi.ac.uk" },
 ]
 maintainers = [
-    "PRIDE Team <pride-support@ebi.ac.uk>",
+    { name = "PRIDE Team", email = "pride-support@ebi.ac.uk" },
 ]
-readme = "README.md"
-license = "Apache-2.0"
 keywords = [
     "PRIDE",
     "proteomics",
@@ -24,51 +25,59 @@ classifiers = [
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.7",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
-    "Development Status :: 5 - Production/Stable"
+    "Development Status :: 5 - Production/Stable",
 ]
-packages = [
-    { include = "pridepy" }
-]
-include = [
-    "LICENSE",
-    "README.md",
-    "**/*.txt",
-    "**/*.md",
-    "aspera/**/*"
+dependencies = [
+    "requests>=2.31.0",
+    "ratelimit>=2.2.1",
+    "click>=8.1.7",
+    "tqdm>=4.66.1",
+    "boto3>=1.34.0",
+    "botocore>=1.34.0",
+    "httpx>=0.27.0",
 ]
 
-[tool.poetry.dependencies]
-python = "^3.9"
-requests = "^2.31.0"
-ratelimit = "^2.2.1"
-click = "^8.1.7"
-tqdm = "^4.66.1"
-boto3 = "^1.34.0"
-botocore = "^1.34.0"
-httpx = "^0.27.0"
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "black>=24.1.0",
+    "isort>=5.13.0",
+    "mypy>=1.8.0",
+    "flake8>=7.0.0",
+]
 
-[tool.poetry.group.dev.dependencies]
-pytest = "^8.0.0"
-black = "^24.1.0"
-isort = "^5.13.0"
-pytest-cov = "^4.1.0"
-mypy = "^1.8.0"
-
-[tool.poetry.urls]
+[project.urls]
 PyPI = "https://pypi.org/project/pridepy/"
 PRIDE = "https://www.ebi.ac.uk/pride/archive/"
 Documentation = "https://github.com/PRIDE-Archive/pridepy#readme"
 Repository = "https://github.com/PRIDE-Archive/pridepy"
 License = "https://github.com/PRIDE-Archive/pridepy/LICENSE"
 
-[tool.poetry.scripts]
+[project.scripts]
 pridepy = "pridepy:main"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pridepy*"]
+
+[tool.setuptools.package-data]
+pridepy = [
+    "aspera/etc/*",
+    "aspera/key/*",
+    "aspera/linux-32/*",
+    "aspera/linux-64/*",
+    "aspera/mac-intel/*",
+    "aspera/windows-32/*",
+    "aspera/windows-64/*",
+]
 
 [tool.black]
 line-length = 99
@@ -104,5 +113,5 @@ warn_no_return = true
 warn_unreachable = true
 
 [build-system]
-requires = ["poetry-core>=1.2.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"

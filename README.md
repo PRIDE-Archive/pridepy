@@ -1,199 +1,249 @@
-# pridepy: A Python package to download and search data from PRIDE database
+# pridepy
 
 [![Python package](https://github.com/PRIDE-Archive/pridepy/actions/workflows/python-package.yml/badge.svg)](https://github.com/PRIDE-Archive/pridepy/actions/workflows/python-package.yml)
 [![PyPI version](https://badge.fury.io/py/pridepy.svg)](https://badge.fury.io/py/pridepy)
 ![PyPI - Downloads](https://img.shields.io/pypi/dm/pridepy)
 
-Python Client library for PRIDE Rest API
+`pridepy` is a Python client and CLI for the PRIDE Archive API.
 
-# Installation
+You can:
+- download public and private PRIDE files
+- download by category (`RAW`, `SEARCH`, `RESULT`, etc.)
+- stream project and file metadata
+- search projects by keyword and filters
+- download raw files from ProteomeXchange XML metadata
 
-## From PyPI
+The downloader supports `auto`, `aspera`, `s3`, `ftp`, and `globus`.  
+With `auto`, it tries multiple protocols with fallback and validates downloaded files (non-empty, and checksum validation when enabled).
 
-To install, simply use `pip`:
+## Requirements
 
-```bash
-$ pip install --upgrade pridepy
-```
+- Python `>=3.9`
 
-## From Source
+## Installation
 
-First, clone the repository on your local machine and then install the package using `pip`:
+### Option 1: Install from PyPI with uv (recommended)
 
-```bash
-$ git clone https://github.com/PRIDE-Archive/pridepy
-$ cd pridepy
-$ poetry build
-$ pip install dist/*.whl
-```
-
-Install with setup.py: 
+Install as a CLI tool:
 
 ```bash
-$ git clone https://github.com/PRIDE-Archive/pridepy
-$ cd pridepy
-$ poetry build
-$ pip install dist/pridepy-{version}.tar.gz
+uv tool install pridepy
+pridepy --help
 ```
-# Usage and Documentation
 
-This Python CLI tool, built using the Click module, 
-already provides detailed usage instructions for each command. To avoid redundancy and potential clutter in this README, you can access the usage instructions directly from the CLI
-Use the below command to view a list of commands available:
+Or run without installing globally:
 
 ```bash
-$ pridepy --help
-Usage: pridepy [OPTIONS] COMMAND [ARGS]...
-
-Options:
-  --help  Show this message and exit.
-
-Commands:
-  download-all-public-raw-files       Download all public raw files...
-  download-all-public-category-files  Download all public files of specific category...
-  download-file-by-name               Download a single file from a...
-  download-px-raw-files               Download all raw files referenced by a ProteomeXchange...
-  list-private-files                  List private files by project accession...
-  search-projects-by-keywords-and-filters  Search all projects by keywords...
-  stream-files-metadata               Stream all files metadata in...
-  stream-projects-metadata            Stream all projects metadata...
+uvx pridepy --help
 ```
-> [!NOTE]
-> Please make sure you are using Python3, not Python 2.7 version.
 
-## Downloading a project from PRIDE Archive
-
-The main purpose of this tool is to download data from the PRIDE Archive. Here, how to download all the raw files from a dataset(eg: PXD012353).
+### Option 2: Install from PyPI with pip
 
 ```bash
-$ pridepy download-all-public-raw-files -a PXD012353 -o /Users/yourname/Downloads/foldername/ -p aspera
+pip install --upgrade pridepy
+pridepy --help
 ```
-- `-a` flag is used to specify the project accession number.
-- `-o` flag is used to specify the output directory. 
-- `-p` flag is used to specify the protocol (**aspera, ftp, globus**)
 
-> [!IMPORTANT]
-> Currently, pridepy supports multiple protocols for downloading including ftp, aspera, globus, s3. ftp, aspera uses those protocols to download the files; the pridepy includes the aspera client. For globus and s3, the tool uses https of both services endpoints. Read the whitepaper to know more about the performance of each protocol.
-
-Additional options: 
-
-- `--skip-if-downloaded-already` flag is used to skip files that already exist in the output directory. By default, files are re-downloaded even if they already exist. Use this flag to avoid re-downloading existing files.
-- `--aspera-maximum-bandwidth` flag is used to specify the maximum bandwidth for the Aspera download. The default value is 100M.
-- `--checksum-check` flag is used to check the checksum of the downloaded files. The default value is False.
-
-## Downloading raw files from ProteomeXchange (PX)
-
-You can download all raw files referenced by a ProteomeXchange dataset by passing only the accession:
+### Option 3: Install from source (development)
 
 ```bash
-$ pridepy download-px-raw-files -a PXD039236 -o /Users/yourname/Downloads/foldername/
+git clone https://github.com/PRIDE-Archive/pridepy
+cd pridepy
+uv sync --extra dev
+uv run pridepy --help
 ```
 
-- The tool resolves the ProteomeXchange XML and downloads via FTP when available, otherwise HTTP(S).
-- Resume is supported. Use `--skip-if-downloaded-already` flag to skip files that have already been downloaded.
+## Quick Start (New Users)
 
-## Download single file by name
-
-Users instead of downloading an entire project files may be interested in downloading a single file if they know it by name. Here is how to download a single file by name.
+### 1) Download all raw files for a project (robust mode)
 
 ```bash
-$ pridepy download-file-by-name -a PXD022105 -o /Users/yourname/Downloads/foldername/ -f checksum.txt -p globus
+pridepy download-all-public-raw-files \
+  -a PXD008644 \
+  -o ./downloads/PXD008644 \
+  -p auto \
+  --checksum-check
 ```
 
-Please be aware that the additional parameters are the same as the previous command [Downloading a project from PRIDE Archive](#downloading-a-project-from-pride-archive).
+What this does:
+- `-p auto` enables protocol fallback (`aspera -> s3 -> ftp -> globus`)
+- `--checksum-check` downloads project checksums and validates files
+- empty/corrupt files are retried automatically
 
-## Download project files by category
-
-Users may be interested in downloading files by category. Here is how to download files by category. The different categories are available in the PRIDE Archive: 
-
-- RAW: Raw data files  
-- PEAK: Peak list files 
-- SEARCH: Search engine output files 
-- OTHER: Other files
-- RESULT: Result files
-- SPECTRUM LIBRARIES: Spectrum libraries
-- FASTA: FASTA files
+### 2) Continue interrupted downloads safely
 
 ```bash
-$ pridepy download-all-public-category-files -a PXD022105 -o /Users/yourname/Downloads/foldername/ -c RAW -p ftp
+pridepy download-all-public-raw-files \
+  -a PXD008644 \
+  -o ./downloads/PXD008644 \
+  --skip-if-downloaded-already \
+  -p auto \
+  --checksum-check
 ```
 
-Please be aware that the additional parameters are the same as the previous command [Downloading a project from PRIDE Archive](#downloading-a-project-from-pride-archive).
-
->[!IMPORTANT]
-> We also implemented a direct command to download RAW files from a project which is the most common use case.
-
-## Download private files
-
-Users and especially reviewers may be interested in downloading private files. Here is how to download private files. 
-
-First, the user can list the private files of a project:
+### 3) Download only selected categories
 
 ```bash
-$ pridepy list-private-files -a PXD022105 -u yourusername -p yourpassword
+pridepy download-all-public-category-files \
+  -a PXD022105 \
+  -o ./downloads/PXD022105 \
+  -c RAW,SEARCH \
+  -p auto
 ```
 
-This command will list the private files of the project PXD022105. Including the file name, file size, and download link.
-
-Then the user can download the private files:
+### 4) Download one file by name
 
 ```bash
-$ pridepy download-file-by-name -a PXD022105 -o /Users/yourname/Downloads/foldername/ --username yourusername --password yourpassword -f checksum.txt 
+pridepy download-file-by-name \
+  -a PXD022105 \
+  -f checksum.txt \
+  -o ./downloads/PXD022105 \
+  -p auto \
+  --checksum-check
 ```
 
->[!WARNING]
-> To download preivate files, the user should use the same command as downloading a single file by name. The only difference is that the user should provide the username and password. However, protocol in this case is unnecessary as the tool will use the https protocol to download the files. At the moment we only allow this protocol because of the infrastructure of PRIDE private files (read the whitepaper for more information).
-
-## Streaming metadata
-
-One of the great features of PRIDE and pridepy is the ability to stream metadata of all projects and files. This is useful for users who want to analyze the metadata of all projects and files locally.
-
-Stream metadata of all projects as JSON and write it to a file: 
+### 5) Download raw files from ProteomeXchange
 
 ```bash
-$ pridepy stream-projects-metadata -o all_pride_projects.json
+pridepy download-px-raw-files \
+  -a PXD039236 \
+  -o ./downloads/PXD039236
 ```
 
-Stream all files metadata in a specific project as JSON and write it to a file: 
+## CLI Command Overview
 
 ```bash
-$ pridepy stream-files-metadata -o all_pride_files_metadata.json
+pridepy --help
 ```
-Stream the files metadata of a specific project as JSON and write it to a file: 
+
+Main commands:
+- `download-all-public-raw-files`
+- `download-all-public-category-files`
+- `download-file-by-name`
+- `download-px-raw-files`
+- `list-private-files`
+- `stream-files-metadata`
+- `stream-projects-metadata`
+- `search-projects-by-keywords-and-filters`
+
+## More CLI Examples
+
+### Search projects
 
 ```bash
-$ pridepy stream-files-metadata -o PXD005011_files.json -a PXD005011
+pridepy search-projects-by-keywords-and-filters \
+  -k human \
+  -f projectTags==ProteomeTools,organismsPart==Pancreas \
+  -sd DESC \
+  -sf accession \
+  -sf submissionDate
 ```
 
-## Search projects by keywords and filters
-
-Get the Project metadata by keywords and filters
+### Stream all project metadata to JSON
 
 ```bash
-$ pridepy search-projects-by-keywords-and-filters -f projectTags==Proteometools,organismsPart==Pancreas -k human -sd DESC -sf accession -sf submissionDate
+pridepy stream-projects-metadata -o all_pride_projects.json
 ```
 
-# White paper
-
-A white paper is available at [here](paper/paper.md). We can build it as PDF using pandoc.
+### Stream all file metadata for one accession
 
 ```bash
-$docker run --rm --platform linux/amd64 -v /Users/yperez/work/pridepy/paper/:/data -w /data openjournals/inara:latest paper.md -p -o pdf
+pridepy stream-files-metadata -a PXD005011 -o PXD005011_files.json
 ```
 
-# Contributing
+### Download private files
 
-Contributions are what make the open source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
+List files:
 
-If you have a suggestion that would make this better, please fork the repo and create a pull request. You can also simply open an issue with the tag "enhancement."
+```bash
+pridepy list-private-files -a PXD022105 -u YOUR_USER -p YOUR_PASSWORD
+```
 
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+Download a private file:
 
-# Citation
+```bash
+pridepy download-file-by-name \
+  -a PXD022105 \
+  -f checksum.txt \
+  -o ./downloads/private \
+  --username YOUR_USER \
+  --password YOUR_PASSWORD
+```
+
+## Python API Examples
+
+### Example: get raw files for a project
+
+```python
+from pridepy.files.files import Files
+
+files = Files()
+raw_files = files.get_all_raw_file_list("PXD008644")
+print(f"RAW files: {len(raw_files)}")
+print(raw_files[0]["fileName"])
+```
+
+### Example: search projects
+
+```python
+from pridepy.project.project import Project
+
+project = Project()
+results = project.search_by_keywords_and_filters(
+    keyword="PXD009476",
+    query_filter="",
+    page_size=25,
+    page=0,
+    sort_direction="DESC",
+    sort_fields="accession",
+)
+print(f"Hits: {len(results)}")
+```
+
+## Development and Release (uv)
+
+Run tests:
+
+```bash
+uv run pytest
+```
+
+Lint:
+
+```bash
+uv run flake8 .
+```
+
+Build distributions:
+
+```bash
+uv build
+```
+
+`pridepy` is published via GitHub Actions (`.github/workflows/python-publish.yml`) using `uv build` and PyPI trusted publishing/token flow.
+
+## White Paper
+
+A white paper is available in [paper/paper.md](paper/paper.md).
+
+Build PDF with pandoc:
+
+```bash
+docker run --rm --platform linux/amd64 \
+  -v /Users/yperez/work/pridepy/paper/:/data \
+  -w /data openjournals/inara:latest paper.md -p -o pdf
+```
+
+## Contributing
+
+1. Fork the repository
+2. Create a branch (`git checkout -b feature/my-change`)
+3. Install dev dependencies (`uv sync --extra dev`)
+4. Run tests and lint (`uv run pytest`, `uv run flake8 .`)
+5. Commit and push your branch
+6. Open a pull request
+
+## Citation
 
 Kamatchinathan, S., Hewapathirana, S., Bandla, C., Insua, S., Vizcaíno, J. A., & Perez-Riverol, Y. (2025). pridepy: A Python package to download and search data from PRIDE database. Journal of Open Source Software, 10(107), 7563. doi:10.21105/joss.07563
 
