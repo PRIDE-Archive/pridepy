@@ -52,8 +52,10 @@ class TestDownloadResilience(TestCase):
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             local_path = os.path.join(tmp_dir, "p.raw")
+            attempted_protocols = []
 
             def fake_download(record, output_folder, protocol, aspera_bandwidth):
+                attempted_protocols.append(protocol)
                 if protocol == "aspera":
                     with open(local_path, "wb") as handle:
                         handle.write(b"")
@@ -73,3 +75,18 @@ class TestDownloadResilience(TestCase):
                 )
 
             assert success is True
+            assert attempted_protocols == ["aspera", "s3"]
+
+    def test_download_files_raises_when_any_file_fails(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            file_list = [{"fileName": "missing.raw"}]
+
+            with patch.object(Files, "_download_with_fallback", return_value=False):
+                with self.assertRaisesRegex(RuntimeError, "missing.raw"):
+                    Files.download_files(
+                        file_list_json=file_list,
+                        accession="PXD000000",
+                        output_folder=tmp_dir,
+                        skip_if_downloaded_already=False,
+                        protocol="auto",
+                    )

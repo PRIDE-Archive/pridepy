@@ -220,7 +220,7 @@ Build distributions:
 uv build
 ```
 
-`pridepy` is published via GitHub Actions (`.github/workflows/python-publish.yml`) using `uv build` and PyPI trusted publishing/token flow.
+`pridepy` is published via GitHub Actions (`.github/workflows/python-publish.yml`) using `uv build` and a PyPI API token secret (`PYPI_API_TOKEN`).
 
 ## White Paper
 
@@ -230,7 +230,7 @@ Build PDF with pandoc:
 
 ```bash
 docker run --rm --platform linux/amd64 \
-  -v /Users/yperez/work/pridepy/paper/:/data \
+  -v "$(pwd)/paper:/data" \
   -w /data openjournals/inara:latest paper.md -p -o pdf
 ```
 

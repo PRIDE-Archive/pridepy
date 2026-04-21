@@ -122,7 +122,13 @@ class Files:
 
     @staticmethod
     def compute_md5(file_path: str, chunk_size: int = 4 * 1024 * 1024) -> str:
-        md5 = hashlib.md5()
+        """
+        Compute an MD5 checksum for integrity validation, not for security use.
+        """
+        try:
+            md5 = hashlib.md5(usedforsecurity=False)
+        except TypeError:
+            md5 = hashlib.md5()
         with open(file_path, "rb") as file_handle:
             while True:
                 chunk = file_handle.read(chunk_size)
@@ -150,11 +156,17 @@ class Files:
 
     @staticmethod
     def _remove_if_exists(file_path: str) -> None:
+        """
+        Remove a file if it already exists locally.
+        """
         if os.path.exists(file_path):
             os.remove(file_path)
 
     @staticmethod
     def _get_download_url(file_record: Dict, protocol: str) -> str:
+        """
+        Resolve the best public download URL for a file and protocol.
+        """
         locations = file_record.get("publicFileLocations", [])
         if not locations:
             raise ValueError("No public file locations present")
@@ -188,6 +200,9 @@ class Files:
 
     @staticmethod
     def _protocol_sequence(protocol: str) -> List[str]:
+        """
+        Build the ordered list of protocols to try for a requested download mode.
+        """
         if protocol == "auto":
             return list(Files.PROTOCOL_ORDER)
         if protocol not in Files.PROTOCOL_ORDER:
@@ -791,7 +806,11 @@ class Files:
 
     @staticmethod
     def save_checksum_file(accession, output_folder):
-        url = f"https://wwwdev.ebi.ac.uk/pride/ws/archive/v3/files/checksum/{accession}"
+        """
+        Download and persist the checksum manifest for a PRIDE accession.
+        """
+        os.makedirs(output_folder, exist_ok=True)
+        url = f"{Files.V3_API_BASE_URL}/files/checksum/{accession}"
         headers = {"accept": "text/plain"}
         request = urllib.request.Request(url, headers=headers, method="GET")
         logging.info(f"Fetching checksum file from {url}")
@@ -799,7 +818,7 @@ class Files:
             data = response.read().decode("utf-8")
             # Save the data to a .tsv file
             output_path = os.path.join(output_folder, f"{accession}-checksum.tsv")
-            with open(output_path, "w") as file:
+            with open(output_path, "w", encoding="utf-8") as file:
                 file.write(data)
             return output_path
 
@@ -818,8 +837,6 @@ class Files:
                 [file_record],
                 output_folder,
                 skip_if_downloaded_already=False,
-                max_connection_retries=1,
-                max_download_retries=1,
             )
             return
         if protocol == "aspera":
@@ -939,6 +956,8 @@ class Files:
             logging.error("Protocol should be one of ftp, aspera, globus, s3, auto")
             return
 
+        os.makedirs(output_folder, exist_ok=True)
+
         checksum_map: Dict[str, str] = {}
         if checksum_check:
             checksum_file_path = Files.save_checksum_file(accession, output_folder)
@@ -947,9 +966,10 @@ class Files:
 
         protocol_sequence = Files._protocol_sequence(protocol)
         file_handler = Files()
+        failed_files: List[str] = []
         for file_record in file_list_json:
             expected_checksum = checksum_map.get(file_record["fileName"])
-            file_handler._download_with_fallback(
+            success = file_handler._download_with_fallback(
                 file_record=file_record,
                 output_folder=output_folder,
                 skip_if_downloaded_already=skip_if_downloaded_already,
@@ -957,6 +977,13 @@ class Files:
                 expected_checksum=expected_checksum,
                 aspera_maximum_bandwidth=aspera_maximum_bandwidth,
             )
+            if not success:
+                failed_files.append(file_record.get("fileName", "<unknown>"))
+
+        if failed_files:
+            failed_summary = ", ".join(failed_files)
+            logging.error(f"Failed to download {len(failed_files)} file(s): {failed_summary}")
+            raise RuntimeError(f"Failed to download {len(failed_files)} file(s): {failed_summary}")
 
     def download_all_category_files(
         self,

@@ -4,7 +4,7 @@ version = "0.0.12"
 description = "Python Client library for PRIDE Rest API"
 readme = "README.md"
 requires-python = ">=3.9"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
 authors = [
     { name = "PRIDE Team", email = "pride-support@ebi.ac.uk" },
 ]
@@ -22,7 +22,6 @@ keywords = [
 ]
 classifiers = [
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.9",

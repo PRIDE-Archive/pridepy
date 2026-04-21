@@ -5,6 +5,8 @@ import click
 from pridepy.files.files import Files
 from pridepy.project.project import Project
 
+PROTOCOL_CHOICES = click.Choice(["auto", "ftp", "aspera", "globus", "s3"], case_sensitive=False)
+
 
 @click.group()
 def main():
@@ -20,6 +22,7 @@ def main():
     "-p",
     "--protocol",
     default="auto",
+    type=PROTOCOL_CHOICES,
     help="Protocol to use for download: auto, ftp, aspera, globus, s3. Default is auto with automatic fallback.",
 )
 @click.option(
@@ -93,6 +96,7 @@ def download_all_public_raw_files(
     "-p",
     "--protocol",
     default="auto",
+    type=PROTOCOL_CHOICES,
     help="Protocol to use for download: auto, ftp, aspera, globus, s3. Default is auto with automatic fallback.",
 )
 @click.option(
@@ -185,6 +189,7 @@ def download_all_public_category_files(
     "-p",
     "--protocol",
     default="auto",
+    type=PROTOCOL_CHOICES,
     help="Protocol to use for download: auto, ftp, aspera, globus, s3. Default is auto with automatic fallback.",
 )
 @click.option("-f", "--file-name", required=True, help="fileName to be downloaded")

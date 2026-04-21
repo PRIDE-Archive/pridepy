@@ -1,0 +1,4 @@
+[flake8]
+exclude = .venv,build,dist,pridepy.egg-info,.pytest_cache,.codacy
+max-line-length = 127
+max-complexity = 10
