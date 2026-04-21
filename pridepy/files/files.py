@@ -57,6 +57,8 @@ class Files:
     API_BASE_URL = "https://www.ebi.ac.uk/pride/ws/archive/v3"
     API_PRIVATE_URL = "https://www.ebi.ac.uk/pride/private/ws/archive/v2"
     PRIDE_ARCHIVE_FTP = "ftp.pride.ebi.ac.uk"
+    PRIDE_ARCHIVE_FTP_URL_PREFIX = "ftp://ftp.pride.ebi.ac.uk/"
+    GLOBUS_BASE_URL = "https://g-a8b222.dd271.03c0.data.globus.org/"
     S3_URL = "https://hh.fire.sdo.ebi.ac.uk"
     S3_BUCKET = "pride-public"
     PROTOCOL_ORDER = ["aspera", "s3", "ftp", "globus"]
@@ -165,38 +167,54 @@ class Files:
     @staticmethod
     def _get_download_url(file_record: Dict, protocol: str) -> str:
         """
-        Resolve the best public download URL for a file and protocol.
+        Resolve the public download URL for a file and protocol.
+
+        Raises ValueError when the requested protocol has no suitable location.
+        Aspera requires a dedicated "Aspera Protocol" entry; ftp/s3/globus
+        derive their URL from the "FTP Protocol" entry (falling back to an
+        arbitrary non-Aspera location would produce a URL the caller cannot
+        actually transfer with).
         """
         locations = file_record.get("publicFileLocations", [])
         if not locations:
             raise ValueError("No public file locations present")
 
-        if protocol == "aspera":
-            for location in locations:
-                if location.get("name") == "Aspera Protocol":
-                    return location.get("value")
-            raise ValueError("Aspera URL not available")
-
-        # FTP URL exists for ftp, globus and s3 adaptation
+        aspera_url = None
         ftp_url = None
         for location in locations:
-            if location.get("name") == "FTP Protocol":
+            name = location.get("name")
+            if name == "Aspera Protocol":
+                aspera_url = location.get("value")
+            elif name == "FTP Protocol":
                 ftp_url = location.get("value")
-                break
-        if not ftp_url:
-            ftp_url = locations[0].get("value")
+
+        if protocol == "aspera":
+            if not aspera_url:
+                raise ValueError("Aspera URL not available")
+            return aspera_url
+
         if not ftp_url:
             raise ValueError("FTP URL not available")
-
         if protocol == "ftp":
             return ftp_url
         if protocol == "globus":
-            return ftp_url.replace(
-                "ftp://ftp.pride.ebi.ac.uk/", "https://g-a8b222.dd271.03c0.data.globus.org/"
-            )
+            return ftp_url.replace(Files.PRIDE_ARCHIVE_FTP_URL_PREFIX, Files.GLOBUS_BASE_URL)
         if protocol == "s3":
             return ftp_url
         raise ValueError(f"Unsupported protocol: {protocol}")
+
+    @staticmethod
+    def _resolve_local_path(file_record: Dict, output_folder: str) -> str:
+        """
+        Compute the canonical local path for a file regardless of transfer protocol.
+        """
+        try:
+            canonical_url = Files._get_download_url(file_record, "ftp")
+        except ValueError:
+            canonical_url = ""
+        if canonical_url:
+            return Files.get_output_file_name(canonical_url, file_record, output_folder)
+        return os.path.join(output_folder, file_record["fileName"])
 
     @staticmethod
     def _protocol_sequence(protocol: str) -> List[str]:
@@ -489,9 +507,9 @@ class Files:
                     download_url = file["publicFileLocations"][1]["value"]
 
                 logging.debug(f"Downloading from Globus: {download_url}")
-                ftp_base_url = "ftp://ftp.pride.ebi.ac.uk/"
-                globus_base_url = "https://g-a8b222.dd271.03c0.data.globus.org/"
-                download_url = download_url.replace(ftp_base_url, globus_base_url)
+                download_url = download_url.replace(
+                    Files.PRIDE_ARCHIVE_FTP_URL_PREFIX, Files.GLOBUS_BASE_URL
+                )
 
                 # Create a clean filename to save the downloaded file
                 new_file_path = Files.get_output_file_name(download_url, file, output_folder)
@@ -821,76 +839,65 @@ class Files:
             return output_path
 
     @staticmethod
-    def _download_one_file_by_protocol(
-        file_record: Dict,
+    def _batch_download_by_protocol(
+        file_list: List[Dict],
         output_folder: str,
         protocol: str,
+        skip_if_downloaded_already: bool,
         aspera_maximum_bandwidth: str,
     ) -> None:
         """
-        Attempt a single file transfer using one protocol.
+        Transfer a batch of files with one protocol, reusing a single
+        connection where the underlying helper supports it (FTP, S3).
         """
+        if not file_list:
+            return
         if protocol == "ftp":
             Files.download_files_from_ftp(
-                [file_record],
+                file_list,
                 output_folder,
-                skip_if_downloaded_already=False,
+                skip_if_downloaded_already=skip_if_downloaded_already,
             )
             return
         if protocol == "aspera":
             Files.download_files_from_aspera(
-                [file_record],
+                file_list,
                 output_folder,
-                skip_if_downloaded_already=False,
+                skip_if_downloaded_already=skip_if_downloaded_already,
                 maximum_bandwidth=aspera_maximum_bandwidth,
             )
             return
         if protocol == "globus":
             Files.download_files_from_globus(
-                [file_record],
+                file_list,
                 output_folder,
-                skip_if_downloaded_already=False,
+                skip_if_downloaded_already=skip_if_downloaded_already,
             )
             return
         if protocol == "s3":
             Files.download_files_from_s3(
-                [file_record],
+                file_list,
                 output_folder,
-                skip_if_downloaded_already=False,
+                skip_if_downloaded_already=skip_if_downloaded_already,
             )
             return
         raise ValueError(f"Unsupported protocol: {protocol}")
 
+    @staticmethod
     def _download_with_fallback(
-        self,
         file_record: Dict,
         output_folder: str,
-        skip_if_downloaded_already: bool,
         protocol_sequence: List[str],
         expected_checksum: Optional[str],
         aspera_maximum_bandwidth: str,
         max_protocol_retries: int = 2,
     ) -> bool:
         """
-        Download one file with automatic retries and protocol fallback.
+        Download one file by trying each protocol in sequence, validating
+        after every attempt. Intended as the per-file fallback path; batch
+        download of the primary protocol is handled separately.
         """
-        try:
-            canonical_url = Files._get_download_url(file_record, "ftp")
-        except ValueError:
-            canonical_url = file_record.get("publicFileLocations", [{}])[0].get("value", "")
-        if canonical_url:
-            local_path = Files.get_output_file_name(canonical_url, file_record, output_folder)
-        else:
-            local_path = os.path.join(output_folder, file_record["fileName"])
-
-        if skip_if_downloaded_already and os.path.exists(local_path):
-            valid, reason = Files.validate_download(local_path, expected_checksum)
-            if valid:
-                logging.info(f"Skipping already valid file: {local_path}")
-                return True
-            logging.warning(
-                f"Existing file is invalid ({reason}), re-downloading: {local_path}"
-            )
+        local_path = Files._resolve_local_path(file_record, output_folder)
 
         for protocol in protocol_sequence:
             for attempt in range(1, max_protocol_retries + 1):
@@ -900,11 +907,12 @@ class Files:
                 )
                 try:
                     Files._remove_if_exists(local_path)
-                    self._download_one_file_by_protocol(
-                        file_record,
+                    Files._batch_download_by_protocol(
+                        [file_record],
                         output_folder,
                         protocol,
-                        aspera_maximum_bandwidth,
+                        skip_if_downloaded_already=False,
+                        aspera_maximum_bandwidth=aspera_maximum_bandwidth,
                     )
                 except Exception as error:
                     logging.error(
@@ -962,16 +970,55 @@ class Files:
             checksum_map = Files.read_checksum_file(checksum_file_path)
             logging.info(f"Loaded checksums for {len(checksum_map)} files")
 
+        if not file_list_json:
+            return
+
         protocol_sequence = Files._protocol_sequence(protocol)
-        file_handler = Files()
+        primary_protocol = protocol_sequence[0]
+        fallback_sequence = protocol_sequence[1:]
+
+        # Phase 1: batch download with the requested protocol. Reuses a single
+        # FTP/S3 connection for all files (the previous behaviour) instead of
+        # paying the per-file reconnect cost in the common happy path.
+        logging.info(
+            f"Downloading {len(file_list_json)} file(s) via {primary_protocol} (batch)"
+        )
+        try:
+            Files._batch_download_by_protocol(
+                file_list_json,
+                output_folder,
+                primary_protocol,
+                skip_if_downloaded_already=skip_if_downloaded_already,
+                aspera_maximum_bandwidth=aspera_maximum_bandwidth,
+            )
+        except Exception as exc:
+            logging.warning(
+                f"Batch {primary_protocol} run hit an error; will retry individual failures: {exc}"
+            )
+
+        # Phase 2: validate every file and fall back per-file for the ones
+        # that are missing or invalid.
         failed_files: List[str] = []
         for file_record in file_list_json:
             expected_checksum = checksum_map.get(file_record["fileName"])
-            success = file_handler._download_with_fallback(
+            local_path = Files._resolve_local_path(file_record, output_folder)
+            valid, reason = Files.validate_download(local_path, expected_checksum)
+            if valid:
+                continue
+
+            logging.warning(
+                f"{file_record['fileName']} invalid after {primary_protocol} ({reason})"
+            )
+            Files._remove_if_exists(local_path)
+
+            if not fallback_sequence:
+                failed_files.append(file_record.get("fileName", "<unknown>"))
+                continue
+
+            success = Files._download_with_fallback(
                 file_record=file_record,
                 output_folder=output_folder,
-                skip_if_downloaded_already=skip_if_downloaded_already,
-                protocol_sequence=protocol_sequence,
+                protocol_sequence=fallback_sequence,
                 expected_checksum=expected_checksum,
                 aspera_maximum_bandwidth=aspera_maximum_bandwidth,
             )
