@@ -3,6 +3,8 @@ dist
 build
 *.egg-info
 *.egg
+poetry.lock
+uv.lock
 .idea/*
 .idea/
 .vscode
