@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import ftplib
+import hashlib
 import importlib.resources
 import logging
 import os
@@ -10,7 +11,7 @@ import urllib
 import urllib.request
 import time
 from ftplib import FTP
-from typing import Dict, List
+from typing import Dict, List, Optional, Tuple
 import socket
 from urllib.parse import urlparse
 import xml.etree.ElementTree as ET
@@ -56,12 +57,173 @@ class Files:
     API_BASE_URL = "https://www.ebi.ac.uk/pride/ws/archive/v3"
     API_PRIVATE_URL = "https://www.ebi.ac.uk/pride/private/ws/archive/v2"
     PRIDE_ARCHIVE_FTP = "ftp.pride.ebi.ac.uk"
+    PRIDE_ARCHIVE_FTP_URL_PREFIX = "ftp://ftp.pride.ebi.ac.uk/"
+    GLOBUS_BASE_URL = "https://g-a8b222.dd271.03c0.data.globus.org/"
     S3_URL = "https://hh.fire.sdo.ebi.ac.uk"
     S3_BUCKET = "pride-public"
+    PROTOCOL_ORDER = ["aspera", "s3", "ftp", "globus"]
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
     def __init__(self):
         pass
+
+    @staticmethod
+    def _parse_checksum_line(line: str) -> Optional[Tuple[str, str]]:
+        """
+        Parse one checksum line and return (file_basename, md5_checksum) when present.
+        Supports common formats:
+          - <md5> <path>
+          - <path>\t<md5>
+          - <md5>\t<path>
+        """
+        clean = line.strip()
+        if not clean or clean.startswith("#"):
+            return None
+
+        tokens = clean.replace("\t", " ").split()
+        if len(tokens) < 2:
+            return None
+
+        checksum = None
+        path_token = None
+        for idx, token in enumerate(tokens):
+            normalized = token.lower()
+            if len(normalized) == 32 and all(c in "0123456789abcdef" for c in normalized):
+                checksum = normalized
+                remaining = [t for i, t in enumerate(tokens) if i != idx]
+                if remaining:
+                    path_token = remaining[-1]
+                break
+
+        if not checksum or not path_token:
+            return None
+
+        file_name = os.path.basename(path_token.lstrip("*"))
+        if not file_name:
+            return None
+        return file_name, checksum
+
+    @staticmethod
+    def read_checksum_file(checksum_file_path: str) -> Dict[str, str]:
+        """
+        Read checksum TSV/TXT and build {file_name: md5} map.
+        """
+        checksums: Dict[str, str] = {}
+        if not checksum_file_path or not os.path.exists(checksum_file_path):
+            return checksums
+
+        with open(checksum_file_path, "r", encoding="utf-8") as checksum_file:
+            for line in checksum_file:
+                parsed = Files._parse_checksum_line(line)
+                if parsed is None:
+                    continue
+                file_name, checksum = parsed
+                checksums[file_name] = checksum
+
+        return checksums
+
+    @staticmethod
+    def compute_md5(file_path: str, chunk_size: int = 4 * 1024 * 1024) -> str:
+        """
+        Compute an MD5 checksum for integrity validation, not for security use.
+        """
+        try:
+            md5 = hashlib.md5(usedforsecurity=False)
+        except TypeError:
+            md5 = hashlib.md5()
+        with open(file_path, "rb") as file_handle:
+            while True:
+                chunk = file_handle.read(chunk_size)
+                if not chunk:
+                    break
+                md5.update(chunk)
+        return md5.hexdigest()
+
+    @staticmethod
+    def validate_download(file_path: str, expected_checksum: Optional[str] = None) -> Tuple[bool, str]:
+        """
+        Validate a local file exists, is non-empty, and checksum matches when provided.
+        """
+        if not os.path.exists(file_path):
+            return False, "file does not exist"
+        if os.path.getsize(file_path) == 0:
+            return False, "file is empty"
+        if expected_checksum:
+            actual_checksum = Files.compute_md5(file_path)
+            if actual_checksum.lower() != expected_checksum.lower():
+                return False, (
+                    f"checksum mismatch (expected={expected_checksum.lower()}, actual={actual_checksum.lower()})"
+                )
+        return True, "ok"
+
+    @staticmethod
+    def _remove_if_exists(file_path: str) -> None:
+        """
+        Remove a file if it already exists locally.
+        """
+        if os.path.exists(file_path):
+            os.remove(file_path)
+
+    @staticmethod
+    def _get_download_url(file_record: Dict, protocol: str) -> str:
+        """
+        Resolve the public download URL for a file and protocol.
+
+        Raises ValueError when the requested protocol has no suitable location.
+        Aspera requires a dedicated "Aspera Protocol" entry; ftp/s3/globus
+        derive their URL from the "FTP Protocol" entry (falling back to an
+        arbitrary non-Aspera location would produce a URL the caller cannot
+        actually transfer with).
+        """
+        locations = file_record.get("publicFileLocations", [])
+        if not locations:
+            raise ValueError("No public file locations present")
+
+        aspera_url = None
+        ftp_url = None
+        for location in locations:
+            name = location.get("name")
+            if name == "Aspera Protocol":
+                aspera_url = location.get("value")
+            elif name == "FTP Protocol":
+                ftp_url = location.get("value")
+
+        if protocol == "aspera":
+            if not aspera_url:
+                raise ValueError("Aspera URL not available")
+            return aspera_url
+
+        if not ftp_url:
+            raise ValueError("FTP URL not available")
+        if protocol == "ftp":
+            return ftp_url
+        if protocol == "globus":
+            return ftp_url.replace(Files.PRIDE_ARCHIVE_FTP_URL_PREFIX, Files.GLOBUS_BASE_URL)
+        if protocol == "s3":
+            return ftp_url
+        raise ValueError(f"Unsupported protocol: {protocol}")
+
+    @staticmethod
+    def _resolve_local_path(file_record: Dict, output_folder: str) -> str:
+        """
+        Compute the canonical local path for a file regardless of transfer protocol.
+        """
+        try:
+            canonical_url = Files._get_download_url(file_record, "ftp")
+        except ValueError:
+            canonical_url = ""
+        if canonical_url:
+            return Files.get_output_file_name(canonical_url, file_record, output_folder)
+        return os.path.join(output_folder, file_record["fileName"])
+
+    @staticmethod
+    def _protocol_sequence(protocol: str) -> List[str]:
+        """
+        Build the ordered list of protocols to try for a requested download mode.
+        """
+        if protocol not in Files.PROTOCOL_ORDER:
+            return []
+        return [protocol] + [p for p in Files.PROTOCOL_ORDER if p != protocol]
 
     async def stream_all_files_metadata(self, output_file, accession=None):
         """
@@ -264,7 +426,8 @@ class Files:
     @staticmethod
     def get_output_file_name(download_url, file, output_folder):
         public_filepath_part = download_url.rsplit("/", 1)
-        logging.debug(file["accession"] + " -> " + public_filepath_part[1])
+        accession = file.get("accession", "unknown-accession")
+        logging.debug(accession + " -> " + public_filepath_part[1])
         new_file_path = os.path.join(output_folder, f"{public_filepath_part[1]}")
         return new_file_path
 
@@ -344,9 +507,9 @@ class Files:
                     download_url = file["publicFileLocations"][1]["value"]
 
                 logging.debug(f"Downloading from Globus: {download_url}")
-                ftp_base_url = "ftp://ftp.pride.ebi.ac.uk/"
-                globus_base_url = "https://g-a8b222.dd271.03c0.data.globus.org/"
-                download_url = download_url.replace(ftp_base_url, globus_base_url)
+                download_url = download_url.replace(
+                    Files.PRIDE_ARCHIVE_FTP_URL_PREFIX, Files.GLOBUS_BASE_URL
+                )
 
                 # Create a clean filename to save the downloaded file
                 new_file_path = Files.get_output_file_name(download_url, file, output_folder)
@@ -659,7 +822,11 @@ class Files:
 
     @staticmethod
     def save_checksum_file(accession, output_folder):
-        url = f"https://wwwdev.ebi.ac.uk/pride/ws/archive/v3/files/checksum/{accession}"
+        """
+        Download and persist the checksum manifest for a PRIDE accession.
+        """
+        os.makedirs(output_folder, exist_ok=True)
+        url = f"{Files.V3_API_BASE_URL}/files/checksum/{accession}"
         headers = {"accept": "text/plain"}
         request = urllib.request.Request(url, headers=headers, method="GET")
         logging.info(f"Fetching checksum file from {url}")
@@ -667,8 +834,109 @@ class Files:
             data = response.read().decode("utf-8")
             # Save the data to a .tsv file
             output_path = os.path.join(output_folder, f"{accession}-checksum.tsv")
-            with open(output_path, "w") as file:
+            with open(output_path, "w", encoding="utf-8") as file:
                 file.write(data)
+            return output_path
+
+    @staticmethod
+    def _batch_download_by_protocol(
+        file_list: List[Dict],
+        output_folder: str,
+        protocol: str,
+        skip_if_downloaded_already: bool,
+        aspera_maximum_bandwidth: str,
+    ) -> None:
+        """
+        Transfer a batch of files with one protocol, reusing a single
+        connection where the underlying helper supports it (FTP, S3).
+        """
+        if not file_list:
+            return
+        if protocol == "ftp":
+            Files.download_files_from_ftp(
+                file_list,
+                output_folder,
+                skip_if_downloaded_already=skip_if_downloaded_already,
+            )
+            return
+        if protocol == "aspera":
+            Files.download_files_from_aspera(
+                file_list,
+                output_folder,
+                skip_if_downloaded_already=skip_if_downloaded_already,
+                maximum_bandwidth=aspera_maximum_bandwidth,
+            )
+            return
+        if protocol == "globus":
+            Files.download_files_from_globus(
+                file_list,
+                output_folder,
+                skip_if_downloaded_already=skip_if_downloaded_already,
+            )
+            return
+        if protocol == "s3":
+            Files.download_files_from_s3(
+                file_list,
+                output_folder,
+                skip_if_downloaded_already=skip_if_downloaded_already,
+            )
+            return
+        raise ValueError(f"Unsupported protocol: {protocol}")
+
+    @staticmethod
+    def _download_with_fallback(
+        file_record: Dict,
+        output_folder: str,
+        protocol_sequence: List[str],
+        expected_checksum: Optional[str],
+        aspera_maximum_bandwidth: str,
+        max_protocol_retries: int = 2,
+    ) -> bool:
+        """
+        Download one file by trying each protocol in sequence, validating
+        after every attempt. Intended as the per-file fallback path; batch
+        download of the primary protocol is handled separately.
+        """
+        local_path = Files._resolve_local_path(file_record, output_folder)
+
+        for protocol in protocol_sequence:
+            for attempt in range(1, max_protocol_retries + 1):
+                logging.info(
+                    f"Downloading {file_record['fileName']} via {protocol} "
+                    f"(attempt {attempt}/{max_protocol_retries})"
+                )
+                try:
+                    Files._remove_if_exists(local_path)
+                    Files._batch_download_by_protocol(
+                        [file_record],
+                        output_folder,
+                        protocol,
+                        skip_if_downloaded_already=False,
+                        aspera_maximum_bandwidth=aspera_maximum_bandwidth,
+                    )
+                except Exception as error:
+                    logging.error(
+                        f"Protocol {protocol} failed for {file_record['fileName']}: {error}"
+                    )
+
+                valid, reason = Files.validate_download(local_path, expected_checksum)
+                if valid:
+                    logging.info(
+                        f"File {file_record['fileName']} downloaded successfully via {protocol}"
+                    )
+                    return True
+
+                logging.warning(
+                    f"Validation failed for {file_record['fileName']} via {protocol}: {reason}"
+                )
+                Files._remove_if_exists(local_path)
+
+            logging.warning(
+                f"Protocol {protocol} exhausted for {file_record['fileName']}, switching protocol."
+            )
+
+        logging.error(f"All protocol attempts failed for {file_record['fileName']}")
+        return False
 
     @staticmethod
     def download_files(
@@ -691,31 +959,76 @@ class Files:
         """
         protocols_supported = ["ftp", "aspera", "globus", "s3"]
         if protocol not in protocols_supported:
-            logging.error("Protocol should be either ftp, aspera, globus")
+            logging.error("Protocol should be one of ftp, aspera, globus, s3")
             return
 
+        os.makedirs(output_folder, exist_ok=True)
+
+        checksum_map: Dict[str, str] = {}
         if checksum_check:
-            Files.save_checksum_file(accession, output_folder)
+            checksum_file_path = Files.save_checksum_file(accession, output_folder)
+            checksum_map = Files.read_checksum_file(checksum_file_path)
+            logging.info(f"Loaded checksums for {len(checksum_map)} files")
 
-        if protocol == "ftp":
-            Files.download_files_from_ftp(
-                file_list_json, output_folder, skip_if_downloaded_already
-            )
+        if not file_list_json:
+            return
 
-        elif protocol == "aspera":
-            Files.download_files_from_aspera(
+        protocol_sequence = Files._protocol_sequence(protocol)
+        primary_protocol = protocol_sequence[0]
+        fallback_sequence = protocol_sequence[1:]
+
+        # Phase 1: batch download with the requested protocol. Reuses a single
+        # FTP/S3 connection for all files (the previous behaviour) instead of
+        # paying the per-file reconnect cost in the common happy path.
+        logging.info(
+            f"Downloading {len(file_list_json)} file(s) via {primary_protocol} (batch)"
+        )
+        try:
+            Files._batch_download_by_protocol(
                 file_list_json,
                 output_folder,
-                skip_if_downloaded_already,
-                maximum_bandwidth=aspera_maximum_bandwidth,
+                primary_protocol,
+                skip_if_downloaded_already=skip_if_downloaded_already,
+                aspera_maximum_bandwidth=aspera_maximum_bandwidth,
+            )
+        except Exception as exc:
+            logging.warning(
+                f"Batch {primary_protocol} run hit an error; will retry individual failures: {exc}"
             )
 
-        elif protocol == "globus":
-            Files.download_files_from_globus(
-                file_list_json, output_folder, skip_if_downloaded_already
+        # Phase 2: validate every file and fall back per-file for the ones
+        # that are missing or invalid.
+        failed_files: List[str] = []
+        for file_record in file_list_json:
+            expected_checksum = checksum_map.get(file_record["fileName"])
+            local_path = Files._resolve_local_path(file_record, output_folder)
+            valid, reason = Files.validate_download(local_path, expected_checksum)
+            if valid:
+                continue
+
+            logging.warning(
+                f"{file_record['fileName']} invalid after {primary_protocol} ({reason})"
             )
-        elif protocol == "s3":
-            Files.download_files_from_s3(file_list_json, output_folder, skip_if_downloaded_already)
+            Files._remove_if_exists(local_path)
+
+            if not fallback_sequence:
+                failed_files.append(file_record.get("fileName", "<unknown>"))
+                continue
+
+            success = Files._download_with_fallback(
+                file_record=file_record,
+                output_folder=output_folder,
+                protocol_sequence=fallback_sequence,
+                expected_checksum=expected_checksum,
+                aspera_maximum_bandwidth=aspera_maximum_bandwidth,
+            )
+            if not success:
+                failed_files.append(file_record.get("fileName", "<unknown>"))
+
+        if failed_files:
+            failed_summary = ", ".join(failed_files)
+            logging.error(f"Failed to download {len(failed_files)} file(s): {failed_summary}")
+            raise RuntimeError(f"Failed to download {len(failed_files)} file(s): {failed_summary}")
 
     def download_all_category_files(
         self,
