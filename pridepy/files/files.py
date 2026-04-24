@@ -10,6 +10,7 @@ import subprocess
 import urllib
 import urllib.request
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from ftplib import FTP
 from typing import Dict, List, Optional, Tuple
 import socket
@@ -68,57 +69,50 @@ class Files:
         pass
 
     @staticmethod
-    def _parse_checksum_line(line: str) -> Optional[Tuple[str, str]]:
-        """
-        Parse one checksum line and return (file_basename, md5_checksum) when present.
-        Supports common formats:
-          - <md5> <path>
-          - <path>\t<md5>
-          - <md5>\t<path>
-        """
-        clean = line.strip()
-        if not clean or clean.startswith("#"):
-            return None
-
-        tokens = clean.replace("\t", " ").split()
-        if len(tokens) < 2:
-            return None
-
-        checksum = None
-        path_token = None
-        for idx, token in enumerate(tokens):
-            normalized = token.lower()
-            if len(normalized) == 32 and all(c in "0123456789abcdef" for c in normalized):
-                checksum = normalized
-                remaining = [t for i, t in enumerate(tokens) if i != idx]
-                if remaining:
-                    path_token = remaining[-1]
-                break
-
-        if not checksum or not path_token:
-            return None
-
-        file_name = os.path.basename(path_token.lstrip("*"))
-        if not file_name:
-            return None
-        return file_name, checksum
+    def _find_tsv_columns(header: str) -> Optional[Tuple[int, int]]:
+        """Return (name_idx, checksum_idx) from a TSV header, or None."""
+        cols = header.split("\t")
+        name_idx = checksum_idx = None
+        for i, col in enumerate(cols):
+            low = col.lower()
+            if "file" in low and "name" in low:
+                name_idx = i
+            elif "checksum" in low:
+                checksum_idx = i
+        if name_idx is not None and checksum_idx is not None:
+            return name_idx, checksum_idx
+        return None
 
     @staticmethod
     def read_checksum_file(checksum_file_path: str) -> Dict[str, str]:
         """
-        Read checksum TSV/TXT and build {file_name: md5} map.
+        Read PRIDE API checksum TSV and build {file_name: md5} map.
+        Expected format: File-Name\tFile-MD5Checksum\tFile-Size
         """
         checksums: Dict[str, str] = {}
         if not checksum_file_path or not os.path.exists(checksum_file_path):
             return checksums
 
-        with open(checksum_file_path, "r", encoding="utf-8") as checksum_file:
-            for line in checksum_file:
-                parsed = Files._parse_checksum_line(line)
-                if parsed is None:
-                    continue
-                file_name, checksum = parsed
-                checksums[file_name] = checksum
+        with open(checksum_file_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+
+        if len(lines) < 2:
+            return checksums
+
+        col_indices = Files._find_tsv_columns(lines[0].strip())
+        if col_indices is None:
+            logging.warning(f"Unrecognized checksum file format: {lines[0].strip()}")
+            return checksums
+
+        name_idx, checksum_idx = col_indices
+        min_cols = max(name_idx, checksum_idx) + 1
+        for line in lines[1:]:
+            parts = line.strip().split("\t")
+            if len(parts) >= min_cols:
+                fn = os.path.basename(parts[name_idx].strip())
+                cs = parts[checksum_idx].strip().lower()
+                if fn and cs:
+                    checksums[fn] = cs
 
         return checksums
 
@@ -486,6 +480,63 @@ class Files:
                 logging.error(f"Aspera download failed for {new_file_path}: {str(e)}")
 
     @staticmethod
+    def _download_range(url, file_path, start, end, pbar):
+        """Download a byte range directly into the target file using seek."""
+        session = Util.create_session_with_retries()
+        headers = {"Range": f"bytes={start}-{end}"}
+        with session.get(url, headers=headers, stream=True, timeout=(30, 300)) as r:
+            r.raise_for_status()
+            with open(file_path, "r+b") as f:
+                f.seek(start)
+                for chunk in r.iter_content(chunk_size=8 * 1024 * 1024):
+                    if chunk:
+                        f.write(chunk)
+                        pbar.update(len(chunk))
+
+    @staticmethod
+    def _parallel_download(url, file_path, num_connections=8):
+        """Download a file using parallel Range requests, like browser parallel downloading."""
+        session = Util.create_session_with_retries()
+        head = session.head(url, timeout=(30, 30))
+        total_size = int(head.headers.get("content-length", 0))
+        accept_ranges = head.headers.get("accept-ranges", "none")
+
+        if total_size == 0 or accept_ranges != "bytes":
+            logging.info("Server does not support Range requests, falling back to single connection")
+            with session.get(url, stream=True, timeout=(30, 300)) as r:
+                r.raise_for_status()
+                with tqdm(total=total_size, unit="B", unit_scale=True, desc=file_path) as pbar:
+                    with open(file_path, "wb", buffering=8 * 1024 * 1024) as f:
+                        for chunk in r.iter_content(chunk_size=8 * 1024 * 1024):
+                            if chunk:
+                                f.write(chunk)
+                                pbar.update(len(chunk))
+            return
+
+        chunk_size = total_size // num_connections
+        ranges = []
+        for i in range(num_connections):
+            start = i * chunk_size
+            end = total_size - 1 if i == num_connections - 1 else (i + 1) * chunk_size - 1
+            ranges.append((start, end))
+
+        logging.info(f"Parallel download: {num_connections} connections, {total_size / 1024 / 1024:.0f}MB total")
+
+        with open(file_path, "wb") as f:
+            f.seek(total_size - 1)
+            f.write(b"\0")
+
+        with tqdm(total=total_size, unit="B", unit_scale=True, desc=file_path) as pbar:
+            with ThreadPoolExecutor(max_workers=num_connections) as executor:
+                futures = []
+                for i, (start, end) in enumerate(ranges):
+                    f = executor.submit(Files._download_range, url, file_path, start, end, pbar)
+                    futures.append(f)
+
+                for f in as_completed(futures):
+                    f.result()
+
+    @staticmethod
     def download_files_from_globus(
         file_list_json: List[Dict], output_folder, skip_if_downloaded_already
     ):
@@ -508,7 +559,7 @@ class Files:
 
                 logging.debug(f"Downloading from Globus: {download_url}")
                 download_url = download_url.replace(
-                    Files.PRIDE_ARCHIVE_FTP_URL_PREFIX, Files.GLOBUS_BASE_URL
+                    "ftp://", "https://"
                 )
 
                 # Create a clean filename to save the downloaded file
@@ -518,21 +569,7 @@ class Files:
                     logging.info("Skipping download as file already exists")
                     continue
 
-                # Get total file size for progress tracking
-                with urllib.request.urlopen(download_url) as response:
-                    total_size = int(response.headers.get("Content-Length", 0))
-
-                # Initialize progress bar
-                progress = Progress(total_size, new_file_path)
-
-                # Download the file with progress bar
-                urllib.request.urlretrieve(
-                    download_url,
-                    new_file_path,
-                    reporthook=lambda blocks, block_size, total_size: progress(block_size),
-                )
-
-                progress.close()
+                Files._parallel_download(download_url, new_file_path)
                 logging.info(f"Successfully downloaded {new_file_path}")
 
             except Exception as e:

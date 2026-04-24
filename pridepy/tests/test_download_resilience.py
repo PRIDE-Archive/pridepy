@@ -8,19 +8,28 @@ from pridepy.files.files import Files
 
 
 class TestDownloadResilience(TestCase):
-    def test_read_checksum_file_parses_common_formats(self):
+    def test_read_checksum_file_parses_pride_api_format(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             checksum_path = os.path.join(tmp_dir, "checksums.tsv")
             with open(checksum_path, "w", encoding="utf-8") as handle:
-                handle.write("900150983cd24fb0d6963f7d28e17f72 fileA.raw\n")
-                handle.write("fileB.raw\t900150983cd24fb0d6963f7d28e17f72\n")
-                handle.write("900150983cd24fb0d6963f7d28e17f72\t/path/to/fileC.raw\n")
+                handle.write("File-Name\tFile-MD5Checksum\tFile-Size\n")
+                handle.write("fileA.raw\t900150983cd24fb0d6963f7d28e17f72\t1024\n")
+                handle.write("fileB.raw\t800150983cd24fb0d6963f7d28e17f72\t2048\n")
 
             checksum_map = Files.read_checksum_file(checksum_path)
 
             assert checksum_map["fileA.raw"] == "900150983cd24fb0d6963f7d28e17f72"
-            assert checksum_map["fileB.raw"] == "900150983cd24fb0d6963f7d28e17f72"
-            assert checksum_map["fileC.raw"] == "900150983cd24fb0d6963f7d28e17f72"
+            assert checksum_map["fileB.raw"] == "800150983cd24fb0d6963f7d28e17f72"
+
+    def test_read_checksum_file_returns_empty_on_bad_header(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            checksum_path = os.path.join(tmp_dir, "checksums.tsv")
+            with open(checksum_path, "w", encoding="utf-8") as handle:
+                handle.write("random header\n")
+                handle.write("some data\n")
+
+            checksum_map = Files.read_checksum_file(checksum_path)
+            assert len(checksum_map) == 0
 
     def test_validate_download_rejects_empty_and_bad_checksum(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
