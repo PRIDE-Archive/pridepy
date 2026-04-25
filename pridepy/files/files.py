@@ -59,7 +59,7 @@ class Files:
     API_PRIVATE_URL = "https://www.ebi.ac.uk/pride/private/ws/archive/v2"
     PRIDE_ARCHIVE_FTP = "ftp.pride.ebi.ac.uk"
     PRIDE_ARCHIVE_FTP_URL_PREFIX = "ftp://ftp.pride.ebi.ac.uk/"
-    GLOBUS_BASE_URL = "https://g-a8b222.dd271.03c0.data.globus.org/"
+    PRIDE_ARCHIVE_HTTPS_URL_PREFIX = "https://ftp.pride.ebi.ac.uk/"
     S3_URL = "https://hh.fire.sdo.ebi.ac.uk"
     S3_BUCKET = "pride-public"
     PROTOCOL_ORDER = ["aspera", "s3", "ftp", "globus"]
@@ -71,17 +71,15 @@ class Files:
     @staticmethod
     def _find_tsv_columns(header: str) -> Optional[Tuple[int, int]]:
         """Return (name_idx, checksum_idx) from a TSV header, or None."""
-        cols = header.split("\t")
-        name_idx = checksum_idx = None
-        for i, col in enumerate(cols):
-            low = col.lower()
-            if "file" in low and "name" in low:
-                name_idx = i
-            elif "checksum" in low:
-                checksum_idx = i
-        if name_idx is not None and checksum_idx is not None:
-            return name_idx, checksum_idx
-        return None
+        cols = [col.strip().lower() for col in header.split("\t")]
+        required_cols = {"file-name", "file-md5checksum", "file-size"}
+        if not required_cols.issubset(set(cols)):
+            return None
+        return cols.index("file-name"), cols.index("file-md5checksum")
+
+    @staticmethod
+    def _is_md5_checksum(value: str) -> bool:
+        return len(value) == 32 and all(char in "0123456789abcdef" for char in value)
 
     @staticmethod
     def read_checksum_file(checksum_file_path: str) -> Dict[str, str]:
@@ -94,25 +92,24 @@ class Files:
             return checksums
 
         with open(checksum_file_path, "r", encoding="utf-8") as f:
-            lines = f.readlines()
+            header = f.readline().strip()
+            if not header:
+                return checksums
 
-        if len(lines) < 2:
-            return checksums
+            col_indices = Files._find_tsv_columns(header)
+            if col_indices is None:
+                logging.warning(f"Unrecognized checksum file format: {header}")
+                return checksums
 
-        col_indices = Files._find_tsv_columns(lines[0].strip())
-        if col_indices is None:
-            logging.warning(f"Unrecognized checksum file format: {lines[0].strip()}")
-            return checksums
-
-        name_idx, checksum_idx = col_indices
-        min_cols = max(name_idx, checksum_idx) + 1
-        for line in lines[1:]:
-            parts = line.strip().split("\t")
-            if len(parts) >= min_cols:
-                fn = os.path.basename(parts[name_idx].strip())
-                cs = parts[checksum_idx].strip().lower()
-                if fn and cs:
-                    checksums[fn] = cs
+            name_idx, checksum_idx = col_indices
+            min_cols = max(name_idx, checksum_idx) + 1
+            for line in f:
+                parts = line.strip().split("\t")
+                if len(parts) >= min_cols:
+                    fn = os.path.basename(parts[name_idx].strip())
+                    cs = parts[checksum_idx].strip().lower()
+                    if fn and Files._is_md5_checksum(cs):
+                        checksums[fn] = cs
 
         return checksums
 
@@ -192,7 +189,11 @@ class Files:
         if protocol == "ftp":
             return ftp_url
         if protocol == "globus":
-            return ftp_url.replace(Files.PRIDE_ARCHIVE_FTP_URL_PREFIX, Files.GLOBUS_BASE_URL)
+            return ftp_url.replace(
+                Files.PRIDE_ARCHIVE_FTP_URL_PREFIX,
+                Files.PRIDE_ARCHIVE_HTTPS_URL_PREFIX,
+                1,
+            )
         if protocol == "s3":
             return ftp_url
         raise ValueError(f"Unsupported protocol: {protocol}")
@@ -486,6 +487,11 @@ class Files:
         headers = {"Range": f"bytes={start}-{end}"}
         with session.get(url, headers=headers, stream=True, timeout=(30, 300)) as r:
             r.raise_for_status()
+            if r.status_code != 206:
+                raise RuntimeError(f"Server did not honor Range request: {r.status_code}")
+            content_range = r.headers.get("Content-Range", "")
+            if not content_range.lower().startswith(f"bytes {start}-{end}/"):
+                raise RuntimeError(f"Unexpected Content-Range header: {content_range}")
             with open(file_path, "r+b") as f:
                 f.seek(start)
                 for chunk in r.iter_content(chunk_size=8 * 1024 * 1024):
@@ -497,12 +503,20 @@ class Files:
     def _parallel_download(url, file_path, num_connections=8):
         """Download a file using parallel Range requests, like browser parallel downloading."""
         session = Util.create_session_with_retries()
-        head = session.head(url, timeout=(30, 30))
-        total_size = int(head.headers.get("content-length", 0))
-        accept_ranges = head.headers.get("accept-ranges", "none")
+        try:
+            head = session.head(url, timeout=(30, 30))
+            head.raise_for_status()
+            total_size = int(head.headers.get("content-length", 0))
+            accept_ranges = head.headers.get("accept-ranges", "none").strip().lower()
+        except (requests.RequestException, ValueError) as exc:
+            logging.info(f"HEAD request failed, falling back to single connection: {exc}")
+            total_size = 0
+            accept_ranges = "none"
 
-        if total_size == 0 or accept_ranges != "bytes":
-            logging.info("Server does not support Range requests, falling back to single connection")
+        if total_size == 0 or accept_ranges != "bytes" or num_connections < 2:
+            logging.info(
+                "Server does not support Range requests, falling back to single connection"
+            )
             with session.get(url, stream=True, timeout=(30, 300)) as r:
                 r.raise_for_status()
                 with tqdm(total=total_size, unit="B", unit_scale=True, desc=file_path) as pbar:
@@ -513,28 +527,45 @@ class Files:
                                 pbar.update(len(chunk))
             return
 
-        chunk_size = total_size // num_connections
+        num_connections = min(num_connections, total_size)
+        chunk_size = (total_size + num_connections - 1) // num_connections
         ranges = []
-        for i in range(num_connections):
-            start = i * chunk_size
-            end = total_size - 1 if i == num_connections - 1 else (i + 1) * chunk_size - 1
+        for start in range(0, total_size, chunk_size):
+            end = min(start + chunk_size - 1, total_size - 1)
             ranges.append((start, end))
 
-        logging.info(f"Parallel download: {num_connections} connections, {total_size / 1024 / 1024:.0f}MB total")
+        logging.info(
+            f"Parallel download: {num_connections} connections, "
+            f"{total_size / 1024 / 1024:.0f}MB total"
+        )
 
         with open(file_path, "wb") as f:
             f.seek(total_size - 1)
             f.write(b"\0")
 
-        with tqdm(total=total_size, unit="B", unit_scale=True, desc=file_path) as pbar:
-            with ThreadPoolExecutor(max_workers=num_connections) as executor:
-                futures = []
-                for i, (start, end) in enumerate(ranges):
-                    f = executor.submit(Files._download_range, url, file_path, start, end, pbar)
-                    futures.append(f)
+        try:
+            with tqdm(total=total_size, unit="B", unit_scale=True, desc=file_path) as pbar:
+                with ThreadPoolExecutor(max_workers=num_connections) as executor:
+                    futures = []
+                    for start, end in ranges:
+                        f = executor.submit(
+                            Files._download_range, url, file_path, start, end, pbar
+                        )
+                        futures.append(f)
 
-                for f in as_completed(futures):
-                    f.result()
+                    for f in as_completed(futures):
+                        f.result()
+        except Exception as exc:
+            logging.info(f"Parallel download failed, retrying with single connection: {exc}")
+            Files._remove_if_exists(file_path)
+            with session.get(url, stream=True, timeout=(30, 300)) as r:
+                r.raise_for_status()
+                with tqdm(total=total_size, unit="B", unit_scale=True, desc=file_path) as pbar:
+                    with open(file_path, "wb", buffering=8 * 1024 * 1024) as f:
+                        for chunk in r.iter_content(chunk_size=8 * 1024 * 1024):
+                            if chunk:
+                                f.write(chunk)
+                                pbar.update(len(chunk))
 
     @staticmethod
     def download_files_from_globus(
@@ -552,15 +583,9 @@ class Files:
 
         for file in file_list_json:
             try:
-                if file["publicFileLocations"][0]["name"] == "FTP Protocol":
-                    download_url = file["publicFileLocations"][0]["value"]
-                else:
-                    download_url = file["publicFileLocations"][1]["value"]
+                download_url = Files._get_download_url(file, "globus")
 
                 logging.debug(f"Downloading from Globus: {download_url}")
-                download_url = download_url.replace(
-                    "ftp://", "https://"
-                )
 
                 # Create a clean filename to save the downloaded file
                 new_file_path = Files.get_output_file_name(download_url, file, output_folder)
