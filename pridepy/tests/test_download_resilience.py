@@ -80,6 +80,61 @@ class TestDownloadResilience(TestCase):
             with open(output_file, "rb") as handle:
                 assert handle.read() == b"abc"
 
+    def test_parallel_download_falls_back_when_head_fails(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            output_file = os.path.join(tmp_dir, "file.raw")
+            session = Mock()
+            session.head.side_effect = ValueError("bad content length")
+
+            fallback_response = Mock()
+            fallback_response.raise_for_status.return_value = None
+            fallback_response.iter_content.return_value = [b"abc"]
+            fallback_response.__enter__ = Mock(return_value=fallback_response)
+            fallback_response.__exit__ = Mock(return_value=None)
+            session.get.return_value = fallback_response
+
+            with patch(
+                "pridepy.files.files.Util.create_session_with_retries",
+                return_value=session,
+            ):
+                Files._parallel_download(
+                    "https://example.org/file.raw",
+                    output_file,
+                    num_connections=2,
+                )
+
+            with open(output_file, "rb") as handle:
+                assert handle.read() == b"abc"
+
+    def test_parallel_download_falls_back_without_accept_ranges(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            output_file = os.path.join(tmp_dir, "file.raw")
+            session = Mock()
+            head = Mock()
+            head.headers = {"content-length": "3", "accept-ranges": "none"}
+            head.raise_for_status.return_value = None
+            session.head.return_value = head
+
+            fallback_response = Mock()
+            fallback_response.raise_for_status.return_value = None
+            fallback_response.iter_content.return_value = [b"abc"]
+            fallback_response.__enter__ = Mock(return_value=fallback_response)
+            fallback_response.__exit__ = Mock(return_value=None)
+            session.get.return_value = fallback_response
+
+            with patch(
+                "pridepy.files.files.Util.create_session_with_retries",
+                return_value=session,
+            ):
+                Files._parallel_download(
+                    "https://example.org/file.raw",
+                    output_file,
+                    num_connections=2,
+                )
+
+            with open(output_file, "rb") as handle:
+                assert handle.read() == b"abc"
+
     def test_validate_download_rejects_empty_and_bad_checksum(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             file_path = os.path.join(tmp_dir, "test.raw")
