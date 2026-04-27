@@ -2,25 +2,138 @@ import hashlib
 import os
 import tempfile
 from unittest import TestCase
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from pridepy.files.files import Files
 
 
 class TestDownloadResilience(TestCase):
-    def test_read_checksum_file_parses_common_formats(self):
+    def test_read_checksum_file_parses_pride_api_format(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             checksum_path = os.path.join(tmp_dir, "checksums.tsv")
             with open(checksum_path, "w", encoding="utf-8") as handle:
-                handle.write("900150983cd24fb0d6963f7d28e17f72 fileA.raw\n")
-                handle.write("fileB.raw\t900150983cd24fb0d6963f7d28e17f72\n")
-                handle.write("900150983cd24fb0d6963f7d28e17f72\t/path/to/fileC.raw\n")
+                handle.write("File-Name\tFile-MD5Checksum\tFile-Size\n")
+                handle.write("fileA.raw\t900150983cd24fb0d6963f7d28e17f72\t1024\n")
+                handle.write("fileB.raw\td41d8cd98f00b204e9800998ecf8427e\t2048\n")
+                handle.write("fileC.raw\tnot-a-md5\t4096\n")
 
             checksum_map = Files.read_checksum_file(checksum_path)
 
             assert checksum_map["fileA.raw"] == "900150983cd24fb0d6963f7d28e17f72"
-            assert checksum_map["fileB.raw"] == "900150983cd24fb0d6963f7d28e17f72"
-            assert checksum_map["fileC.raw"] == "900150983cd24fb0d6963f7d28e17f72"
+            assert checksum_map["fileB.raw"] == "d41d8cd98f00b204e9800998ecf8427e"
+            assert "fileC.raw" not in checksum_map
+
+    def test_read_checksum_file_returns_empty_on_bad_header(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            checksum_path = os.path.join(tmp_dir, "checksums.tsv")
+            with open(checksum_path, "w", encoding="utf-8") as handle:
+                handle.write("random header\n")
+                handle.write("some data\n")
+
+            checksum_map = Files.read_checksum_file(checksum_path)
+            assert len(checksum_map) == 0
+
+    def test_get_download_url_maps_globus_to_pride_archive_https(self):
+        file_record = {
+            "publicFileLocations": [
+                {"name": "FTP Protocol", "value": "ftp://ftp.pride.ebi.ac.uk/path/file.raw"}
+            ]
+        }
+
+        download_url = Files._get_download_url(file_record, "globus")
+
+        assert download_url == "https://ftp.pride.ebi.ac.uk/path/file.raw"
+
+    def test_parallel_download_falls_back_when_range_not_honored(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            output_file = os.path.join(tmp_dir, "file.raw")
+            session = Mock()
+            head = Mock()
+            head.headers = {"content-length": "1", "accept-ranges": "bytes"}
+            head.raise_for_status.return_value = None
+            session.head.return_value = head
+
+            ranged_response = Mock()
+            ranged_response.status_code = 200
+            ranged_response.headers = {}
+            ranged_response.raise_for_status.return_value = None
+            ranged_response.__enter__ = Mock(return_value=ranged_response)
+            ranged_response.__exit__ = Mock(return_value=None)
+
+            fallback_response = Mock()
+            fallback_response.raise_for_status.return_value = None
+            fallback_response.iter_content.return_value = [b"abc"]
+            fallback_response.__enter__ = Mock(return_value=fallback_response)
+            fallback_response.__exit__ = Mock(return_value=None)
+            session.get.side_effect = [ranged_response, fallback_response]
+
+            with patch(
+                "pridepy.files.files.Util.create_session_with_retries",
+                return_value=session,
+            ):
+                Files._parallel_download(
+                    "https://example.org/file.raw",
+                    output_file,
+                    num_connections=2,
+                )
+
+            with open(output_file, "rb") as handle:
+                assert handle.read() == b"abc"
+
+    def test_parallel_download_falls_back_when_head_fails(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            output_file = os.path.join(tmp_dir, "file.raw")
+            session = Mock()
+            session.head.side_effect = ValueError("bad content length")
+
+            fallback_response = Mock()
+            fallback_response.raise_for_status.return_value = None
+            fallback_response.iter_content.return_value = [b"abc"]
+            fallback_response.__enter__ = Mock(return_value=fallback_response)
+            fallback_response.__exit__ = Mock(return_value=None)
+            session.get.return_value = fallback_response
+
+            with patch(
+                "pridepy.files.files.Util.create_session_with_retries",
+                return_value=session,
+            ):
+                Files._parallel_download(
+                    "https://example.org/file.raw",
+                    output_file,
+                    num_connections=2,
+                )
+
+            with open(output_file, "rb") as handle:
+                assert handle.read() == b"abc"
+
+    def test_parallel_download_falls_back_without_accept_ranges(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            output_file = os.path.join(tmp_dir, "file.raw")
+            session = Mock()
+            head = Mock()
+            head.headers = {"content-length": "3", "accept-ranges": "none"}
+            head.raise_for_status.return_value = None
+            session.head.return_value = head
+
+            fallback_response = Mock()
+            fallback_response.raise_for_status.return_value = None
+            fallback_response.iter_content.return_value = [b"abc"]
+            fallback_response.__enter__ = Mock(return_value=fallback_response)
+            fallback_response.__exit__ = Mock(return_value=None)
+            session.get.return_value = fallback_response
+
+            with patch(
+                "pridepy.files.files.Util.create_session_with_retries",
+                return_value=session,
+            ):
+                Files._parallel_download(
+                    "https://example.org/file.raw",
+                    output_file,
+                    num_connections=2,
+                )
+
+            with open(output_file, "rb") as handle:
+                assert handle.read() == b"abc"
 
     def test_validate_download_rejects_empty_and_bad_checksum(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
