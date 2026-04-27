@@ -222,14 +222,6 @@ uv build
 
 A white paper is available in [paper/paper.md](paper/paper.md).
 
-Build PDF with pandoc:
-
-```bash
-docker run --rm --platform linux/amd64 \
-  -v "$(pwd)/paper:/data" \
-  -w /data openjournals/inara:latest paper.md -p -o pdf
-```
-
 ## Contributing
 
 1. Fork the repository
