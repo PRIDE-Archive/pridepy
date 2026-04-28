@@ -464,15 +464,19 @@ def _read_filename_arguments(file_list_path, files_csv):
     return deduped
 
 
-def _read_url_arguments(url_list_path, single_url):
-    """Build a deduplicated URL list from a manifest path and/or single URL.
+def _read_url_arguments(url_list_path, single_url, urls_csv=None):
+    """Build a deduplicated URL list from a manifest path, a CSV string,
+    and/or a single URL.
 
     Manifest format: one URL per line; blank lines and ``#``-prefixed comments
-    are skipped.
+    are skipped. URLs are RFC 3986 compliant and never contain bare commas, so
+    splitting ``urls_csv`` on ``,`` is safe.
     """
-    if not url_list_path and not single_url:
-        raise click.BadParameter("Provide either --url-list or --url")
+    if not url_list_path and not single_url and not urls_csv:
+        raise click.BadParameter("Provide --url-list, --urls, or --url")
     urls = list(_parse_text_manifest(url_list_path))
+    if urls_csv:
+        urls.extend(part.strip() for part in urls_csv.split(",") if part.strip())
     if single_url:
         urls.append(single_url)
     deduped = list(dict.fromkeys(urls))
@@ -571,6 +575,12 @@ def download_files_by_list(
     help="Path to a manifest file with one URL per line.",
 )
 @click.option(
+    "--urls",
+    "urls_csv",
+    required=False,
+    help="Comma-separated URLs. Use this OR --url-list / --url (or combine).",
+)
+@click.option(
     "--url",
     "single_url",
     required=False,
@@ -590,12 +600,13 @@ def download_files_by_list(
 )
 def download_files_by_url(
     url_list_path,
+    urls_csv,
     single_url,
     output_folder,
     skip_if_downloaded_already,
 ):
     """Download files from raw URLs (http/https/ftp), dispatched by scheme."""
-    urls = _read_url_arguments(url_list_path, single_url)
+    urls = _read_url_arguments(url_list_path, single_url, urls_csv)
     logging.info("Downloading %d URL(s)", len(urls))
     Files.download_files_by_url(
         urls=urls,

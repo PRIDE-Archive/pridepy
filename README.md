@@ -132,7 +132,8 @@ pridepy download-files-by-url \
 
 `urls.txt` is one fully-qualified URL per line. Schemes `http`, `https`, and
 `ftp` are dispatched to the matching downloader. Use `--url <single>` for a
-single URL.
+single URL, or `--urls a,b,c` for an inline comma-separated list (URLs are
+RFC 3986 compliant and never contain commas).
 
 ## CLI Command Overview
 

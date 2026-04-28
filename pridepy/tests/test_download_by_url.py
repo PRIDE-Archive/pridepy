@@ -140,3 +140,25 @@ class TestReadUrlArguments(TestCase):
             assert _read_url_arguments(
                 manifest, "https://a.com/y.raw"
             ) == ["https://a.com/x.raw", "https://a.com/y.raw"]
+
+    def test_csv_only(self):
+        assert _read_url_arguments(
+            None,
+            None,
+            "https://a.com/x.raw,ftp://b.com/y.raw,https://a.com/x.raw",
+        ) == ["https://a.com/x.raw", "ftp://b.com/y.raw"]
+
+    def test_manifest_csv_single_combined_dedupe(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            manifest = os.path.join(tmp_dir, "urls.txt")
+            with open(manifest, "w", encoding="utf-8") as handle:
+                handle.write("https://a.com/x.raw\n")
+            assert _read_url_arguments(
+                manifest,
+                "https://a.com/z.raw",
+                "ftp://b.com/y.raw,https://a.com/x.raw",
+            ) == [
+                "https://a.com/x.raw",
+                "ftp://b.com/y.raw",
+                "https://a.com/z.raw",
+            ]
