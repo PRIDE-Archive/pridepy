@@ -1092,6 +1092,180 @@ class Files:
             logging.error(f"Failed to download {len(failed_files)} file(s): {failed_summary}")
             raise RuntimeError(f"Failed to download {len(failed_files)} file(s): {failed_summary}")
 
+    def download_files_by_list(
+        self,
+        accession: str,
+        file_names: List[str],
+        output_folder: str,
+        skip_if_downloaded_already: bool,
+        protocol: str = "ftp",
+        aspera_maximum_bandwidth: str = "100M",
+        checksum_check: bool = False,
+    ) -> None:
+        """Download a subset of project files identified by a filename list.
+
+        Resolves each requested filename via the project metadata API and
+        delegates to :meth:`download_files` so the existing batch + protocol
+        fallback engine is reused.
+
+        :param accession: PRIDE project accession (public)
+        :param file_names: filenames to download
+        :param output_folder: directory to write downloaded files into
+        :param skip_if_downloaded_already: skip files already present locally
+        :param protocol: preferred protocol; falls back across others on failure
+        :param aspera_maximum_bandwidth: aspera ascp bandwidth cap
+        :param checksum_check: download project checksums and validate
+        :raises ValueError: if ``file_names`` is empty or none match the project
+        """
+        if not file_names:
+            raise ValueError("file_names must contain at least one filename")
+
+        all_files = self.stream_all_files_by_project(accession)
+        requested = set(file_names)
+        matched = [f for f in all_files if f.get("fileName") in requested]
+        missing = sorted(requested - {f.get("fileName") for f in matched})
+        if missing:
+            logging.warning("Files not found in project %s: %s", accession, missing)
+        if not matched:
+            raise ValueError(
+                f"No matching files in project {accession} for: {sorted(requested)}"
+            )
+
+        self.download_files(
+            matched,
+            accession,
+            output_folder,
+            skip_if_downloaded_already,
+            protocol,
+            aspera_maximum_bandwidth=aspera_maximum_bandwidth,
+            checksum_check=checksum_check,
+        )
+
+    @staticmethod
+    def download_files_by_url(
+        urls: List[str],
+        output_folder: str,
+        skip_if_downloaded_already: bool = False,
+    ) -> None:
+        """Download files from a list of raw URLs, dispatched by URL scheme.
+
+        Supported schemes: ``http``, ``https``, ``ftp``. Each URL is downloaded
+        independently; per-URL errors are logged, then aggregated and re-raised
+        as a single :class:`RuntimeError` so callers see a complete failure
+        summary.
+
+        :param urls: fully-qualified URLs (each contains its scheme)
+        :param output_folder: directory to write downloaded files into
+        :param skip_if_downloaded_already: skip URLs whose target file exists
+        :raises ValueError: if ``urls`` is empty
+        :raises RuntimeError: if one or more URLs failed
+        """
+        if not urls:
+            raise ValueError("urls must contain at least one URL")
+
+        os.makedirs(output_folder, exist_ok=True)
+
+        failures: List[Tuple[str, str]] = []
+        for url in urls:
+            try:
+                Files._download_single_url(url, output_folder, skip_if_downloaded_already)
+            except Exception as exc:  # pylint: disable=broad-except
+                logging.error("Failed to download %s: %s", url, exc)
+                failures.append((url, str(exc)))
+
+        if failures:
+            summary = ", ".join(f"{u} ({e})" for u, e in failures)
+            raise RuntimeError(
+                f"Failed to download {len(failures)} URL(s): {summary}"
+            )
+
+    @staticmethod
+    def _download_single_url(
+        url: str,
+        output_folder: str,
+        skip_if_exists: bool = False,
+    ) -> str:
+        """Download one URL, dispatched by scheme; return the local file path."""
+        parsed = urlparse(url)
+        if not (parsed.scheme or "").lower():
+            raise ValueError(f"URL missing scheme: {url}")
+
+        file_name = os.path.basename(parsed.path)
+        if not file_name:
+            raise ValueError(f"Cannot derive filename from URL: {url}")
+
+        target = os.path.join(output_folder, file_name)
+        if skip_if_exists and os.path.isfile(target) and os.path.getsize(target) > 0:
+            logging.info("Skipping %s: already downloaded", file_name)
+            return target
+
+        Files._dispatch_url_scheme(parsed, target)
+
+        ok, reason = Files.validate_download(target)
+        if not ok:
+            Files._remove_if_exists(target)
+            raise RuntimeError(f"Download invalid: {reason} ({target})")
+        return target
+
+    @staticmethod
+    def _dispatch_url_scheme(parsed, target: str) -> None:
+        """Route a parsed URL to its protocol-specific downloader."""
+        scheme = (parsed.scheme or "").lower()
+        if scheme in ("http", "https"):
+            Files._http_download_url(parsed.geturl(), target)
+        elif scheme == "ftp":
+            Files._ftp_download_url(parsed, target)
+        else:
+            raise ValueError(f"Unsupported URL scheme: {scheme}")
+
+    @staticmethod
+    def _http_download_url(url: str, target: str) -> None:
+        """Stream an http/https URL into ``target`` with a progress bar."""
+        session = Util.create_session_with_retries()
+        with session.get(url, stream=True, timeout=60) as response:
+            response.raise_for_status()
+            total = int(response.headers.get("Content-Length", 0))
+            with open(target, "wb") as out, tqdm(
+                total=total,
+                unit="B",
+                unit_scale=True,
+                desc=os.path.basename(target),
+            ) as pbar:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        out.write(chunk)
+                        pbar.update(len(chunk))
+
+    @staticmethod
+    def _ftp_download_url(parsed, target: str) -> None:
+        """Download a single file from an ftp:// URL with a progress bar."""
+        host = parsed.hostname
+        if not host:
+            raise ValueError(f"FTP URL missing host: {parsed.geturl()}")
+        port = parsed.port or 21
+        user = parsed.username or "anonymous"
+        pwd = parsed.password or "anonymous@"
+        remote_path = parsed.path
+        with FTP() as ftp:
+            ftp.connect(host, port, timeout=60)
+            ftp.login(user, pwd)
+            try:
+                total = ftp.size(remote_path) or 0
+            except ftplib.error_perm:
+                total = 0
+            with open(target, "wb") as out, tqdm(
+                total=total,
+                unit="B",
+                unit_scale=True,
+                desc=os.path.basename(target),
+            ) as pbar:
+
+                def _callback(data: bytes) -> None:
+                    out.write(data)
+                    pbar.update(len(data))
+
+                ftp.retrbinary(f"RETR {remote_path}", _callback)
+
     def download_all_category_files(
         self,
         accession: str,

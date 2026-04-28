@@ -427,5 +427,182 @@ def search_projects_by_keywords_and_filters(
     )
 
 
+def _parse_text_manifest(path, *, take_first_column=False):
+    """Read a text manifest, skipping blank lines and ``#``-prefixed comments.
+
+    When ``take_first_column`` is True, each line is split on tabs and only
+    the first cell is kept (used by the filename-list manifest).
+    """
+    if not path:
+        return []
+    items = []
+    with open(path, "r", encoding="utf-8") as handle:
+        for raw in handle:
+            line = raw.strip()
+            if not line or line.startswith("#"):
+                continue
+            if take_first_column:
+                line = line.split("\t")[0].strip()
+            items.append(line)
+    return items
+
+
+def _read_filename_arguments(file_list_path, files_csv):
+    """Build a deduplicated filename list from a manifest path and/or CSV string.
+
+    The manifest takes one filename per line (additional tab-separated columns
+    are ignored); blank lines and ``#``-prefixed comments are skipped.
+    """
+    if not file_list_path and not files_csv:
+        raise click.BadParameter("Provide either --file-list or --files")
+    names = list(_parse_text_manifest(file_list_path, take_first_column=True))
+    if files_csv:
+        names.extend(part.strip() for part in files_csv.split(",") if part.strip())
+    deduped = list(dict.fromkeys(names))
+    if not deduped:
+        raise click.BadParameter("No filenames found in the provided inputs")
+    return deduped
+
+
+def _read_url_arguments(url_list_path, single_url):
+    """Build a deduplicated URL list from a manifest path and/or single URL.
+
+    Manifest format: one URL per line; blank lines and ``#``-prefixed comments
+    are skipped.
+    """
+    if not url_list_path and not single_url:
+        raise click.BadParameter("Provide either --url-list or --url")
+    urls = list(_parse_text_manifest(url_list_path))
+    if single_url:
+        urls.append(single_url)
+    deduped = list(dict.fromkeys(urls))
+    if not deduped:
+        raise click.BadParameter("No URLs found in the provided inputs")
+    return deduped
+
+
+@main.command(
+    "download-files-by-list",
+    help="Download a subset of files from a PRIDE project, given a filename list",
+)
+@click.option("-a", "--accession", required=True, help="PRIDE project accession")
+@click.option(
+    "-p",
+    "--protocol",
+    default="ftp",
+    type=PROTOCOL_CHOICES,
+    help="Protocol to use for download: ftp, aspera, globus, s3. Default is ftp with fallback enabled.",
+)
+@click.option(
+    "-F",
+    "--file-list",
+    "file_list_path",
+    required=False,
+    type=click.Path(exists=True, dir_okay=False),
+    help="Path to a manifest file with one filename per line.",
+)
+@click.option(
+    "-f",
+    "--files",
+    "files_csv",
+    required=False,
+    help="Comma-separated filenames. Use this OR --file-list (or both).",
+)
+@click.option(
+    "-o",
+    "--output-folder",
+    required=True,
+    help="output folder to download files",
+)
+@click.option(
+    "--skip-if-downloaded-already",
+    is_flag=True,
+    default=False,
+    help="Skip the download if the file has already been downloaded.",
+)
+@click.option(
+    "--aspera-maximum-bandwidth",
+    required=False,
+    default="100M",
+    help="Aspera maximum bandwidth (e.g 50M, 100M, 200M).",
+)
+@click.option(
+    "--checksum-check",
+    is_flag=True,
+    default=False,
+    help="Download project checksums and validate downloaded files.",
+)
+def download_files_by_list(
+    accession,
+    protocol,
+    file_list_path,
+    files_csv,
+    output_folder,
+    skip_if_downloaded_already,
+    aspera_maximum_bandwidth,
+    checksum_check,
+):
+    """Download a named subset of files from a PRIDE project."""
+    file_names = _read_filename_arguments(file_list_path, files_csv)
+    files_obj = Files()
+    logging.info("accession: %s", accession)
+    logging.info("Downloading %d file(s) via %s", len(file_names), protocol)
+    files_obj.download_files_by_list(
+        accession=accession,
+        file_names=file_names,
+        output_folder=output_folder,
+        skip_if_downloaded_already=skip_if_downloaded_already,
+        protocol=protocol,
+        aspera_maximum_bandwidth=aspera_maximum_bandwidth,
+        checksum_check=checksum_check,
+    )
+
+
+@main.command(
+    "download-files-by-url",
+    help="Download files from a list of raw URLs (http/https/ftp)",
+)
+@click.option(
+    "-F",
+    "--url-list",
+    "url_list_path",
+    required=False,
+    type=click.Path(exists=True, dir_okay=False),
+    help="Path to a manifest file with one URL per line.",
+)
+@click.option(
+    "--url",
+    "single_url",
+    required=False,
+    help="Single URL. Use this OR --url-list (or both).",
+)
+@click.option(
+    "-o",
+    "--output-folder",
+    required=True,
+    help="output folder to download files into",
+)
+@click.option(
+    "--skip-if-downloaded-already",
+    is_flag=True,
+    default=False,
+    help="Skip URLs whose target file already exists locally.",
+)
+def download_files_by_url(
+    url_list_path,
+    single_url,
+    output_folder,
+    skip_if_downloaded_already,
+):
+    """Download files from raw URLs (http/https/ftp), dispatched by scheme."""
+    urls = _read_url_arguments(url_list_path, single_url)
+    logging.info("Downloading %d URL(s)", len(urls))
+    Files.download_files_by_url(
+        urls=urls,
+        output_folder=output_folder,
+        skip_if_downloaded_already=skip_if_downloaded_already,
+    )
+
+
 if __name__ == "__main__":
     main()

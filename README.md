@@ -106,6 +106,34 @@ pridepy download-px-raw-files \
   -o ./downloads/PXD039236
 ```
 
+### 6) Download a named subset of files (manifest)
+
+```bash
+pridepy download-files-by-list \
+  -a PXD001819 \
+  -F files.txt \
+  -o ./downloads/PXD001819 \
+  --checksum-check
+```
+
+`files.txt` is one filename per line (blank lines and `#` comments are
+ignored). Internally each filename is resolved against the project metadata
+API and downloaded via the same batch + protocol-fallback engine as
+`download-all-public-raw-files`. Use `-f a.raw,b.raw,c.raw` instead of
+`-F` for a small inline list.
+
+### 7) Download files from raw URLs
+
+```bash
+pridepy download-files-by-url \
+  -F urls.txt \
+  -o ./downloads/urls
+```
+
+`urls.txt` is one fully-qualified URL per line. Schemes `http`, `https`, and
+`ftp` are dispatched to the matching downloader. Use `--url <single>` for a
+single URL.
+
 ## CLI Command Overview
 
 ```bash
@@ -116,6 +144,8 @@ Main commands:
 - `download-all-public-raw-files`
 - `download-all-public-category-files`
 - `download-file-by-name`
+- `download-files-by-list`
+- `download-files-by-url`
 - `download-px-raw-files`
 - `list-private-files`
 - `stream-files-metadata`
