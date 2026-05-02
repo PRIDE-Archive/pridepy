@@ -484,21 +484,18 @@ def _read_filename_arguments(file_list_path, files_csv):
     return deduped
 
 
-def _read_url_arguments(url_list_path, single_url, urls_csv=None):
-    """Build a deduplicated URL list from a manifest path, a CSV string,
-    and/or a single URL.
+def _read_url_arguments(url_list_path, urls_csv=None):
+    """Build a deduplicated URL list from a manifest path and/or a CSV string.
 
     Manifest format: one URL per line; blank lines and ``#``-prefixed comments
     are skipped. URLs are RFC 3986 compliant and never contain bare commas, so
     splitting ``urls_csv`` on ``,`` is safe.
     """
-    if not url_list_path and not single_url and not urls_csv:
-        raise click.BadParameter("Provide --url-list, --urls, or --url")
+    if not url_list_path and not urls_csv:
+        raise click.BadParameter("Provide --url-list or --urls")
     urls = list(_parse_text_manifest(url_list_path))
     if urls_csv:
         urls.extend(part.strip() for part in urls_csv.split(",") if part.strip())
-    if single_url:
-        urls.append(single_url)
     deduped = list(dict.fromkeys(urls))
     if not deduped:
         raise click.BadParameter("No URLs found in the provided inputs")
@@ -556,6 +553,13 @@ def _read_url_arguments(url_list_path, single_url, urls_csv=None):
     default=False,
     help="Download project checksums and validate downloaded files.",
 )
+@click.option(
+    "-w",
+    "--parallel-files",
+    default=1,
+    type=int,
+    help="Number of files to download simultaneously for globus (max 3). Default is 1.",
+)
 def download_files_by_list(
     accession,
     protocol,
@@ -565,6 +569,7 @@ def download_files_by_list(
     skip_if_downloaded_already,
     aspera_maximum_bandwidth,
     checksum_check,
+    parallel_files,
 ):
     """Download a named subset of files from a PRIDE project."""
     file_names = _read_filename_arguments(file_list_path, files_csv)
@@ -579,6 +584,7 @@ def download_files_by_list(
         protocol=protocol,
         aspera_maximum_bandwidth=aspera_maximum_bandwidth,
         checksum_check=checksum_check,
+        parallel_files=parallel_files,
     )
 
 
@@ -595,16 +601,11 @@ def download_files_by_list(
     help="Path to a manifest file with one URL per line.",
 )
 @click.option(
+    "-u",
     "--urls",
     "urls_csv",
     required=False,
-    help="Comma-separated URLs. Use this OR --url-list / --url (or combine).",
-)
-@click.option(
-    "--url",
-    "single_url",
-    required=False,
-    help="Single URL. Use this OR --url-list (or both).",
+    help="One or more comma-separated URLs. Use this OR --url-list (or both).",
 )
 @click.option(
     "-o",
@@ -626,22 +627,39 @@ def download_files_by_list(
     help="Download strategy. ftp (default): single-connection per URL scheme. "
          "globus: parallel multi-Range downloads on http/https URLs.",
 )
+@click.option(
+    "--checksum-check",
+    is_flag=True,
+    default=False,
+    help="Validate downloaded files against PRIDE checksums. "
+         "Accessions are inferred from PRIDE URL paths (only PRIDE URLs supported).",
+)
+@click.option(
+    "-w",
+    "--parallel-files",
+    default=1,
+    type=int,
+    help="Number of files to download simultaneously for globus (max 3). Default is 1.",
+)
 def download_files_by_url(
     url_list_path,
     urls_csv,
-    single_url,
     output_folder,
     skip_if_downloaded_already,
     protocol,
+    checksum_check,
+    parallel_files,
 ):
     """Download files from raw URLs (http/https/ftp), dispatched by scheme."""
-    urls = _read_url_arguments(url_list_path, single_url, urls_csv)
+    urls = _read_url_arguments(url_list_path, urls_csv)
     logging.info("Downloading %d URL(s) [protocol=%s]", len(urls), protocol)
     Files.download_files_by_url(
         urls=urls,
         output_folder=output_folder,
         skip_if_downloaded_already=skip_if_downloaded_already,
         protocol=protocol,
+        parallel_files=parallel_files,
+        checksum_check=checksum_check,
     )
 
 

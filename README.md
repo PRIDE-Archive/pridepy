@@ -122,6 +122,12 @@ API and downloaded via the same batch + protocol-fallback engine as
 `download-all-public-raw-files`. Use `-f a.raw,b.raw,c.raw` instead of
 `-F` for a small inline list.
 
+Useful options:
+
+- `-p globus` — use the globus download strategy (HTTP Range + resume)
+- `-w 3` — download up to 3 files in parallel (globus only, max 3)
+- `--checksum-check` — validate files against PRIDE checksums after download
+
 ### 7) Download files from raw URLs
 
 ```bash
@@ -131,9 +137,16 @@ pridepy download-files-by-url \
 ```
 
 `urls.txt` is one fully-qualified URL per line. Schemes `http`, `https`, and
-`ftp` are dispatched to the matching downloader. Use `--url <single>` for a
-single URL, or `--urls a,b,c` for an inline comma-separated list (URLs are
-RFC 3986 compliant and never contain commas).
+`ftp` are dispatched to the matching downloader. Use `-u/--urls` for one or
+more comma-separated URLs (URLs are RFC 3986 compliant and never contain
+commas), e.g. `--urls https://a.com/x.raw,ftp://b.com/y.raw`.
+
+Useful options:
+
+- `-p globus` — use globus download strategy for http/https URLs (resume-capable)
+- `-w 3` — download up to 3 files in parallel (globus only, max 3)
+- `--checksum-check` — validate against PRIDE checksums (accession inferred
+  from PRIDE URL paths; only PRIDE archive URLs are supported)
 
 ## CLI Command Overview
 

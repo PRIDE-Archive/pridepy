@@ -110,12 +110,18 @@ class TestReadUrlArguments(TestCase):
 
     def test_no_input_raises(self):
         with pytest.raises(click.BadParameter):
-            _read_url_arguments(None, None)
+            _read_url_arguments(None)
 
     def test_single_url(self):
         assert _read_url_arguments(None, "https://example.org/a.raw") == [
             "https://example.org/a.raw"
         ]
+
+    def test_multiple_urls_csv(self):
+        assert _read_url_arguments(
+            None,
+            "https://a.com/x.raw,ftp://b.com/y.raw,https://a.com/x.raw",
+        ) == ["https://a.com/x.raw", "ftp://b.com/y.raw"]
 
     def test_manifest(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -132,33 +138,15 @@ class TestReadUrlArguments(TestCase):
                 "ftp://b.com/y.raw",
             ]
 
-    def test_manifest_plus_single_dedupe(self):
+    def test_manifest_plus_csv_dedupe(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             manifest = os.path.join(tmp_dir, "urls.txt")
             with open(manifest, "w", encoding="utf-8") as handle:
                 handle.write("https://a.com/x.raw\nhttps://a.com/y.raw\n")
             assert _read_url_arguments(
-                manifest, "https://a.com/y.raw"
-            ) == ["https://a.com/x.raw", "https://a.com/y.raw"]
-
-    def test_csv_only(self):
-        assert _read_url_arguments(
-            None,
-            None,
-            "https://a.com/x.raw,ftp://b.com/y.raw,https://a.com/x.raw",
-        ) == ["https://a.com/x.raw", "ftp://b.com/y.raw"]
-
-    def test_manifest_csv_single_combined_dedupe(self):
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            manifest = os.path.join(tmp_dir, "urls.txt")
-            with open(manifest, "w", encoding="utf-8") as handle:
-                handle.write("https://a.com/x.raw\n")
-            assert _read_url_arguments(
-                manifest,
-                "https://a.com/z.raw",
-                "ftp://b.com/y.raw,https://a.com/x.raw",
+                manifest, "https://a.com/y.raw,ftp://b.com/z.raw"
             ) == [
                 "https://a.com/x.raw",
-                "ftp://b.com/y.raw",
-                "https://a.com/z.raw",
+                "https://a.com/y.raw",
+                "ftp://b.com/z.raw",
             ]
