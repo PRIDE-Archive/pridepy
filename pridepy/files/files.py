@@ -513,8 +513,9 @@ class Files:
 
     @staticmethod
     def _parallel_download(url, file_path, position=0):
-        """Download a file using parallel Range requests, like browser parallel downloading.
-        Supports resume: if a partial file exists, continues from where it left off."""
+        """Download a file via a single-connection HTTP stream with optional resume.
+        If a partial file exists and the server supports Range requests, resumes
+        from where it left off; otherwise restarts from scratch."""
         session = Util.create_session_with_retries()
         try:
             head = session.head(url, timeout=(30, 30))
@@ -538,6 +539,9 @@ class Files:
         headers = {"Range": f"bytes={resume_size}-"} if resume_size > 0 else {}
         with session.get(url, headers=headers, stream=True, timeout=(30, 60)) as r:
             r.raise_for_status()
+            if resume_size > 0 and r.status_code != 206:
+                logging.warning("Server did not honor Range request (status %s), restarting download", r.status_code)
+                resume_size = 0
             with tqdm(total=total_size, unit="B", unit_scale=True, desc=file_path,
                       initial=resume_size, position=position, leave=True) as pbar:
                 mode = "ab" if resume_size > 0 else "wb"
@@ -589,7 +593,7 @@ class Files:
             checksum_map = {}
 
         if not (os.path.isdir(output_folder)):
-            os.mkdir(output_folder, exist_ok=True)
+            os.makedirs(output_folder, exist_ok=True)
 
         # --- Phase 0: pre-filter files that need downloading -----------------
         files_to_download: List[Dict] = []
@@ -1237,7 +1241,7 @@ class Files:
         :param output_folder: directory to write downloaded files into
         :param skip_if_downloaded_already: skip URLs whose target file exists
         :param protocol: ``ftp`` (default) for single-connection per URL scheme;
-            ``globus`` for parallel multi-Range downloads on http/https URLs
+            ``globus`` for resume-capable http/https downloads (single-connection stream)
             (no effect on ftp:// URLs which always use single-connection FTP)
         :param checksum_check: validate downloads against PRIDE checksum API;
             accessions are inferred from URL paths (only PRIDE URLs supported)

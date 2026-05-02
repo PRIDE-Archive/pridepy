@@ -54,8 +54,8 @@ def main():
     "-w",
     "--parallel-files",
     default=1,
-    type=int,
-    help="Number of files to download simultaneously for globus (max 3). Default is 1.",
+    type=click.IntRange(1, 3),
+    help="Number of files to download simultaneously for globus (1-3). Default is 1.",
 )
 def download_all_public_raw_files(
     accession,
@@ -145,8 +145,8 @@ def download_all_public_raw_files(
     "-w",
     "--parallel-files",
     default=1,
-    type=int,
-    help="Number of files to download simultaneously for globus (max 3). Default is 1.",
+    type=click.IntRange(1, 3),
+    help="Number of files to download simultaneously for globus (1-3). Default is 1.",
 )
 def download_all_public_category_files(
     accession: str,
@@ -488,8 +488,8 @@ def _read_url_arguments(url_list_path, urls_csv=None):
     """Build a deduplicated URL list from a manifest path and/or a CSV string.
 
     Manifest format: one URL per line; blank lines and ``#``-prefixed comments
-    are skipped. URLs are RFC 3986 compliant and never contain bare commas, so
-    splitting ``urls_csv`` on ``,`` is safe.
+    are skipped. ``urls_csv`` is split on ``,``; URLs containing literal
+    commas should be provided via a manifest file instead.
     """
     if not url_list_path and not urls_csv:
         raise click.BadParameter("Provide --url-list or --urls")
@@ -557,8 +557,8 @@ def _read_url_arguments(url_list_path, urls_csv=None):
     "-w",
     "--parallel-files",
     default=1,
-    type=int,
-    help="Number of files to download simultaneously for globus (max 3). Default is 1.",
+    type=click.IntRange(1, 3),
+    help="Number of files to download simultaneously for globus (1-3). Default is 1.",
 )
 def download_files_by_list(
     accession,
@@ -625,7 +625,7 @@ def download_files_by_list(
     default="ftp",
     type=click.Choice(["ftp", "globus"], case_sensitive=False),
     help="Download strategy. ftp (default): single-connection per URL scheme. "
-         "globus: parallel multi-Range downloads on http/https URLs.",
+         "globus: resume-capable http/https downloads (single-connection stream).",
 )
 @click.option(
     "--checksum-check",
@@ -638,8 +638,8 @@ def download_files_by_list(
     "-w",
     "--parallel-files",
     default=1,
-    type=int,
-    help="Number of files to download simultaneously for globus (max 3). Default is 1.",
+    type=click.IntRange(1, 3),
+    help="Number of files to download simultaneously for globus (1-3). Default is 1.",
 )
 def download_files_by_url(
     url_list_path,

@@ -138,8 +138,9 @@ pridepy download-files-by-url \
 
 `urls.txt` is one fully-qualified URL per line. Schemes `http`, `https`, and
 `ftp` are dispatched to the matching downloader. Use `-u/--urls` for one or
-more comma-separated URLs (URLs are RFC 3986 compliant and never contain
-commas), e.g. `--urls https://a.com/x.raw,ftp://b.com/y.raw`.
+more comma-separated URLs, e.g. `--urls https://a.com/x.raw,ftp://b.com/y.raw`.
+Note: URLs containing literal commas are not supported with `--urls`; use a
+manifest file (`-F`) instead.
 
 Useful options:
 
