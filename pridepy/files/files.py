@@ -1253,7 +1253,7 @@ class Files:
 
         os.makedirs(output_folder, exist_ok=True)
 
-        parallel_files = min(parallel_files, 3)
+        parallel_files = min(parallel_files, 3, len(urls))
         failures: List[Tuple[str, str]] = []
         if parallel_files < 2:
             for url in urls:

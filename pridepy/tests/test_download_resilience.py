@@ -215,6 +215,45 @@ class TestDownloadResilience(TestCase):
             assert batch_mock.call_args.args[2] == "ftp"
             fallback_mock.assert_not_called()
 
+    def test_globus_parallel_workers_capped_to_file_count(self):
+        """When parallel_files exceeds the number of files to download,
+        the worker pool must not allocate more threads than files."""
+        file_records = [
+            {
+                "fileName": "only.raw",
+                "publicFileLocations": [
+                    {"name": "FTP Protocol",
+                     "value": "ftp://ftp.pride.ebi.ac.uk/pride/data/archive/2024/01/PXD000001/only.raw"}
+                ],
+            }
+        ]
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            with patch.object(Files, "_globus_download_one") as mock_one:
+                Files.download_files_from_globus(
+                    file_list_json=file_records,
+                    output_folder=tmp_dir,
+                    skip_if_downloaded_already=False,
+                    parallel_files=3,
+                )
+                # With 1 file and parallel_files=3, should fall through to
+                # the serial path (parallel_files capped to 1 < 2).
+                mock_one.assert_called_once()
+
+    def test_url_parallel_workers_capped_to_url_count(self):
+        """download_files_by_url must cap workers to len(urls)."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            with patch.object(Files, "_download_single_url") as mock_single:
+                Files.download_files_by_url(
+                    urls=["https://example.org/a.raw"],
+                    output_folder=tmp_dir,
+                    skip_if_downloaded_already=False,
+                    protocol="globus",
+                    parallel_files=3,
+                )
+                # 1 URL with parallel_files=3 → capped to 1, serial path.
+                mock_single.assert_called_once()
+
     def test_download_files_raises_when_any_file_fails(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             file_list = [{"fileName": "missing.raw"}]
