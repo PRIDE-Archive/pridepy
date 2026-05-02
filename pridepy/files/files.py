@@ -622,7 +622,7 @@ class Files:
         )
 
         # --- Phase 1: download (skip check already done, pass False) ---------
-        parallel_files = min(parallel_files, 3)
+        parallel_files = min(parallel_files, 3, len(files_to_download))
         if parallel_files < 2:
             for file in files_to_download:
                 try:
@@ -1253,7 +1253,7 @@ class Files:
 
         os.makedirs(output_folder, exist_ok=True)
 
-        parallel_files = min(parallel_files, 3)
+        parallel_files = min(parallel_files, 3, len(urls))
         failures: List[Tuple[str, str]] = []
         if parallel_files < 2:
             for url in urls:
