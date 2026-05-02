@@ -44,28 +44,21 @@ class TestDownloadResilience(TestCase):
 
         assert download_url == "https://ftp.pride.ebi.ac.uk/path/file.raw"
 
-    def test_parallel_download_falls_back_when_range_not_honored(self):
+    def test_parallel_download_streams_full_file(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             output_file = os.path.join(tmp_dir, "file.raw")
             session = Mock()
             head = Mock()
-            head.headers = {"content-length": "1", "accept-ranges": "bytes"}
+            head.headers = {"content-length": "3", "accept-ranges": "bytes"}
             head.raise_for_status.return_value = None
             session.head.return_value = head
 
-            ranged_response = Mock()
-            ranged_response.status_code = 200
-            ranged_response.headers = {}
-            ranged_response.raise_for_status.return_value = None
-            ranged_response.__enter__ = Mock(return_value=ranged_response)
-            ranged_response.__exit__ = Mock(return_value=None)
-
-            fallback_response = Mock()
-            fallback_response.raise_for_status.return_value = None
-            fallback_response.iter_content.return_value = [b"abc"]
-            fallback_response.__enter__ = Mock(return_value=fallback_response)
-            fallback_response.__exit__ = Mock(return_value=None)
-            session.get.side_effect = [ranged_response, fallback_response]
+            stream_response = Mock()
+            stream_response.raise_for_status.return_value = None
+            stream_response.iter_content.return_value = [b"abc"]
+            stream_response.__enter__ = Mock(return_value=stream_response)
+            stream_response.__exit__ = Mock(return_value=None)
+            session.get.return_value = stream_response
 
             with patch(
                 "pridepy.files.files.Util.create_session_with_retries",
@@ -74,7 +67,6 @@ class TestDownloadResilience(TestCase):
                 Files._parallel_download(
                     "https://example.org/file.raw",
                     output_file,
-                    num_connections=2,
                 )
 
             with open(output_file, "rb") as handle:
@@ -100,7 +92,6 @@ class TestDownloadResilience(TestCase):
                 Files._parallel_download(
                     "https://example.org/file.raw",
                     output_file,
-                    num_connections=2,
                 )
 
             with open(output_file, "rb") as handle:
@@ -129,7 +120,6 @@ class TestDownloadResilience(TestCase):
                 Files._parallel_download(
                     "https://example.org/file.raw",
                     output_file,
-                    num_connections=2,
                 )
 
             with open(output_file, "rb") as handle:
@@ -169,7 +159,7 @@ class TestDownloadResilience(TestCase):
             attempted_protocols = []
 
             def fake_batch(file_list, output_folder, protocol, skip_if_downloaded_already,
-                           aspera_maximum_bandwidth):
+                           aspera_maximum_bandwidth, **kwargs):
                 attempted_protocols.append(protocol)
                 if protocol == "aspera":
                     with open(local_path, "wb") as handle:
@@ -207,7 +197,7 @@ class TestDownloadResilience(TestCase):
             local_path = os.path.join(tmp_dir, "happy.raw")
 
             def fake_batch(file_list, output_folder, protocol, skip_if_downloaded_already,
-                           aspera_maximum_bandwidth):
+                           aspera_maximum_bandwidth, **kwargs):
                 with open(local_path, "wb") as handle:
                     handle.write(b"data")
 

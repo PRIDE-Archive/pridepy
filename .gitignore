@@ -22,3 +22,7 @@ venv
 #Ignore cursor AI rules
 .cursor/rules/codacy.mdc
 .DS_Store
+
+# Docker
+Dockerfile
+.dockerignore
