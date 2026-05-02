@@ -46,9 +46,16 @@ def main():
 @click.option(
     "--checksum-check",
     required=False,
-    help="Download checksum file for project",
+    help="Download checksum file for project and validate downloads",
     is_flag=True,
     default=False,
+)
+@click.option(
+    "-w",
+    "--parallel-files",
+    default=1,
+    type=int,
+    help="Number of files to download simultaneously for globus (max 3). Default is 1.",
 )
 def download_all_public_raw_files(
     accession,
@@ -57,6 +64,7 @@ def download_all_public_raw_files(
     skip_if_downloaded_already,
     aspera_maximum_bandwidth: str = "50M",
     checksum_check: bool = False,
+    parallel_files: int = 1,
 ):
     """
     Command to download all public raw files from a specified PRIDE project.
@@ -68,6 +76,7 @@ def download_all_public_raw_files(
         skip_if_downloaded_already (bool): Skip download if files already exist. Default is False.
         aspera_maximum_bandwidth (str): Maximum bandwidth for Aspera protocol. Default is 100M.
         checksum_check (bool): Flag to download checksum file for the project. Default is False.
+        parallel_files (int): Number of files to download simultaneously. Default is 1.
     """
 
     raw_files = Files()
@@ -84,6 +93,7 @@ def download_all_public_raw_files(
         protocol,
         aspera_maximum_bandwidth=aspera_maximum_bandwidth,
         checksum_check=checksum_check,
+        parallel_files=parallel_files,
     )
 
 
@@ -120,7 +130,7 @@ def download_all_public_raw_files(
 @click.option(
     "--checksum-check",
     required=False,
-    help="Download checksum file for project",
+    help="Download checksum file for project and validate downloads",
     is_flag=True,
     default=False,
 )
@@ -131,6 +141,13 @@ def download_all_public_raw_files(
     help="Comma-separated categories of files to download (e.g. RAW or RAW,SEARCH). "
     "Valid values: RAW, PEAK, SEARCH, RESULT, SPECTRUM_LIBRARY, OTHER, FASTA",
 )
+@click.option(
+    "-w",
+    "--parallel-files",
+    default=1,
+    type=int,
+    help="Number of files to download simultaneously for globus (max 3). Default is 1.",
+)
 def download_all_public_category_files(
     accession: str,
     protocol: str,
@@ -139,6 +156,7 @@ def download_all_public_category_files(
     aspera_maximum_bandwidth: str = "50M",
     checksum_check: bool = False,
     category: str = "RAW",
+    parallel_files: int = 1,
 ):
     """
     Command to download all public files of a specified category from a given PRIDE public project.
@@ -151,6 +169,7 @@ def download_all_public_category_files(
         aspera_maximum_bandwidth (str): Maximum bandwidth for Aspera transfers.
         checksum_check (bool): If True, downloads the checksum file for the project.
         category (str): Comma-separated categories of files to download (e.g. RAW or RAW,SEARCH).
+        parallel_files (int): Number of files to download simultaneously. Default is 1.
     """
 
     valid_categories = {"RAW", "PEAK", "SEARCH", "RESULT", "SPECTRUM_LIBRARY", "OTHER", "FASTA"}
@@ -177,6 +196,7 @@ def download_all_public_category_files(
         aspera_maximum_bandwidth=aspera_maximum_bandwidth,
         checksum_check=checksum_check,
         categories=categories,
+        parallel_files=parallel_files,
     )
 
 
@@ -216,7 +236,7 @@ def download_all_public_category_files(
 @click.option(
     "--checksum-check",
     required=False,
-    help="Download checksum file for project",
+    help="Download checksum file for project and validate downloads",
     is_flag=True,
     default=False,
 )
@@ -598,20 +618,30 @@ def download_files_by_list(
     default=False,
     help="Skip URLs whose target file already exists locally.",
 )
+@click.option(
+    "-p",
+    "--protocol",
+    default="ftp",
+    type=click.Choice(["ftp", "globus"], case_sensitive=False),
+    help="Download strategy. ftp (default): single-connection per URL scheme. "
+         "globus: parallel multi-Range downloads on http/https URLs.",
+)
 def download_files_by_url(
     url_list_path,
     urls_csv,
     single_url,
     output_folder,
     skip_if_downloaded_already,
+    protocol,
 ):
     """Download files from raw URLs (http/https/ftp), dispatched by scheme."""
     urls = _read_url_arguments(url_list_path, single_url, urls_csv)
-    logging.info("Downloading %d URL(s)", len(urls))
+    logging.info("Downloading %d URL(s) [protocol=%s]", len(urls), protocol)
     Files.download_files_by_url(
         urls=urls,
         output_folder=output_folder,
         skip_if_downloaded_already=skip_if_downloaded_already,
+        protocol=protocol,
     )
 
 

@@ -74,7 +74,6 @@ class TestDownloadResilience(TestCase):
                 Files._parallel_download(
                     "https://example.org/file.raw",
                     output_file,
-                    num_connections=2,
                 )
 
             with open(output_file, "rb") as handle:
@@ -100,7 +99,6 @@ class TestDownloadResilience(TestCase):
                 Files._parallel_download(
                     "https://example.org/file.raw",
                     output_file,
-                    num_connections=2,
                 )
 
             with open(output_file, "rb") as handle:
@@ -129,7 +127,6 @@ class TestDownloadResilience(TestCase):
                 Files._parallel_download(
                     "https://example.org/file.raw",
                     output_file,
-                    num_connections=2,
                 )
 
             with open(output_file, "rb") as handle:
