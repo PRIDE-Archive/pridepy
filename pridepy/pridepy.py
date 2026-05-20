@@ -9,6 +9,7 @@ PROTOCOL_CHOICES = click.Choice(["ftp", "aspera", "globus", "s3"], case_sensitiv
 
 
 @click.group()
+@click.version_option(package_name="pridepy")
 def main():
     pass
 
