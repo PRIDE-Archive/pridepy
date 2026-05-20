@@ -269,7 +269,7 @@ class Files:
         protocol,
         aspera_maximum_bandwidth: str,
         checksum_check: bool = False,
-        parallel_files: int = 1,
+        download_threads: int = 1,
     ):
         """
         This method will download all the raw files from PRIDE PROJECT
@@ -295,7 +295,7 @@ class Files:
             protocol,
             aspera_maximum_bandwidth=aspera_maximum_bandwidth,
             checksum_check=checksum_check,
-            parallel_files=parallel_files,
+            download_threads=download_threads,
         )
 
     @staticmethod
@@ -483,29 +483,97 @@ class Files:
                 logging.error(f"Aspera download failed for {new_file_path}: {str(e)}")
 
     @staticmethod
+    def _multipart_download(url, file_path, threads=8, position=0, min_size_bytes=10 * 1024 * 1024):
+        """Download a single file via parallel HTTP Range requests.
+
+        Falls back to :meth:`_parallel_download` if the server does not advertise
+        ``Accept-Ranges: bytes``, the total size is unknown, or the file is
+        smaller than ``min_size_bytes`` (default 10 MB).
+
+        Threads are clamped to ``[1, 32]``. Resume is best-effort: if an existing
+        file matches the expected total size, it is treated as complete.
+        """
+        threads = max(1, min(32, int(threads or 1)))
+        session = Util.create_session_with_retries()
+        try:
+            head = session.head(url, timeout=(30, 30), allow_redirects=True)
+            head.raise_for_status()
+            total_size = int(head.headers.get("content-length", 0))
+            accept_ranges = head.headers.get("accept-ranges", "none").strip().lower()
+        except (requests.RequestException, ValueError) as exc:
+            logging.info(f"HEAD failed for multipart, falling back to single stream: {exc}")
+            Files._parallel_download(url, file_path, position=position)
+            return
+
+        if (
+            threads < 2
+            or accept_ranges != "bytes"
+            or total_size <= 0
+            or total_size < min_size_bytes
+        ):
+            Files._parallel_download(url, file_path, position=position)
+            return
+
+        if os.path.exists(file_path) and os.path.getsize(file_path) == total_size:
+            logging.info(f"File already complete: {file_path}")
+            return
+
+        with open(file_path, "wb") as pre:
+            pre.truncate(total_size)
+
+        part_size = total_size // threads
+        ranges = []
+        for i in range(threads):
+            start = i * part_size
+            end = total_size - 1 if i == threads - 1 else (start + part_size - 1)
+            ranges.append((start, end))
+
+        with tqdm(
+            total=total_size, unit="B", unit_scale=True, desc=file_path,
+            position=position, leave=True,
+        ) as pbar:
+            with ThreadPoolExecutor(max_workers=threads) as executor:
+                futures = [
+                    executor.submit(Files._download_range, url, file_path, start, end, pbar)
+                    for start, end in ranges
+                ]
+                for future in as_completed(futures):
+                    future.result()
+
+    @staticmethod
     def _download_range(url, file_path, start, end, pbar, max_retries=3):
-        """Download a byte range directly into the target file using seek."""
+        """Download a byte range directly into the target file using seek.
+
+        On transient failures (e.g. ``IncompleteRead``) the segment resumes
+        from the last successfully written byte using a fresh Range request
+        for the remaining bytes, instead of restarting the whole segment.
+        ``pbar`` only accumulates bytes that were actually written, so the
+        progress bar stays in sync with on-disk state across retries.
+        """
+        cursor = start
         for attempt in range(1, max_retries + 1):
             try:
                 session = Util.create_session_with_retries()
-                headers = {"Range": f"bytes={start}-{end}"}
+                headers = {"Range": f"bytes={cursor}-{end}"}
                 with session.get(url, headers=headers, stream=True, timeout=(15, 15)) as r:
                     r.raise_for_status()
                     if r.status_code != 206:
                         raise RuntimeError(f"Server did not honor Range request: {r.status_code}")
                     content_range = r.headers.get("Content-Range", "")
-                    if not content_range.lower().startswith(f"bytes {start}-{end}/"):
+                    if not content_range.lower().startswith(f"bytes {cursor}-{end}/"):
                         raise RuntimeError(f"Unexpected Content-Range header: {content_range}")
                     with open(file_path, "r+b") as f:
-                        f.seek(start)
+                        f.seek(cursor)
                         for chunk in r.iter_content(chunk_size=8 * 1024 * 1024):
                             if chunk:
                                 f.write(chunk)
+                                cursor += len(chunk)
                                 pbar.update(len(chunk))
                 return
             except (requests.RequestException, RuntimeError, OSError) as exc:
                 logging.warning(
-                    f"Range {start}-{end} attempt {attempt}/{max_retries} failed: {exc}"
+                    f"Range {start}-{end} attempt {attempt}/{max_retries} failed "
+                    f"(resumed at {cursor}/{end + 1}): {exc}"
                 )
                 if attempt >= max_retries:
                     raise
@@ -552,8 +620,16 @@ class Files:
                             pbar.update(len(chunk))
 
     @staticmethod
-    def _globus_download_one(file, output_folder, skip_if_downloaded_already, max_retries=6, position=0):
-        """Download a single file via globus; used as a worker target."""
+    def _globus_download_one(
+        file, output_folder, skip_if_downloaded_already,
+        max_retries=6, position=0, download_threads: int = 1,
+    ):
+        """Download a single file via globus; used as a worker target.
+
+        When ``download_threads > 1`` the file is fetched via parallel HTTP
+        Range requests (:meth:`_multipart_download`); otherwise a single
+        resume-capable stream is used (:meth:`_parallel_download`).
+        """
         download_url = Files._get_download_url(file, "globus")
         new_file_path = Files.get_output_file_name(download_url, file, output_folder)
 
@@ -563,7 +639,13 @@ class Files:
 
         for attempt in range(1, max_retries + 1):
             try:
-                Files._parallel_download(download_url, new_file_path, position=position)
+                if download_threads and download_threads > 1:
+                    Files._multipart_download(
+                        download_url, new_file_path,
+                        threads=download_threads, position=position,
+                    )
+                else:
+                    Files._parallel_download(download_url, new_file_path, position=position)
                 return
             except Exception as e:
                 logging.warning(f"Attempt {attempt}/{max_retries} failed for {file.get('fileName', '?')}: {e}")
@@ -573,20 +655,28 @@ class Files:
     @staticmethod
     def download_files_from_globus(
         file_list_json: List[Dict], output_folder, skip_if_downloaded_already,
-        parallel_files: int = 1,
+        download_threads: int = 1,
         checksum_map: Optional[Dict[str, str]] = None,
     ):
         """
-        Download files using globus transfer url with progress bar for each file.
-        When skip_if_downloaded_already is True, files are pre-filtered so that
-        only missing or incomplete files are submitted to the worker pool,
-        ensuring the -w parallel_files parameter is fully utilised.
-        When checksum_map is provided, existing files are validated against
-        their expected checksum; corrupted files are re-downloaded.
+        Download files via the globus (https) transfer URL, one file at a time.
+
+        Each file is fetched with :meth:`_globus_download_one`. When
+        ``download_threads > 1`` a single file is split into parallel HTTP
+        Range segments for higher throughput; otherwise a single
+        resume-capable connection is used. Multiple files are downloaded
+        sequentially so the user-visible progress bar stays clean and the
+        server is not swamped with concurrent connections.
+
+        When ``skip_if_downloaded_already`` is True, files are pre-filtered
+        so that only missing or incomplete files are queued.
+        When ``checksum_map`` is provided, existing files are validated
+        against their expected MD5; corrupted files are re-downloaded.
+
         :param file_list_json: file list in json format
         :param output_folder: folder to download the files
-        :param skip_if_downloaded_already: Boolean value to skip the download if the file has already been downloaded.
-        :param parallel_files: number of files to download simultaneously
+        :param skip_if_downloaded_already: skip files that already exist locally
+        :param download_threads: parallel HTTP Range threads per file (1-32)
         :param checksum_map: mapping of file name to expected MD5 checksum
         """
         if checksum_map is None:
@@ -618,39 +708,23 @@ class Files:
 
         logging.info(
             f"{len(file_list_json) - len(files_to_download)} file(s) skipped, "
-            f"{len(files_to_download)} file(s) to download"
+            f"{len(files_to_download)} file(s) to download "
+            f"(download_threads={download_threads})"
         )
 
-        # --- Phase 1: download (skip check already done, pass False) ---------
-        parallel_files = min(parallel_files, 3, len(files_to_download))
-        if parallel_files < 2:
-            for file in files_to_download:
-                try:
-                    Files._globus_download_one(
-                        file, output_folder, False
-                    )
-                    new_file_path = Files.get_output_file_name(
-                        Files._get_download_url(file, "globus"), file, output_folder
-                    )
-                    logging.info(f"Successfully downloaded {new_file_path}")
-                except Exception as e:
-                    logging.error(f"Download from Globus failed: {str(e)}")
-        else:
-            logging.info(f"Downloading {len(files_to_download)} file(s) with {parallel_files} parallel workers")
-            with ThreadPoolExecutor(max_workers=parallel_files) as executor:
-                futures = {
-                    executor.submit(
-                        Files._globus_download_one,
-                        file, output_folder, False,
-                        position=idx,
-                    ): file
-                    for idx, file in enumerate(files_to_download)
-                }
-                for future in as_completed(futures):
-                    try:
-                        future.result()
-                    except Exception as e:
-                        logging.error(f"Download from Globus failed: {str(e)}")
+        # --- Phase 1: download files sequentially ---------------------------
+        for file in files_to_download:
+            try:
+                Files._globus_download_one(
+                    file, output_folder, False,
+                    download_threads=download_threads,
+                )
+                new_file_path = Files.get_output_file_name(
+                    Files._get_download_url(file, "globus"), file, output_folder
+                )
+                logging.info(f"Successfully downloaded {new_file_path}")
+            except Exception as e:
+                logging.error(f"Download from Globus failed: {str(e)}")
 
     @staticmethod
     def download_files_from_s3(
@@ -959,7 +1033,7 @@ class Files:
         protocol: str,
         skip_if_downloaded_already: bool,
         aspera_maximum_bandwidth: str,
-        parallel_files: int = 1,
+        download_threads: int = 1,
         checksum_map: Optional[Dict[str, str]] = None,
     ) -> None:
         """
@@ -988,7 +1062,7 @@ class Files:
                 file_list,
                 output_folder,
                 skip_if_downloaded_already=skip_if_downloaded_already,
-                parallel_files=parallel_files,
+                download_threads=download_threads,
                 checksum_map=checksum_map or {},
             )
             return
@@ -1009,7 +1083,7 @@ class Files:
         expected_checksum: Optional[str],
         aspera_maximum_bandwidth: str,
         max_protocol_retries: int = 2,
-        parallel_files: int = 1,
+        download_threads: int = 1,
     ) -> bool:
         """
         Download one file by trying each protocol in sequence, validating
@@ -1032,7 +1106,7 @@ class Files:
                         protocol,
                         skip_if_downloaded_already=False,
                         aspera_maximum_bandwidth=aspera_maximum_bandwidth,
-                        parallel_files=parallel_files,
+                        download_threads=download_threads,
                     )
                 except Exception as error:
                     logging.error(
@@ -1067,7 +1141,7 @@ class Files:
         protocol: str = "ftp",
         aspera_maximum_bandwidth: str = "100M",  # Aspera maximum bandwidth
         checksum_check=False,
-        parallel_files: int = 1,
+        download_threads: int = 1,
     ):
         """
         Download files using either FTP or Aspera transfer protocol.
@@ -1112,7 +1186,7 @@ class Files:
                 primary_protocol,
                 skip_if_downloaded_already=skip_if_downloaded_already,
                 aspera_maximum_bandwidth=aspera_maximum_bandwidth,
-                parallel_files=parallel_files,
+                download_threads=download_threads,
                 checksum_map=checksum_map,
             )
         except Exception as exc:
@@ -1148,7 +1222,7 @@ class Files:
                 protocol_sequence=fallback_sequence,
                 expected_checksum=expected_checksum,
                 aspera_maximum_bandwidth=aspera_maximum_bandwidth,
-                parallel_files=parallel_files,
+                download_threads=download_threads,
             )
             if not success:
                 failed_files.append(file_record.get("fileName", "<unknown>"))
@@ -1167,7 +1241,7 @@ class Files:
         protocol: str = "ftp",
         aspera_maximum_bandwidth: str = "100M",
         checksum_check: bool = False,
-        parallel_files: int = 1,
+        download_threads: int = 1,
     ) -> None:
         """Download a subset of project files identified by a filename list.
 
@@ -1182,7 +1256,7 @@ class Files:
         :param protocol: preferred protocol; falls back across others on failure
         :param aspera_maximum_bandwidth: aspera ascp bandwidth cap
         :param checksum_check: download project checksums and validate
-        :param parallel_files: number of files to download simultaneously for globus
+        :param download_threads: parallel HTTP Range threads per file for globus
         :raises ValueError: if ``file_names`` is empty or none match the project
         """
         if not file_names:
@@ -1207,7 +1281,7 @@ class Files:
             protocol,
             aspera_maximum_bandwidth=aspera_maximum_bandwidth,
             checksum_check=checksum_check,
-            parallel_files=parallel_files,
+            download_threads=download_threads,
         )
 
     @staticmethod
@@ -1227,24 +1301,28 @@ class Files:
         output_folder: str,
         skip_if_downloaded_already: bool = False,
         protocol: str = "ftp",
-        parallel_files: int = 1,
         checksum_check: bool = False,
+        download_threads: int = 1,
     ) -> None:
         """Download files from a list of raw URLs, dispatched by URL scheme.
 
         Supported schemes: ``http``, ``https``, ``ftp``. Each URL is downloaded
-        independently; per-URL errors are logged, then aggregated and re-raised
+        sequentially; per-URL errors are logged, then aggregated and re-raised
         as a single :class:`RuntimeError` so callers see a complete failure
-        summary.
+        summary. Per-file speed is controlled via ``download_threads``
+        (HTTP Range parallelism, ``protocol='globus'`` only).
 
         :param urls: fully-qualified URLs (each contains its scheme)
         :param output_folder: directory to write downloaded files into
         :param skip_if_downloaded_already: skip URLs whose target file exists
         :param protocol: ``ftp`` (default) for single-connection per URL scheme;
-            ``globus`` for resume-capable http/https downloads (single-connection stream)
-            (no effect on ftp:// URLs which always use single-connection FTP)
+            ``globus`` for resume-capable http/https downloads (no effect on
+            ftp:// URLs which always use single-connection FTP)
         :param checksum_check: validate downloads against PRIDE checksum API;
             accessions are inferred from URL paths (only PRIDE URLs supported)
+        :param download_threads: parallel HTTP Range threads per file for
+            globus (1-32); falls back to single connection if Range is not
+            supported or the file is below 10 MB
         :raises ValueError: if ``urls`` is empty
         :raises RuntimeError: if one or more URLs failed
         """
@@ -1253,38 +1331,16 @@ class Files:
 
         os.makedirs(output_folder, exist_ok=True)
 
-        parallel_files = min(parallel_files, 3, len(urls))
         failures: List[Tuple[str, str]] = []
-        if parallel_files < 2:
-            for url in urls:
-                try:
-                    Files._download_single_url(
-                        url, output_folder, skip_if_downloaded_already, protocol,
-                    )
-                except Exception as exc:  # pylint: disable=broad-except
-                    logging.error("Failed to download %s: %s", url, exc)
-                    failures.append((url, str(exc)))
-        else:
-            logging.info(
-                "Downloading %d URL(s) with %d parallel workers",
-                len(urls), parallel_files,
-            )
-            with ThreadPoolExecutor(max_workers=parallel_files) as executor:
-                futures = {
-                    executor.submit(
-                        Files._download_single_url,
-                        url, output_folder, skip_if_downloaded_already, protocol,
-                        position=idx,
-                    ): url
-                    for idx, url in enumerate(urls)
-                }
-                for future in as_completed(futures):
-                    url = futures[future]
-                    try:
-                        future.result()
-                    except Exception as exc:  # pylint: disable=broad-except
-                        logging.error("Failed to download %s: %s", url, exc)
-                        failures.append((url, str(exc)))
+        for url in urls:
+            try:
+                Files._download_single_url(
+                    url, output_folder, skip_if_downloaded_already, protocol,
+                    download_threads=download_threads,
+                )
+            except Exception as exc:  # pylint: disable=broad-except
+                logging.error("Failed to download %s: %s", url, exc)
+                failures.append((url, str(exc)))
 
         if failures:
             summary = ", ".join(f"{u} ({e})" for u, e in failures)
@@ -1348,6 +1404,7 @@ class Files:
         skip_if_exists: bool = False,
         protocol: str = "ftp",
         position: int = 0,
+        download_threads: int = 1,
     ) -> str:
         """Download one URL, dispatched by scheme; return the local file path."""
         parsed = urlparse(url)
@@ -1363,7 +1420,10 @@ class Files:
             logging.info("Skipping %s: already downloaded", file_name)
             return target
 
-        Files._dispatch_url_scheme(parsed, target, protocol, position=position)
+        Files._dispatch_url_scheme(
+            parsed, target, protocol, position=position,
+            download_threads=download_threads,
+        )
 
         ok, reason = Files.validate_download(target)
         if not ok:
@@ -1372,17 +1432,38 @@ class Files:
         return target
 
     @staticmethod
-    def _dispatch_url_scheme(parsed, target: str, protocol: str = "ftp", position: int = 0) -> None:
+    def _dispatch_url_scheme(
+        parsed, target: str, protocol: str = "ftp", position: int = 0,
+        download_threads: int = 1,
+    ) -> None:
         """Route a parsed URL to its protocol-specific downloader.
 
         ``protocol='globus'`` swaps the http/https single-connection streamer
-        for :meth:`_parallel_download` (single-connection with progress bar).
-        ftp:// URLs are unaffected.
+        for :meth:`_parallel_download` (single-connection with progress bar) or
+        :meth:`_multipart_download` (parallel HTTP Range requests) when
+        ``download_threads`` > 1. ftp:// URLs are unaffected.
         """
         scheme = (parsed.scheme or "").lower()
         if scheme in ("http", "https"):
             if protocol == "globus":
-                Files._parallel_download(parsed.geturl(), target, position=position)
+                max_retries = 6
+                for attempt in range(1, max_retries + 1):
+                    try:
+                        if download_threads and download_threads > 1:
+                            Files._multipart_download(
+                                parsed.geturl(), target,
+                                threads=download_threads, position=position,
+                            )
+                        else:
+                            Files._parallel_download(parsed.geturl(), target, position=position)
+                        break
+                    except Exception as exc:  # pylint: disable=broad-except
+                        logging.warning(
+                            "Attempt %d/%d failed for %s: %s",
+                            attempt, max_retries, os.path.basename(target), exc,
+                        )
+                        if attempt == max_retries:
+                            raise
             else:
                 Files._http_download_url(parsed.geturl(), target)
         elif scheme == "ftp":
@@ -1448,7 +1529,7 @@ class Files:
         checksum_check: bool,
         categories: List[str] = None,
         category: str = None,
-        parallel_files: int = 1,
+        download_threads: int = 1,
     ):
         """
         Download all files of specified categories from a PRIDE project.
@@ -1473,7 +1554,7 @@ class Files:
             protocol,
             aspera_maximum_bandwidth=aspera_maximum_bandwidth,
             checksum_check=checksum_check,
-            parallel_files=parallel_files,
+            download_threads=download_threads,
         )
 
     def get_all_category_file_list(

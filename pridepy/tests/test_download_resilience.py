@@ -97,6 +97,142 @@ class TestDownloadResilience(TestCase):
             with open(output_file, "rb") as handle:
                 assert handle.read() == b"abc"
 
+    def test_multipart_download_splits_eligible_file_into_segments(self):
+        """When the server advertises Accept-Ranges: bytes and the file exceeds
+        ``min_size_bytes``, ``_multipart_download`` must dispatch one
+        ``_download_range`` call per requested thread, with non-overlapping
+        ranges that cover the whole file."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            output_file = os.path.join(tmp_dir, "file.raw")
+            session = Mock()
+            head = Mock()
+            head.headers = {"content-length": "32", "accept-ranges": "bytes"}
+            head.raise_for_status.return_value = None
+            session.head.return_value = head
+
+            with patch(
+                "pridepy.files.files.Util.create_session_with_retries",
+                return_value=session,
+            ), patch.object(Files, "_download_range") as range_mock, \
+                 patch.object(Files, "_parallel_download") as parallel_mock:
+                Files._multipart_download(
+                    "https://example.org/file.raw",
+                    output_file,
+                    threads=4,
+                    min_size_bytes=16,
+                )
+
+            parallel_mock.assert_not_called()
+            assert range_mock.call_count == 4
+            ranges = [(call.args[2], call.args[3]) for call in range_mock.call_args_list]
+            assert sorted(ranges) == [(0, 7), (8, 15), (16, 23), (24, 31)]
+
+    def test_multipart_download_falls_back_when_no_range_support(self):
+        """When the server does not advertise Accept-Ranges: bytes,
+        ``_multipart_download`` must defer to ``_parallel_download`` even with
+        ``threads > 1``."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            output_file = os.path.join(tmp_dir, "file.raw")
+            session = Mock()
+            head = Mock()
+            head.headers = {"content-length": "1000000", "accept-ranges": "none"}
+            head.raise_for_status.return_value = None
+            session.head.return_value = head
+
+            with patch(
+                "pridepy.files.files.Util.create_session_with_retries",
+                return_value=session,
+            ), patch.object(Files, "_parallel_download") as parallel_mock, \
+                 patch.object(Files, "_download_range") as range_mock:
+                Files._multipart_download(
+                    "https://example.org/file.raw",
+                    output_file,
+                    threads=8,
+                )
+
+            parallel_mock.assert_called_once()
+            range_mock.assert_not_called()
+
+    def test_multipart_download_falls_back_for_small_file(self):
+        """Files smaller than ``min_size_bytes`` must use single-stream
+        ``_parallel_download`` even when Range requests are supported."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            output_file = os.path.join(tmp_dir, "file.raw")
+            session = Mock()
+            head = Mock()
+            head.headers = {"content-length": "100", "accept-ranges": "bytes"}
+            head.raise_for_status.return_value = None
+            session.head.return_value = head
+
+            with patch(
+                "pridepy.files.files.Util.create_session_with_retries",
+                return_value=session,
+            ), patch.object(Files, "_parallel_download") as parallel_mock, \
+                 patch.object(Files, "_download_range") as range_mock:
+                Files._multipart_download(
+                    "https://example.org/file.raw",
+                    output_file,
+                    threads=8,
+                    min_size_bytes=10 * 1024 * 1024,
+                )
+
+            parallel_mock.assert_called_once()
+            range_mock.assert_not_called()
+
+    def test_download_range_resumes_from_cursor_after_partial_read(self):
+        """Regression: when a Range stream dies after writing some bytes, the
+        retry must request only the remaining bytes (``Range: bytes={cursor}-{end}``)
+        instead of restarting the whole segment."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            output_file = os.path.join(tmp_dir, "file.raw")
+            with open(output_file, "wb") as handle:
+                handle.truncate(100)
+
+            def make_response(content_range_start, chunks, fail_after_first=False):
+                response = Mock()
+                response.status_code = 206
+                response.headers = {"Content-Range": f"bytes {content_range_start}-99/100"}
+                response.raise_for_status.return_value = None
+                if fail_after_first:
+                    def generate(chunk_size=None):
+                        yield chunks[0]
+                        raise OSError("connection broken")
+                    response.iter_content.side_effect = generate
+                else:
+                    response.iter_content.return_value = chunks
+                response.__enter__ = Mock(return_value=response)
+                response.__exit__ = Mock(return_value=None)
+                return response
+
+            attempt1 = make_response(0, [b"a" * 30], fail_after_first=True)
+            attempt2 = make_response(30, [b"b" * 70])
+
+            session1 = Mock()
+            session1.get.return_value = attempt1
+            session2 = Mock()
+            session2.get.return_value = attempt2
+
+            with patch(
+                "pridepy.files.files.Util.create_session_with_retries",
+                side_effect=[session1, session2],
+            ), patch("pridepy.files.files.time.sleep"):
+                pbar = Mock()
+                Files._download_range(
+                    "https://example.org/file.raw",
+                    output_file,
+                    start=0,
+                    end=99,
+                    pbar=pbar,
+                    max_retries=3,
+                )
+
+            second_request_headers = session2.get.call_args.kwargs["headers"]
+            assert second_request_headers["Range"] == "bytes=30-99"
+            total_bytes_reported = sum(
+                call.args[0] for call in pbar.update.call_args_list
+            )
+            assert total_bytes_reported == 100
+
     def test_parallel_download_falls_back_without_accept_ranges(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             output_file = os.path.join(tmp_dir, "file.raw")
@@ -215,17 +351,24 @@ class TestDownloadResilience(TestCase):
             assert batch_mock.call_args.args[2] == "ftp"
             fallback_mock.assert_not_called()
 
-    def test_globus_parallel_workers_capped_to_file_count(self):
-        """When parallel_files exceeds the number of files to download,
-        the worker pool must not allocate more threads than files."""
+    def test_globus_downloads_files_sequentially_with_threads(self):
+        """download_files_from_globus should always download sequentially and
+        propagate ``download_threads`` to each per-file call."""
         file_records = [
             {
-                "fileName": "only.raw",
+                "fileName": "a.raw",
                 "publicFileLocations": [
                     {"name": "FTP Protocol",
-                     "value": "ftp://ftp.pride.ebi.ac.uk/pride/data/archive/2024/01/PXD000001/only.raw"}
+                     "value": "ftp://ftp.pride.ebi.ac.uk/pride/data/archive/2024/01/PXD000001/a.raw"}
                 ],
-            }
+            },
+            {
+                "fileName": "b.raw",
+                "publicFileLocations": [
+                    {"name": "FTP Protocol",
+                     "value": "ftp://ftp.pride.ebi.ac.uk/pride/data/archive/2024/01/PXD000001/b.raw"}
+                ],
+            },
         ]
 
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -234,25 +377,13 @@ class TestDownloadResilience(TestCase):
                     file_list_json=file_records,
                     output_folder=tmp_dir,
                     skip_if_downloaded_already=False,
-                    parallel_files=3,
+                    download_threads=8,
                 )
-                # With 1 file and parallel_files=3, should fall through to
-                # the serial path (parallel_files capped to 1 < 2).
-                mock_one.assert_called_once()
-
-    def test_url_parallel_workers_capped_to_url_count(self):
-        """download_files_by_url must cap workers to len(urls)."""
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            with patch.object(Files, "_download_single_url") as mock_single:
-                Files.download_files_by_url(
-                    urls=["https://example.org/a.raw"],
-                    output_folder=tmp_dir,
-                    skip_if_downloaded_already=False,
-                    protocol="globus",
-                    parallel_files=3,
-                )
-                # 1 URL with parallel_files=3 → capped to 1, serial path.
-                mock_single.assert_called_once()
+                # Both files should be downloaded sequentially, each carrying
+                # download_threads=8 through to _globus_download_one.
+                assert mock_one.call_count == 2
+                for call in mock_one.call_args_list:
+                    assert call.kwargs["download_threads"] == 8
 
     def test_download_files_raises_when_any_file_fails(self):
         with tempfile.TemporaryDirectory() as tmp_dir:

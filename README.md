@@ -66,7 +66,7 @@ pridepy download-all-public-raw-files \
 
 What this does:
 - default `ftp` starts with FTP and falls back (`ftp -> aspera -> s3 -> globus`)
-- `--checksum-check` downloads project checksums and validates files
+- `--checksum-check` (default for this command) downloads project checksums and validates files; pass `--no-checksum-check` to skip
 - empty/corrupt files are retried automatically
 
 ### 2) Continue interrupted downloads safely
@@ -125,7 +125,7 @@ API and downloaded via the same batch + protocol-fallback engine as
 Useful options:
 
 - `-p globus` — use the globus download strategy (HTTP Range + resume)
-- `-w 3` — download up to 3 files in parallel (globus only, max 3)
+- `-t 8` — split a single file into 8 parallel HTTP Range threads (globus only, 1-32). Falls back to a single connection when the server does not advertise `Accept-Ranges: bytes` or the file is below 10 MB.
 - `--checksum-check` — validate files against PRIDE checksums after download
 
 ### 7) Download files from raw URLs
@@ -145,7 +145,7 @@ manifest file (`-F`) instead.
 Useful options:
 
 - `-p globus` — use globus download strategy for http/https URLs (resume-capable)
-- `-w 3` — download up to 3 files in parallel (globus only, max 3)
+- `-t 8` — split a single file into 8 parallel HTTP Range threads (globus only, 1-32). Falls back to a single connection when the server does not advertise `Accept-Ranges: bytes` or the file is below 10 MB.
 - `--checksum-check` — validate against PRIDE checksums (accession inferred
   from PRIDE URL paths; only PRIDE archive URLs are supported)
 

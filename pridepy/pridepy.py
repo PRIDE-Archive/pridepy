@@ -44,18 +44,22 @@ def main():
     default="100M",
 )
 @click.option(
-    "--checksum-check",
-    required=False,
-    help="Download checksum file for project and validate downloads",
-    is_flag=True,
-    default=False,
+    "--checksum-check/--no-checksum-check",
+    "checksum_check",
+    default=True,
+    help="Validate downloads against PRIDE MD5 checksums. Enabled by default "
+         "for whole-project raw downloads since the PRIDE API guarantees "
+         "checksums for all raw files. Use --no-checksum-check to skip.",
 )
 @click.option(
-    "-w",
-    "--parallel-files",
+    "-t",
+    "--threads",
+    "download_threads",
     default=1,
-    type=click.IntRange(1, 3),
-    help="Number of files to download simultaneously for globus (1-3). Default is 1.",
+    type=click.IntRange(1, 32),
+    help="Number of parallel HTTP Range threads per file for globus (1-32). "
+         "Default is 1 (single connection). Falls back to single connection if "
+         "the server does not support Range requests or the file is below 10 MB.",
 )
 def download_all_public_raw_files(
     accession,
@@ -63,8 +67,8 @@ def download_all_public_raw_files(
     output_folder,
     skip_if_downloaded_already,
     aspera_maximum_bandwidth: str = "50M",
-    checksum_check: bool = False,
-    parallel_files: int = 1,
+    checksum_check: bool = True,
+    download_threads: int = 1,
 ):
     """
     Command to download all public raw files from a specified PRIDE project.
@@ -75,8 +79,8 @@ def download_all_public_raw_files(
         output_folder (str): Directory to save downloaded raw files.
         skip_if_downloaded_already (bool): Skip download if files already exist. Default is False.
         aspera_maximum_bandwidth (str): Maximum bandwidth for Aspera protocol. Default is 100M.
-        checksum_check (bool): Flag to download checksum file for the project. Default is False.
-        parallel_files (int): Number of files to download simultaneously. Default is 1.
+        checksum_check (bool): Validate downloads against PRIDE MD5 checksums. Default is True.
+        download_threads (int): Parallel HTTP Range threads per file for globus. Default is 1.
     """
 
     raw_files = Files()
@@ -93,7 +97,7 @@ def download_all_public_raw_files(
         protocol,
         aspera_maximum_bandwidth=aspera_maximum_bandwidth,
         checksum_check=checksum_check,
-        parallel_files=parallel_files,
+        download_threads=download_threads,
     )
 
 
@@ -142,11 +146,14 @@ def download_all_public_raw_files(
     "Valid values: RAW, PEAK, SEARCH, RESULT, SPECTRUM_LIBRARY, OTHER, FASTA",
 )
 @click.option(
-    "-w",
-    "--parallel-files",
+    "-t",
+    "--threads",
+    "download_threads",
     default=1,
-    type=click.IntRange(1, 3),
-    help="Number of files to download simultaneously for globus (1-3). Default is 1.",
+    type=click.IntRange(1, 32),
+    help="Number of parallel HTTP Range threads per file for globus (1-32). "
+         "Default is 1 (single connection). Falls back to single connection if "
+         "the server does not support Range requests or the file is below 10 MB.",
 )
 def download_all_public_category_files(
     accession: str,
@@ -156,7 +163,7 @@ def download_all_public_category_files(
     aspera_maximum_bandwidth: str = "50M",
     checksum_check: bool = False,
     category: str = "RAW",
-    parallel_files: int = 1,
+    download_threads: int = 1,
 ):
     """
     Command to download all public files of a specified category from a given PRIDE public project.
@@ -169,7 +176,7 @@ def download_all_public_category_files(
         aspera_maximum_bandwidth (str): Maximum bandwidth for Aspera transfers.
         checksum_check (bool): If True, downloads the checksum file for the project.
         category (str): Comma-separated categories of files to download (e.g. RAW or RAW,SEARCH).
-        parallel_files (int): Number of files to download simultaneously. Default is 1.
+        download_threads (int): Parallel HTTP Range threads per file for globus. Default is 1.
     """
 
     valid_categories = {"RAW", "PEAK", "SEARCH", "RESULT", "SPECTRUM_LIBRARY", "OTHER", "FASTA"}
@@ -196,7 +203,7 @@ def download_all_public_category_files(
         aspera_maximum_bandwidth=aspera_maximum_bandwidth,
         checksum_check=checksum_check,
         categories=categories,
-        parallel_files=parallel_files,
+        download_threads=download_threads,
     )
 
 
@@ -554,11 +561,14 @@ def _read_url_arguments(url_list_path, urls_csv=None):
     help="Download project checksums and validate downloaded files.",
 )
 @click.option(
-    "-w",
-    "--parallel-files",
+    "-t",
+    "--threads",
+    "download_threads",
     default=1,
-    type=click.IntRange(1, 3),
-    help="Number of files to download simultaneously for globus (1-3). Default is 1.",
+    type=click.IntRange(1, 32),
+    help="Number of parallel HTTP Range threads per file for globus (1-32). "
+         "Default is 1 (single connection). Falls back to single connection if "
+         "the server does not support Range requests or the file is below 10 MB.",
 )
 def download_files_by_list(
     accession,
@@ -569,7 +579,7 @@ def download_files_by_list(
     skip_if_downloaded_already,
     aspera_maximum_bandwidth,
     checksum_check,
-    parallel_files,
+    download_threads,
 ):
     """Download a named subset of files from a PRIDE project."""
     file_names = _read_filename_arguments(file_list_path, files_csv)
@@ -584,7 +594,7 @@ def download_files_by_list(
         protocol=protocol,
         aspera_maximum_bandwidth=aspera_maximum_bandwidth,
         checksum_check=checksum_check,
-        parallel_files=parallel_files,
+        download_threads=download_threads,
     )
 
 
@@ -635,11 +645,14 @@ def download_files_by_list(
          "Accessions are inferred from PRIDE URL paths (only PRIDE URLs supported).",
 )
 @click.option(
-    "-w",
-    "--parallel-files",
+    "-t",
+    "--threads",
+    "download_threads",
     default=1,
-    type=click.IntRange(1, 3),
-    help="Number of files to download simultaneously for globus (1-3). Default is 1.",
+    type=click.IntRange(1, 32),
+    help="Number of parallel HTTP Range threads per file for globus (1-32). "
+         "Default is 1 (single connection). Falls back to single connection if "
+         "the server does not support Range requests or the file is below 10 MB.",
 )
 def download_files_by_url(
     url_list_path,
@@ -648,7 +661,7 @@ def download_files_by_url(
     skip_if_downloaded_already,
     protocol,
     checksum_check,
-    parallel_files,
+    download_threads,
 ):
     """Download files from raw URLs (http/https/ftp), dispatched by scheme."""
     urls = _read_url_arguments(url_list_path, urls_csv)
@@ -658,8 +671,8 @@ def download_files_by_url(
         output_folder=output_folder,
         skip_if_downloaded_already=skip_if_downloaded_already,
         protocol=protocol,
-        parallel_files=parallel_files,
         checksum_check=checksum_check,
+        download_threads=download_threads,
     )
 
 
