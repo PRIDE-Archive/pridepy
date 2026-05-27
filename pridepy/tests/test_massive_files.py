@@ -135,3 +135,42 @@ class TestMassIVEFiles(TestCase):
         kwargs = download_mock.call_args.kwargs
         assert kwargs["use_tls"] is True
         assert kwargs["parallel_files"] == 3
+
+    def test_base_direct_download_provider_partitions_urls_by_scheme(self):
+        """Records mixing ftp:// and http(s):// route to the right transport."""
+        from pridepy.providers.massive import MassiveProvider
+
+        provider = MassiveProvider()
+        records = [
+            Files._build_massive_file_record(
+                "MSV000012345",
+                "ftp://massive-ftp.ucsd.edu/v01/MSV000012345/raw/a.raw",
+            ),
+            # Synthetic http record to verify partitioning (real MassIVE uses ftp).
+            {
+                "accession": "MSV000012345",
+                "fileName": "b.raw",
+                "fileCategory": {"value": "RAW"},
+                "publicFileLocations": [
+                    {"name": "FTP Protocol", "value": "http://example.org/b.raw"}
+                ],
+            },
+        ]
+        with patch.object(Files, "download_ftp_urls") as ftp_mock, \
+             patch.object(Files, "download_http_urls") as http_mock:
+            provider.download_files(
+                accession="MSV000012345",
+                records=records,
+                output_folder="/tmp/test",
+                skip_if_downloaded_already=False,
+                protocol="ftp",
+                parallel_files=1,
+            )
+
+        ftp_mock.assert_called_once()
+        assert ftp_mock.call_args.kwargs["use_tls"] is True
+        assert ftp_mock.call_args.kwargs["ftp_urls"] == [
+            "ftp://massive-ftp.ucsd.edu/v01/MSV000012345/raw/a.raw"
+        ]
+        http_mock.assert_called_once()
+        assert http_mock.call_args.kwargs["http_urls"] == ["http://example.org/b.raw"]
