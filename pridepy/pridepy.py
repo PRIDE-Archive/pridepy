@@ -56,7 +56,7 @@ def main():
     "--parallel-files",
     default=1,
     type=click.IntRange(1, 3),
-    help="Number of files to download simultaneously for globus (1-3). Default is 1.",
+    help="Number of files to download simultaneously (1-3). Primarily used by globus protocol. Default is 1.",
 )
 def download_all_public_raw_files(
     accession,
@@ -147,7 +147,7 @@ def download_all_public_raw_files(
     "--parallel-files",
     default=1,
     type=click.IntRange(1, 3),
-    help="Number of files to download simultaneously for globus (1-3). Default is 1.",
+    help="Number of files to download simultaneously (1-3). Primarily used by globus protocol. Default is 1.",
 )
 def download_all_public_category_files(
     accession: str,
@@ -559,7 +559,7 @@ def _read_url_arguments(url_list_path, urls_csv=None):
     "--parallel-files",
     default=1,
     type=click.IntRange(1, 3),
-    help="Number of files to download simultaneously for globus (1-3). Default is 1.",
+    help="Number of files to download simultaneously (1-3). Primarily used by globus protocol. Default is 1.",
 )
 def download_files_by_list(
     accession,
@@ -640,7 +640,7 @@ def download_files_by_list(
     "--parallel-files",
     default=1,
     type=click.IntRange(1, 3),
-    help="Number of files to download simultaneously for globus (1-3). Default is 1.",
+    help="Number of files to download simultaneously (1-3). Primarily used by globus protocol. Default is 1.",
 )
 def download_files_by_url(
     url_list_path,

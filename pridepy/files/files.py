@@ -1367,7 +1367,7 @@ class Files:
         delegates to :meth:`download_files` so the existing batch + protocol
         fallback engine is reused.
 
-        :param accession: PRIDE project accession (public)
+        :param accession: PRIDE or MassIVE project accession (public)
         :param file_names: filenames to download
         :param output_folder: directory to write downloaded files into
         :param skip_if_downloaded_already: skip files already present locally
@@ -1380,7 +1380,10 @@ class Files:
         if not file_names:
             raise ValueError("file_names must contain at least one filename")
 
-        all_files = self.stream_all_files_by_project(accession)
+        if self.is_massive_accession(accession):
+            all_files = self._list_massive_public_files(accession)
+        else:
+            all_files = self.stream_all_files_by_project(accession)
         requested = set(file_names)
         matched = [f for f in all_files if f.get("fileName") in requested]
         missing = sorted(requested - {f.get("fileName") for f in matched})
@@ -1390,6 +1393,16 @@ class Files:
             raise ValueError(
                 f"No matching files in project {accession} for: {sorted(requested)}"
             )
+
+        if self.is_massive_accession(accession):
+            self._download_massive_file_records(
+                accession=accession,
+                file_records=matched,
+                output_folder=output_folder,
+                skip_if_downloaded_already=skip_if_downloaded_already,
+                protocol=protocol,
+            )
+            return
 
         self.download_files(
             matched,
