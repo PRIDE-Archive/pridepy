@@ -1,0 +1,129 @@
+"""iProX direct-download provider.
+
+iProX publishes the ProteomeXchange XML for each dataset at a
+deterministic path on its anonymous HTTPS download server::
+
+    http://download.iprox.org/<accession>/PX_<accession>.xml
+
+We fetch the XML, walk every ``<DatasetFile>``'s ``cvParam`` entries, and
+turn each ``Associated raw file URI`` (and sibling URIs for search-engine
+output, result files, etc.) into a pridepy file record. File downloads
+themselves go through plain HTTPS on the same host, which supports
+``Range`` requests for resume.
+"""
+import logging
+import os
+import re
+import xml.etree.ElementTree as ET
+from typing import ClassVar, Dict, List, Optional
+from urllib.parse import urlparse
+
+import requests
+
+from pridepy.providers import registry
+from pridepy.providers.base import BaseDirectDownloadProvider
+from pridepy.providers.jpost import JpostProvider
+
+
+@registry.register
+class IproxProvider(BaseDirectDownloadProvider):
+    name: ClassVar[str] = "iprox"
+    use_tls: ClassVar[bool] = False  # download.iprox.org serves over plain HTTP
+
+    DOWNLOAD_BASE_URL: ClassVar[str] = "http://download.iprox.org/"
+    PX_XML_URL_TEMPLATE: ClassVar[str] = (
+        "http://download.iprox.org/{accession}/PX_{accession}.xml"
+    )
+    # iProX PX XML uses the same PSI-MS cvParam "name" values as JPOST PROXI,
+    # so we reuse JpostProvider's category map.
+    PX_CATEGORY_MAP: ClassVar[Dict[str, str]] = JpostProvider.PROXI_CATEGORY_MAP
+
+    @staticmethod
+    def matches(accession: str) -> bool:
+        """Return True when ``accession`` looks like an iProX dataset accession."""
+        if not accession:
+            return False
+        return bool(re.fullmatch(r"IPX\d{7,10}", accession.upper()))
+
+    @staticmethod
+    def _get_public_root(accession: str) -> str:
+        return f"/{accession.upper()}"
+
+    @classmethod
+    def _get_public_ftp_url(cls, accession: str, remote_path: str) -> str:
+        # NOTE: name kept as `_get_public_ftp_url` for parity with other providers,
+        # but iProX URLs are http(s) not ftp. The dispatcher routes by scheme.
+        root_path = cls._get_public_root(accession).rstrip("/")
+        relative_path = remote_path
+        if remote_path.startswith(root_path):
+            relative_path = remote_path[len(root_path):].lstrip("/")
+        return f"{cls.DOWNLOAD_BASE_URL}{accession.upper()}/{relative_path}"
+
+    @classmethod
+    def _build_file_record(
+        cls, accession: str, https_url: str, category_from_px: Optional[str] = None
+    ) -> Dict:
+        """Build a pridepy file record for an iProX file.
+
+        ``category_from_px`` is the ``cvParam`` ``name`` from the dataset's
+        ProteomeXchange XML (e.g. ``"Associated raw file URI"``).
+        """
+        from pridepy.providers.massive import MassiveProvider
+        parsed = urlparse(https_url)
+        root_prefix = f"/{accession.upper()}/"
+        relative_path = parsed.path
+        if relative_path.startswith(root_prefix):
+            relative_path = relative_path[len(root_prefix):]
+        relative_path = relative_path.lstrip("/")
+        collection = relative_path.split("/", 1)[0] if relative_path else ""
+        if category_from_px and category_from_px in cls.PX_CATEGORY_MAP:
+            category = cls.PX_CATEGORY_MAP[category_from_px]
+        else:
+            category = MassiveProvider._map_collection_to_category(collection)
+        return {
+            "accession": accession.upper(),
+            "fileName": os.path.basename(parsed.path),
+            "fileCategory": {"value": category},
+            # "FTP Protocol" is the existing label the download dispatcher uses
+            # to locate a file URL; here it actually points at HTTPS.
+            # BaseDirectDownloadProvider.download_files routes by URL scheme.
+            "publicFileLocations": [{"name": "FTP Protocol", "value": https_url}],
+            "relativePath": relative_path,
+            "collection": collection,
+            "source": "iProX",
+        }
+
+    def list_files(self, accession: str) -> List[Dict]:
+        normalized = accession.upper()
+        xml_url = self.PX_XML_URL_TEMPLATE.format(accession=normalized)
+        logging.info(f"Fetching iProX PX XML: {xml_url}")
+        response = requests.get(xml_url, timeout=30)
+        response.raise_for_status()
+        try:
+            root = ET.fromstring(response.content)
+        except ET.ParseError as parse_error:
+            raise RuntimeError(
+                f"Unable to parse iProX PX XML for {normalized}: {parse_error}"
+            ) from parse_error
+
+        records: List[Dict] = []
+        for dataset_file in root.iter("DatasetFile"):
+            for cv in dataset_file.findall("cvParam"):
+                name = cv.attrib.get("name")
+                value = cv.attrib.get("value")
+                if not value or not name or not name.endswith("URI"):
+                    continue
+                if not value.lower().startswith(("http://", "https://")):
+                    continue
+                records.append(
+                    self._build_file_record(
+                        normalized,
+                        value,
+                        category_from_px=name,
+                    )
+                )
+        if not records:
+            raise RuntimeError(
+                f"iProX PX XML for {normalized} contained no downloadable HTTPS URIs"
+            )
+        return records

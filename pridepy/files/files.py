@@ -59,14 +59,11 @@ class Files:
     JPOST_PROXI_BASE_URL = _JpostProvider.PROXI_BASE_URL
     JPOST_PROXI_CATEGORY_MAP = _JpostProvider.PROXI_CATEGORY_MAP
     del _JpostProvider
-    IPROX_DOWNLOAD_BASE_URL = "http://download.iprox.org/"
-    IPROX_PX_XML_URL_TEMPLATE = (
-        "http://download.iprox.org/{accession}/PX_{accession}.xml"
-    )
-    # iProX PX XML uses the same PSI-MS cvParam "name" values as JPOST, so the
-    # JPOST PROXI category map applies. PX XML cvParam "Associated raw file URI"
-    # is the canonical raw-file label per the PSI-MS CV (MS:1002846).
-    IPROX_PX_CATEGORY_MAP = JPOST_PROXI_CATEGORY_MAP
+    from pridepy.providers.iprox import IproxProvider as _IproxProvider
+    IPROX_DOWNLOAD_BASE_URL = _IproxProvider.DOWNLOAD_BASE_URL
+    IPROX_PX_XML_URL_TEMPLATE = _IproxProvider.PX_XML_URL_TEMPLATE
+    IPROX_PX_CATEGORY_MAP = _IproxProvider.PX_CATEGORY_MAP
+    del _IproxProvider
     S3_URL = "https://hh.fire.sdo.ebi.ac.uk"
     S3_BUCKET = "pride-public"
     PROTOCOL_ORDER = ["aspera", "s3", "ftp", "globus"]
@@ -180,67 +177,32 @@ class Files:
         return JpostProvider._build_file_record(accession, ftp_url, category_from_proxi)
 
     @staticmethod
-    def _build_iprox_file_record(
-        accession: str, https_url: str, category_from_px: Optional[str] = None
-    ) -> Dict:
-        """
-        Build a pridepy file record for an iProX file. iProX exposes files
-        over anonymous HTTPS at
-        ``http://download.iprox.org/<accession>/<sub-accession>/<filename>``;
-        ``category_from_px`` is the ``cvParam`` ``name`` from the dataset's
-        ProteomeXchange XML (e.g. ``"Associated raw file URI"``).
-        """
-        parsed = urlparse(https_url)
-        root_prefix = f"/{accession.upper()}/"
-        relative_path = parsed.path
-        if relative_path.startswith(root_prefix):
-            relative_path = relative_path[len(root_prefix) :]
-        relative_path = relative_path.lstrip("/")
-        collection = relative_path.split("/", 1)[0] if relative_path else ""
-        if category_from_px and category_from_px in Files.IPROX_PX_CATEGORY_MAP:
-            category = Files.IPROX_PX_CATEGORY_MAP[category_from_px]
-        else:
-            category = Files._map_massive_collection_to_category(collection)
-        return {
-            "accession": accession.upper(),
-            "fileName": os.path.basename(parsed.path),
-            "fileCategory": {"value": category},
-            # ``FTP Protocol`` is the existing label the download dispatcher
-            # uses to locate a file URL; here it actually points at HTTPS.
-            # ``_download_direct_download_records`` routes by URL scheme.
-            "publicFileLocations": [{"name": "FTP Protocol", "value": https_url}],
-            "relativePath": relative_path,
-            "collection": collection,
-            "source": "iProX",
-        }
+    def _build_iprox_file_record(accession, https_url, category_from_px=None):
+        """Shim — see :meth:`pridepy.providers.iprox.IproxProvider._build_file_record`."""
+        from pridepy.providers.iprox import IproxProvider
+        return IproxProvider._build_file_record(accession, https_url, category_from_px)
+
+    @staticmethod
+    def _get_iprox_public_root(accession: str) -> str:
+        from pridepy.providers.iprox import IproxProvider
+        return IproxProvider._get_public_root(accession)
+
+    @staticmethod
+    def _get_iprox_public_ftp_url(accession: str, remote_path: str) -> str:
+        from pridepy.providers.iprox import IproxProvider
+        return IproxProvider._get_public_ftp_url(accession, remote_path)
 
     @staticmethod
     def is_direct_download_accession(accession: str) -> bool:
-        """
-        Return True when the accession is served by a public repository that
-        pridepy supports via direct downloads (no ProteomeXchange API).
-        MassIVE and JPOST use FTP(S); iProX uses anonymous HTTPS via
-        ``download.iprox.org``.
-        """
-        return (
-            Files.is_massive_accession(accession)
-            or Files.is_jpost_accession(accession)
-            or Files.is_iprox_accession(accession)
-        )
+        """Shim — True for any registered direct-download provider (MSV/JPST/IPX)."""
+        from pridepy.providers import registry
+        return registry.is_known(accession)
 
     @staticmethod
     def is_iprox_accession(accession: str) -> bool:
-        """
-        Return True when the accession looks like an iProX dataset accession
-        (``IPX`` followed by 7-10 digits). iProX exposes the dataset
-        ProteomeXchange XML at
-        ``http://download.iprox.org/<accession>/PX_<accession>.xml`` and the
-        referenced files are downloadable from ``download.iprox.org`` over
-        anonymous HTTPS with byte-range support.
-        """
-        if not accession:
-            return False
-        return bool(re.fullmatch(r"IPX\d{7,10}", accession.upper()))
+        """Shim — see :meth:`pridepy.providers.iprox.IproxProvider.matches`."""
+        from pridepy.providers.iprox import IproxProvider
+        return IproxProvider.matches(accession)
 
     @staticmethod
     def _repo_uses_tls(accession: str) -> bool:
@@ -333,53 +295,9 @@ class Files:
         return JpostProvider()._list_via_proxi(accession)
 
     def _list_iprox_public_files(self, accession: str) -> List[Dict]:
-        """
-        Discover all public files for an iProX dataset.
-
-        iProX publishes the ProteomeXchange XML for every public dataset at a
-        deterministic path on its anonymous HTTPS download server::
-
-            http://download.iprox.org/<accession>/PX_<accession>.xml
-
-        We fetch that XML, walk every ``<DatasetFile>``'s ``cvParam`` entries,
-        and turn each ``Associated raw file URI`` (and sibling URIs for
-        search-engine output, result files, etc.) into a pridepy file record.
-        File downloads themselves go through plain HTTPS on the same host,
-        which supports ``Range`` requests for resume.
-        """
-        normalized_accession = accession.upper()
-        xml_url = self.IPROX_PX_XML_URL_TEMPLATE.format(accession=normalized_accession)
-        logging.info(f"Fetching iProX PX XML: {xml_url}")
-        response = requests.get(xml_url, timeout=30)
-        response.raise_for_status()
-        try:
-            root = ET.fromstring(response.content)
-        except ET.ParseError as parse_error:
-            raise RuntimeError(
-                f"Unable to parse iProX PX XML for {normalized_accession}: {parse_error}"
-            ) from parse_error
-
-        records: List[Dict] = []
-        for dataset_file in root.iter("DatasetFile"):
-            for cv in dataset_file.findall("cvParam"):
-                name = cv.attrib.get("name")
-                value = cv.attrib.get("value")
-                if not value or not name or not name.endswith("URI"):
-                    continue
-                if not value.lower().startswith(("http://", "https://")):
-                    continue
-                records.append(
-                    self._build_iprox_file_record(
-                        normalized_accession,
-                        value,
-                        category_from_px=name,
-                    )
-                )
-        if not records:
-            raise RuntimeError(
-                f"iProX PX XML for {normalized_accession} contained no downloadable HTTPS URIs"
-            )
-        return records
+        """Shim — see :meth:`pridepy.providers.iprox.IproxProvider.list_files`."""
+        from pridepy.providers.iprox import IproxProvider
+        return IproxProvider().list_files(accession)
 
     def _list_direct_download_files(self, accession: str) -> List[Dict]:
         """
@@ -414,35 +332,17 @@ class Files:
         ``download.iprox.org`` with ``Range``-based resume and per-file
         parallel workers. URLs are partitioned by scheme so a mixed batch
         (e.g. a JPOST PX XML that ever pointed at HTTPS) routes correctly.
+        Dispatches via the provider registry.
         """
-        if protocol not in ("ftp", "https", "http"):
-            logging.warning(
-                "Direct downloads currently use ftp / https only. "
-                f"Ignoring requested protocol '{protocol}' for {accession}."
-            )
-
-        all_urls = [self._get_download_url(record, "ftp") for record in file_records]
-        ftp_urls = [u for u in all_urls if u.lower().startswith("ftp://")]
-        http_urls = [u for u in all_urls if u.lower().startswith(("http://", "https://"))]
-        if not ftp_urls and not http_urls:
-            logging.info(f"No files matched for direct-download dataset {accession}")
-            return
-
-        if ftp_urls:
-            self.download_ftp_urls(
-                ftp_urls=ftp_urls,
-                output_folder=output_folder,
-                skip_if_downloaded_already=skip_if_downloaded_already,
-                use_tls=self._repo_uses_tls(accession),
-                parallel_files=parallel_files,
-            )
-        if http_urls:
-            self.download_http_urls(
-                http_urls=http_urls,
-                output_folder=output_folder,
-                skip_if_downloaded_already=skip_if_downloaded_already,
-                parallel_files=parallel_files,
-            )
+        from pridepy.providers import registry
+        return registry.resolve(accession).download_files(
+            accession=accession,
+            records=file_records,
+            output_folder=output_folder,
+            skip_if_downloaded_already=skip_if_downloaded_already,
+            protocol=protocol,
+            parallel_files=parallel_files,
+        )
 
     async def stream_all_files_metadata(self, output_file, accession=None):
         """
