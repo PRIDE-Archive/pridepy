@@ -205,12 +205,13 @@ class Files:
 
     @staticmethod
     def _repo_uses_tls(accession: str) -> bool:
-        """
-        Whether the public FTP server for ``accession`` requires FTP over TLS.
-        MassIVE rejects plain anonymous FTP (``421 TLS is required``); JPOST
-        accepts plain FTP.
-        """
-        return Files.is_massive_accession(accession)
+        """Shim — returns the resolved provider's use_tls flag (False if unknown)."""
+        from pridepy.providers import registry
+        try:
+            provider = registry.resolve(accession)
+        except ValueError:
+            return False
+        return getattr(provider, "use_tls", False)
 
     @staticmethod
     def _walk_ftp_tree(ftp: FTP, remote_dir: str) -> List[str]:
@@ -246,11 +247,12 @@ class Files:
     ) -> None:
         """
         Download public MassIVE files via anonymous FTP (now FTPS).
-        Backward-compat wrapper around :meth:`_download_direct_download_records`.
+        Backward-compat shim — dispatches via the provider registry.
         """
-        self._download_direct_download_records(
+        from pridepy.providers import registry
+        registry.resolve(accession).download_files(
             accession=accession,
-            file_records=file_records,
+            records=file_records,
             output_folder=output_folder,
             skip_if_downloaded_already=skip_if_downloaded_already,
             protocol=protocol,
@@ -298,50 +300,6 @@ class Files:
         from pridepy.providers.iprox import IproxProvider
         return IproxProvider().list_files(accession)
 
-    def _list_direct_download_files(self, accession: str) -> List[Dict]:
-        """
-        Dispatch to the right listing transport for a direct-download
-        repository: MassIVE walks FTPS, JPOST uses PROXI JSON over HTTPS with
-        an FTP fallback, iProX uses the dataset's PX XML over HTTPS.
-        """
-        if self.is_massive_accession(accession):
-            return self._list_massive_public_files(accession)
-        if self.is_jpost_accession(accession):
-            return self._list_jpost_public_files(accession)
-        if self.is_iprox_accession(accession):
-            return self._list_iprox_public_files(accession)
-        raise ValueError(
-            f"Accession {accession} is not a direct-download repository accession"
-        )
-
-    def _download_direct_download_records(
-        self,
-        accession: str,
-        file_records: List[Dict],
-        output_folder: str,
-        skip_if_downloaded_already: bool,
-        protocol: str,
-        parallel_files: int = 1,
-    ) -> None:
-        """
-        Download files from a direct-download repository.
-
-        MassIVE and JPOST use anonymous FTP(S) with REST-based resume and
-        per-host parallel workers. iProX uses anonymous HTTPS via
-        ``download.iprox.org`` with ``Range``-based resume and per-file
-        parallel workers. URLs are partitioned by scheme so a mixed batch
-        (e.g. a JPOST PX XML that ever pointed at HTTPS) routes correctly.
-        Dispatches via the provider registry.
-        """
-        from pridepy.providers import registry
-        return registry.resolve(accession).download_files(
-            accession=accession,
-            records=file_records,
-            output_folder=output_folder,
-            skip_if_downloaded_already=skip_if_downloaded_already,
-            protocol=protocol,
-            parallel_files=parallel_files,
-        )
 
     async def stream_all_files_metadata(self, output_file, accession=None):
         """Shim — see :meth:`pridepy.providers.pride.PrideProvider.stream_all_files_metadata`."""
@@ -354,22 +312,14 @@ class Files:
         return PrideProvider().stream_all_files_by_project(accession)
 
     def get_all_raw_file_list(self, project_accession):
-        """
-        Get all raw file lists from PRIDE API for a given project_accession
-        :param project_accession: PRIDE accession
-        :return: raw file list in JSON format
-        """
-        if self.is_direct_download_accession(project_accession):
-            record_files = self._list_direct_download_files(project_accession)
-            return [
-                file for file in record_files if file["fileCategory"]["value"] == "RAW"
-            ]
+        """Get raw file list for any registered provider.
 
-        record_files = self.stream_all_files_by_project(project_accession)
-
-        # Filter projects by fileCategory = RAW
-        raw_files = [file for file in record_files if file["fileCategory"]["value"] == "RAW"]
-        return raw_files
+        Returns the dataset's file records filtered to fileCategory == "RAW".
+        """
+        from pridepy.providers import registry
+        provider = registry.resolve(project_accession)
+        records = provider.list_files(project_accession)
+        return [r for r in records if r["fileCategory"]["value"] == "RAW"]
 
     def download_all_raw_files(
         self,
@@ -381,42 +331,21 @@ class Files:
         checksum_check: bool = False,
         parallel_files: int = 1,
     ):
-        """
-        This method will download all the raw files from PRIDE PROJECT
-        :param output_folder: output directory where raw files will get saved
-        :param skip_if_downloaded_already: Boolean value to skip the download if the file has already been downloaded.
-        :param accession: PRIDE accession
-        :param protocol: ftp, aspera, globus
-        :param aspera_maximum_bandwidth: Aspera maximum bandwidth
-        :param checksum_check: Download checksum for a given project.
-        :return: None
-        """
-
-        if not (os.path.isdir(output_folder)):
+        """Download all RAW files for any registered provider."""
+        if not os.path.isdir(output_folder):
             os.mkdir(output_folder)
-
-        raw_files = self.get_all_raw_file_list(accession)
-
-        if self.is_direct_download_accession(accession):
-            self._download_direct_download_records(
-                accession=accession,
-                file_records=raw_files,
-                output_folder=output_folder,
-                skip_if_downloaded_already=skip_if_downloaded_already,
-                protocol=protocol,
-                parallel_files=parallel_files,
-            )
-            return
-
-        self.download_files(
-            raw_files,
-            accession,
-            output_folder,
-            skip_if_downloaded_already,
-            protocol,
-            aspera_maximum_bandwidth=aspera_maximum_bandwidth,
-            checksum_check=checksum_check,
+        from pridepy.providers import registry
+        provider = registry.resolve(accession)
+        records = self.get_all_raw_file_list(accession)
+        provider.download_files(
+            accession=accession,
+            records=records,
+            output_folder=output_folder,
+            skip_if_downloaded_already=skip_if_downloaded_already,
+            protocol=protocol,
             parallel_files=parallel_files,
+            checksum_check=checksum_check,
+            aspera_maximum_bandwidth=aspera_maximum_bandwidth,
         )
 
     @staticmethod
@@ -597,11 +526,14 @@ class Files:
         :param checksum_check: Download checksum for a given project.
         """
 
-        if not (os.path.isdir(output_folder)):
+        if not os.path.isdir(output_folder):
             os.mkdir(output_folder)
 
+        from pridepy.providers import registry
+        provider = registry.resolve(accession)
+
         ## Check type of project
-        if self.is_direct_download_accession(accession):
+        if provider.name in ("massive", "jpost", "iprox"):
             logging.info(
                 "Downloading file from public direct-download dataset {}".format(accession)
             )
@@ -610,9 +542,9 @@ class Files:
                 raise Exception(
                     "File name {} not found in dataset {}".format(file_name, accession)
                 )
-            self._download_direct_download_records(
+            provider.download_files(
                 accession=accession,
-                file_records=response,
+                records=response,
                 output_folder=output_folder,
                 skip_if_downloaded_already=skip_if_downloaded_already,
                 protocol=protocol,
@@ -670,14 +602,10 @@ class Files:
         :param file_name: file name
         :return: file in json format
         """
-
+        from pridepy.providers import registry
         try:
-            if self.is_direct_download_accession(accession):
-                files = self._list_direct_download_files(accession)
-                return [f for f in files if f["fileName"] == file_name]
-            files = self.stream_all_files_by_project(accession)
-            file = [f for f in files if f["fileName"] == file_name]
-            return file
+            records = registry.resolve(accession).list_files(accession)
+            return [r for r in records if r["fileName"] == file_name]
         except Exception as e:
             raise Exception("File not found " + str(e))
 
@@ -760,9 +688,9 @@ class Files:
         checksum_check=False,
         parallel_files: int = 1,
     ):
-        """Shim — see :meth:`pridepy.providers.pride.PrideProvider.download_files`."""
+        """Shim — see :meth:`pridepy.providers.pride.PrideProvider._download_files_batch`."""
         from pridepy.providers.pride import PrideProvider
-        return PrideProvider.download_files(
+        return PrideProvider._download_files_batch(
             file_list_json,
             accession,
             output_folder,
@@ -803,10 +731,10 @@ class Files:
         if not file_names:
             raise ValueError("file_names must contain at least one filename")
 
-        if self.is_direct_download_accession(accession):
-            all_files = self._list_direct_download_files(accession)
-        else:
-            all_files = self.stream_all_files_by_project(accession)
+        from pridepy.providers import registry
+        provider = registry.resolve(accession)
+        all_files = provider.list_files(accession)
+
         requested = set(file_names)
         matched = [f for f in all_files if f.get("fileName") in requested]
         missing = sorted(requested - {f.get("fileName") for f in matched})
@@ -817,26 +745,15 @@ class Files:
                 f"No matching files in project {accession} for: {sorted(requested)}"
             )
 
-        if self.is_direct_download_accession(accession):
-            self._download_direct_download_records(
-                accession=accession,
-                file_records=matched,
-                output_folder=output_folder,
-                skip_if_downloaded_already=skip_if_downloaded_already,
-                protocol=protocol,
-                parallel_files=parallel_files,
-            )
-            return
-
-        self.download_files(
-            matched,
-            accession,
-            output_folder,
-            skip_if_downloaded_already,
-            protocol,
-            aspera_maximum_bandwidth=aspera_maximum_bandwidth,
-            checksum_check=checksum_check,
+        provider.download_files(
+            accession=accession,
+            records=matched,
+            output_folder=output_folder,
+            skip_if_downloaded_already=skip_if_downloaded_already,
+            protocol=protocol,
             parallel_files=parallel_files,
+            checksum_check=checksum_check,
+            aspera_maximum_bandwidth=aspera_maximum_bandwidth,
         )
 
     @staticmethod
@@ -1093,26 +1010,18 @@ class Files:
         """
         if categories is None:
             categories = [category] if category else ["RAW"]
-        raw_files = self.get_all_category_file_list(accession, categories)
-        if self.is_direct_download_accession(accession):
-            self._download_direct_download_records(
-                accession=accession,
-                file_records=raw_files,
-                output_folder=output_folder,
-                skip_if_downloaded_already=skip_if_downloaded_already,
-                protocol=protocol,
-                parallel_files=parallel_files,
-            )
-            return
-        self.download_files(
-            raw_files,
-            accession,
-            output_folder,
-            skip_if_downloaded_already,
-            protocol,
-            aspera_maximum_bandwidth=aspera_maximum_bandwidth,
-            checksum_check=checksum_check,
+        records = self.get_all_category_file_list(accession, categories)
+        from pridepy.providers import registry
+        provider = registry.resolve(accession)
+        provider.download_files(
+            accession=accession,
+            records=records,
+            output_folder=output_folder,
+            skip_if_downloaded_already=skip_if_downloaded_already,
+            protocol=protocol,
             parallel_files=parallel_files,
+            checksum_check=checksum_check,
+            aspera_maximum_bandwidth=aspera_maximum_bandwidth,
         )
 
     def get_all_category_file_list(
@@ -1127,17 +1036,10 @@ class Files:
         """
         if isinstance(categories, str):
             categories = [categories]
-        category_set = {category.upper() for category in categories}
-
-        if self.is_direct_download_accession(accession):
-            record_files = self._list_direct_download_files(accession)
-        else:
-            record_files = self.stream_all_files_by_project(accession)
-
-        category_files = [
-            file for file in record_files if file["fileCategory"]["value"] in category_set
-        ]
-        return category_files
+        category_set = {c.upper() for c in categories}
+        from pridepy.providers import registry
+        records = registry.resolve(accession).list_files(accession)
+        return [r for r in records if r["fileCategory"]["value"] in category_set]
 
     # -------------------------------
     # ProteomeXchange support

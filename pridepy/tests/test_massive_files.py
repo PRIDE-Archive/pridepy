@@ -3,6 +3,7 @@ from unittest import TestCase
 from unittest.mock import patch
 
 from pridepy.files.files import Files
+from pridepy.providers.massive import MassiveProvider
 
 
 class TestMassIVEFiles(TestCase):
@@ -66,7 +67,7 @@ class TestMassIVEFiles(TestCase):
             ),
         ]
 
-        with patch.object(Files, "_list_massive_public_files", return_value=massive_records):
+        with patch.object(MassiveProvider, "list_files", return_value=massive_records):
             result = files.get_all_raw_file_list("MSV000012345")
 
         assert len(result) == 1
@@ -80,7 +81,7 @@ class TestMassIVEFiles(TestCase):
         )
 
         with tempfile.TemporaryDirectory() as tmp_dir:
-            with patch.object(Files, "_list_massive_public_files", return_value=[file_record]), patch.object(
+            with patch.object(MassiveProvider, "list_files", return_value=[file_record]), patch.object(
                 Files, "download_ftp_urls"
             ) as download_mock:
                 files.download_file_by_name(
@@ -120,7 +121,7 @@ class TestMassIVEFiles(TestCase):
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             with patch.object(
-                Files, "_list_massive_public_files", return_value=massive_records
+                MassiveProvider, "list_files", return_value=massive_records
             ), patch.object(Files, "download_ftp_urls") as download_mock:
                 files.download_all_raw_files(
                     accession="MSV000012345",

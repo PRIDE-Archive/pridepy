@@ -685,8 +685,33 @@ class PrideProvider(Provider):
         logging.error(f"All protocol attempts failed for {file_record['fileName']}")
         return False
 
-    @staticmethod
     def download_files(
+        self,
+        accession,
+        records: List[Dict],
+        output_folder: str,
+        skip_if_downloaded_already,
+        protocol: str = "ftp",
+        aspera_maximum_bandwidth: str = "100M",
+        checksum_check: bool = False,
+        parallel_files: int = 1,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
+    ):
+        """Implement Provider.download_files — maps to the legacy static batch downloader."""
+        PrideProvider._download_files_batch(
+            file_list_json=records,
+            accession=accession,
+            output_folder=output_folder,
+            skip_if_downloaded_already=skip_if_downloaded_already,
+            protocol=protocol,
+            aspera_maximum_bandwidth=aspera_maximum_bandwidth,
+            checksum_check=checksum_check,
+            parallel_files=parallel_files,
+        )
+
+    @staticmethod
+    def _download_files_batch(
         file_list_json: List[Dict],
         accession,
         output_folder: str,

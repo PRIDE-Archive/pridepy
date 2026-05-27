@@ -4,6 +4,7 @@ from unittest import TestCase
 from unittest.mock import MagicMock, patch
 
 from pridepy.files.files import Files
+from pridepy.providers.jpost import JpostProvider
 
 
 class TestJPOSTFiles(TestCase):
@@ -50,12 +51,9 @@ class TestJPOSTFiles(TestCase):
             ),
         ]
 
-        with patch.object(Files, "_list_jpost_public_files", return_value=jpost_records), patch.object(
-            Files, "stream_all_files_by_project"
-        ) as pride_mock:
+        with patch.object(JpostProvider, "list_files", return_value=jpost_records):
             result = files.get_all_raw_file_list("JPST000001")
 
-        pride_mock.assert_not_called()
         assert len(result) == 1
         assert {file["fileName"] for file in result} == {"run1.raw"}
 
@@ -68,7 +66,7 @@ class TestJPOSTFiles(TestCase):
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             with patch.object(
-                Files, "_list_jpost_public_files", return_value=[file_record]
+                JpostProvider, "list_files", return_value=[file_record]
             ), patch.object(Files, "download_ftp_urls") as download_mock:
                 files.download_file_by_name(
                     accession="JPST000001",
