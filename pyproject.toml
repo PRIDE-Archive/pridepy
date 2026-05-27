@@ -1,6 +1,6 @@
 [project]
 name = "pridepy"
-version = "0.0.16"
+version = "0.0.17"
 description = "Python Client library for PRIDE Rest API"
 readme = "README.md"
 requires-python = ">=3.9"
