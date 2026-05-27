@@ -53,18 +53,12 @@ class Files:
     MASSIVE_ARCHIVE_FTP = _MassiveProvider.ARCHIVE_FTP
     MASSIVE_ARCHIVE_FTP_URL_PREFIX = _MassiveProvider.ARCHIVE_FTP_URL_PREFIX
     del _MASSIVE_CATEGORY_MAP, _MassiveProvider
-    JPOST_ARCHIVE_FTP = "ftp.jpostdb.org"
-    JPOST_ARCHIVE_FTP_URL_PREFIX = "ftp://ftp.jpostdb.org/"
-    JPOST_PROXI_BASE_URL = "https://repository.jpostdb.org/proxi/datasets/"
-    JPOST_PROXI_CATEGORY_MAP = {
-        "Associated raw file URI": "RAW",
-        "Result file URI": "RESULT",
-        "Search engine output file URI": "SEARCH",
-        "Peak list file URI": "PEAK",
-        "Spectrum library file URI": "SPECTRUM_LIBRARY",
-        "Sequence database URI": "FASTA",
-        "Quantification file URI": "RESULT",
-    }
+    from pridepy.providers.jpost import JpostProvider as _JpostProvider
+    JPOST_ARCHIVE_FTP = _JpostProvider.ARCHIVE_FTP
+    JPOST_ARCHIVE_FTP_URL_PREFIX = _JpostProvider.ARCHIVE_FTP_URL_PREFIX
+    JPOST_PROXI_BASE_URL = _JpostProvider.PROXI_BASE_URL
+    JPOST_PROXI_CATEGORY_MAP = _JpostProvider.PROXI_CATEGORY_MAP
+    del _JpostProvider
     IPROX_DOWNLOAD_BASE_URL = "http://download.iprox.org/"
     IPROX_PX_XML_URL_TEMPLATE = (
         "http://download.iprox.org/{accession}/PX_{accession}.xml"
@@ -166,57 +160,24 @@ class Files:
 
     @staticmethod
     def is_jpost_accession(accession: str) -> bool:
-        """
-        Return True when the accession looks like a JPOST dataset accession.
-        """
-        if not accession:
-            return False
-        return bool(re.fullmatch(r"JPST\d{6}", accession.upper()))
+        """Shim — see :meth:`pridepy.providers.jpost.JpostProvider.matches`."""
+        from pridepy.providers.jpost import JpostProvider
+        return JpostProvider.matches(accession)
 
     @staticmethod
     def _get_jpost_public_root(accession: str) -> str:
-        return f"/{accession.upper()}"
+        from pridepy.providers.jpost import JpostProvider
+        return JpostProvider._get_public_root(accession)
 
     @staticmethod
     def _get_jpost_public_ftp_url(accession: str, remote_path: str) -> str:
-        root_path = Files._get_jpost_public_root(accession).rstrip("/")
-        relative_path = remote_path
-        if remote_path.startswith(root_path):
-            relative_path = remote_path[len(root_path) :].lstrip("/")
-        return f"{Files.JPOST_ARCHIVE_FTP_URL_PREFIX}{accession.upper()}/{relative_path}"
+        from pridepy.providers.jpost import JpostProvider
+        return JpostProvider._get_public_ftp_url(accession, remote_path)
 
     @staticmethod
-    def _build_jpost_file_record(
-        accession: str, ftp_url: str, category_from_proxi: Optional[str] = None
-    ) -> Dict:
-        """
-        Build a pridepy file record for a JPOST file.
-
-        When ``category_from_proxi`` is provided (e.g. ``"Associated raw file URI"``),
-        the PROXI CV name takes precedence over the heuristic collection-from-path
-        mapping. Falls back to the same path-segment heuristic used for MassIVE
-        when the category isn't known.
-        """
-        parsed = urlparse(ftp_url)
-        root_prefix = f"/{accession.upper()}/"
-        relative_path = parsed.path
-        if relative_path.startswith(root_prefix):
-            relative_path = relative_path[len(root_prefix) :]
-        relative_path = relative_path.lstrip("/")
-        collection = relative_path.split("/", 1)[0] if relative_path else ""
-        if category_from_proxi and category_from_proxi in Files.JPOST_PROXI_CATEGORY_MAP:
-            category = Files.JPOST_PROXI_CATEGORY_MAP[category_from_proxi]
-        else:
-            category = Files._map_massive_collection_to_category(collection)
-        return {
-            "accession": accession.upper(),
-            "fileName": os.path.basename(parsed.path),
-            "fileCategory": {"value": category},
-            "publicFileLocations": [{"name": "FTP Protocol", "value": ftp_url}],
-            "relativePath": relative_path,
-            "collection": collection,
-            "source": "JPOST",
-        }
+    def _build_jpost_file_record(accession, ftp_url, category_from_proxi=None):
+        from pridepy.providers.jpost import JpostProvider
+        return JpostProvider._build_file_record(accession, ftp_url, category_from_proxi)
 
     @staticmethod
     def _build_iprox_file_record(
@@ -339,12 +300,11 @@ class Files:
         """
         Discover all public files for a JPOST dataset.
 
-        Prefers the JPOST PROXI JSON endpoint at
-        ``https://repository.jpostdb.org/proxi/datasets/<acc>`` since it
-        returns file URLs with category labels and avoids the anonymous-FTP
-        rate limit that ``ftp.jpostdb.org`` applies per source IP. Falls back
-        to walking the FTP tree if PROXI is unreachable or returns no files.
+        Delegates to JpostProvider but routes via the shim methods so that
+        test patches on ``_list_jpost_public_files_via_proxi`` and
+        ``_list_ftp_repo_files`` continue to intercept.
         """
+        from pridepy.providers.jpost import JpostProvider
         normalized_accession = accession.upper()
         try:
             return self._list_jpost_public_files_via_proxi(normalized_accession)
@@ -353,55 +313,24 @@ class Files:
                 f"JPOST PROXI listing failed for {normalized_accession} "
                 f"({proxi_error}); falling back to FTP tree walk."
             )
-            remote_root = self._get_jpost_public_root(normalized_accession)
+            remote_root = JpostProvider._get_public_root(normalized_accession)
             remote_files = self._list_ftp_repo_files(
-                host=self.JPOST_ARCHIVE_FTP,
+                host=JpostProvider.ARCHIVE_FTP,
                 remote_root=remote_root,
                 error_label=f"JPOST dataset {normalized_accession}",
             )
             return [
                 self._build_jpost_file_record(
                     normalized_accession,
-                    self._get_jpost_public_ftp_url(normalized_accession, remote_file),
+                    JpostProvider._get_public_ftp_url(normalized_accession, remote_file),
                 )
                 for remote_file in remote_files
             ]
 
     def _list_jpost_public_files_via_proxi(self, accession: str) -> List[Dict]:
-        """
-        Fetch the JPOST PROXI dataset metadata and turn each ``datasetFiles``
-        entry into a pridepy file record. The PROXI ``name`` field is mapped to
-        a PRIDE-style category so existing RAW/SEARCH/RESULT filtering works.
-        """
-        import json as _json
-
-        proxi_url = f"{self.JPOST_PROXI_BASE_URL}{accession}"
-        logging.info(f"Fetching JPOST PROXI metadata: {proxi_url}")
-        response = requests.get(
-            proxi_url,
-            headers={"Accept": "application/json"},
-            timeout=30,
-        )
-        response.raise_for_status()
-        data = _json.loads(response.content)
-        dataset_files = data.get("datasetFiles") or []
-        records: List[Dict] = []
-        for entry in dataset_files:
-            value = (entry or {}).get("value")
-            if not value or not value.startswith("ftp://"):
-                continue
-            records.append(
-                self._build_jpost_file_record(
-                    accession,
-                    value,
-                    category_from_proxi=(entry or {}).get("name"),
-                )
-            )
-        if not records:
-            raise RuntimeError(
-                f"JPOST PROXI returned no FTP file URIs for {accession}"
-            )
-        return records
+        """Shim — see :meth:`pridepy.providers.jpost.JpostProvider._list_via_proxi`."""
+        from pridepy.providers.jpost import JpostProvider
+        return JpostProvider()._list_via_proxi(accession)
 
     def _list_iprox_public_files(self, accession: str) -> List[Dict]:
         """
