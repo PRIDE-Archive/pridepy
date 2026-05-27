@@ -8,7 +8,7 @@
 
 You can:
 - download public and private PRIDE files
-- download public MassIVE (`MSV...`) and JPOST (`JPST...`) datasets directly. MassIVE goes through FTPS at `massive-ftp.ucsd.edu`; JPOST uses the JSON PROXI endpoint at `repository.jpostdb.org` for listings and `ftp.jpostdb.org` for transfers
+- download public MassIVE (`MSV...`), JPOST (`JPST...`), and iProX (`IPX...`) datasets directly. MassIVE goes through FTPS at `massive-ftp.ucsd.edu`; JPOST uses the JSON PROXI endpoint at `repository.jpostdb.org` for listings and `ftp.jpostdb.org` for transfers; iProX fetches the dataset's ProteomeXchange XML from `download.iprox.org` and downloads files over anonymous HTTPS
 - download by category (`RAW`, `SEARCH`, `RESULT`, etc.)
 - stream project and file metadata
 - search projects by keyword and filters
@@ -80,7 +80,7 @@ pridepy download-all-public-raw-files \
   --checksum-check
 ```
 
-### 3) Download a public MassIVE or JPOST dataset directly
+### 3) Download a public MassIVE, JPOST, or iProX dataset directly
 
 ```bash
 # MassIVE
@@ -90,17 +90,21 @@ pridepy download-all-public-raw-files \
 
 # JPOST
 pridepy download-all-public-raw-files \
-  -a JPST000123 \
-  -o ./downloads/JPST000123
+  -a JPST002311 \
+  -o ./downloads/JPST002311
+
+# iProX
+pridepy download-all-public-raw-files \
+  -a IPX0017413000 \
+  -o ./downloads/IPX0017413000
 ```
 
 For these direct downloads, `pridepy` enumerates the dataset from the repository:
 - **MassIVE** lists files by walking the FTPS tree at `massive-ftp.ucsd.edu` (TLS is required by the server).
 - **JPOST** lists files through the JSON PROXI endpoint at `https://repository.jpostdb.org/proxi/datasets/<JPSTxxxxxx>` and downloads them from `ftp.jpostdb.org` over plain FTP. The PROXI listing avoids the source-IP connection limit JPOST enforces on FTP.
+- **iProX** fetches the dataset's ProteomeXchange XML from `http://download.iprox.org/<accession>/PX_<accession>.xml`, then downloads each referenced file from the same host over anonymous HTTPS. iProX exposes Aspera (`faspe://`) with username/password for very large bulk transfers; `pridepy` uses the public HTTPS endpoint instead so no iProX credentials are required.
 
-Raw downloads follow each repository's own collection layout, so `download-all-public-raw-files` downloads the files stored under the dataset's `raw/` collection. Direct downloads support REST-based resume, per-file retries, parallel workers (`-w N` up to 3), and post-transfer size verification against the server-reported size.
-
-iProX accessions (`IPX...`) are recognised so the CLI gives you a clear "not supported yet" error rather than treating them as unknown PRIDE accessions. Native iProX download support is blocked on their REST API requiring CAS authentication and downloads going through Aspera with per-session tokens; track that work upstream.
+Raw downloads follow each repository's own collection layout, so `download-all-public-raw-files` downloads the files stored under the dataset's `raw/` collection. Direct downloads support resume (REST for FTP, byte-Range for HTTPS), per-file retries, parallel workers (`-w N` up to 3), and post-transfer size verification against the server-reported size.
 
 ### 4) Download only selected categories
 
@@ -111,7 +115,7 @@ pridepy download-all-public-category-files \
   -c RAW,SEARCH
 ```
 
-You can also request a specific MassIVE / JPOST collection through the same category interface:
+You can also request a specific MassIVE / JPOST / iProX collection through the same category interface:
 
 ```bash
 pridepy download-all-public-category-files \
@@ -256,13 +260,13 @@ print(f"RAW files: {len(raw_files)}")
 print(raw_files[0]["fileName"])
 ```
 
-For MassIVE / JPOST accessions, the same method returns the files found under the dataset's `raw/` collection:
+For MassIVE / JPOST / iProX accessions, the same method returns the files found under the dataset's `raw/` collection:
 
 ```python
 from pridepy.files.files import Files
 
 files = Files()
-for accession in ("MSV000082297", "JPST000123"):
+for accession in ("MSV000082297", "JPST002311", "IPX0017413000"):
     raw_files = files.get_all_raw_file_list(accession)
     print(f"{accession} raw files: {len(raw_files)}")
 ```

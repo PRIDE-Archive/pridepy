@@ -75,6 +75,14 @@ class Files:
         "Sequence database URI": "FASTA",
         "Quantification file URI": "RESULT",
     }
+    IPROX_DOWNLOAD_BASE_URL = "http://download.iprox.org/"
+    IPROX_PX_XML_URL_TEMPLATE = (
+        "http://download.iprox.org/{accession}/PX_{accession}.xml"
+    )
+    # iProX PX XML uses the same PSI-MS cvParam "name" values as JPOST, so the
+    # JPOST PROXI category map applies. PX XML cvParam "Associated raw file URI"
+    # is the canonical raw-file label per the PSI-MS CV (MS:1002846).
+    IPROX_PX_CATEGORY_MAP = JPOST_PROXI_CATEGORY_MAP
     S3_URL = "https://hh.fire.sdo.ebi.ac.uk"
     S3_BUCKET = "pride-public"
     PROTOCOL_ORDER = ["aspera", "s3", "ftp", "globus"]
@@ -347,43 +355,67 @@ class Files:
         }
 
     @staticmethod
+    def _build_iprox_file_record(
+        accession: str, https_url: str, category_from_px: Optional[str] = None
+    ) -> Dict:
+        """
+        Build a pridepy file record for an iProX file. iProX exposes files
+        over anonymous HTTPS at
+        ``http://download.iprox.org/<accession>/<sub-accession>/<filename>``;
+        ``category_from_px`` is the ``cvParam`` ``name`` from the dataset's
+        ProteomeXchange XML (e.g. ``"Associated raw file URI"``).
+        """
+        parsed = urlparse(https_url)
+        root_prefix = f"/{accession.upper()}/"
+        relative_path = parsed.path
+        if relative_path.startswith(root_prefix):
+            relative_path = relative_path[len(root_prefix) :]
+        relative_path = relative_path.lstrip("/")
+        collection = relative_path.split("/", 1)[0] if relative_path else ""
+        if category_from_px and category_from_px in Files.IPROX_PX_CATEGORY_MAP:
+            category = Files.IPROX_PX_CATEGORY_MAP[category_from_px]
+        else:
+            category = Files._map_massive_collection_to_category(collection)
+        return {
+            "accession": accession.upper(),
+            "fileName": os.path.basename(parsed.path),
+            "fileCategory": {"value": category},
+            # ``FTP Protocol`` is the existing label the download dispatcher
+            # uses to locate a file URL; here it actually points at HTTPS.
+            # ``_download_direct_download_records`` routes by URL scheme.
+            "publicFileLocations": [{"name": "FTP Protocol", "value": https_url}],
+            "relativePath": relative_path,
+            "collection": collection,
+            "source": "iProX",
+        }
+
+    @staticmethod
     def is_direct_download_accession(accession: str) -> bool:
         """
-        Return True when the accession is served by a public FTP repository
-        that pridepy supports via direct downloads (no ProteomeXchange API).
+        Return True when the accession is served by a public repository that
+        pridepy supports via direct downloads (no ProteomeXchange API).
+        MassIVE and JPOST use FTP(S); iProX uses anonymous HTTPS via
+        ``download.iprox.org``.
         """
         return (
             Files.is_massive_accession(accession)
             or Files.is_jpost_accession(accession)
+            or Files.is_iprox_accession(accession)
         )
 
     @staticmethod
     def is_iprox_accession(accession: str) -> bool:
         """
         Return True when the accession looks like an iProX dataset accession
-        (``IPX`` followed by 7-10 digits). iProX is recognised so the CLI can
-        emit a clear error rather than treating IPX as an unknown PRIDE
-        accession; direct downloads from iProX are not yet supported because
-        their listing API requires CAS authentication and downloads go through
-        Aspera with per-session tokens.
+        (``IPX`` followed by 7-10 digits). iProX exposes the dataset
+        ProteomeXchange XML at
+        ``http://download.iprox.org/<accession>/PX_<accession>.xml`` and the
+        referenced files are downloadable from ``download.iprox.org`` over
+        anonymous HTTPS with byte-range support.
         """
         if not accession:
             return False
         return bool(re.fullmatch(r"IPX\d{7,10}", accession.upper()))
-
-    @staticmethod
-    def _raise_if_iprox(accession: str) -> None:
-        """
-        Raise a clear ``NotImplementedError`` when a user passes an iProX
-        accession. iProX downloads need CAS authentication and Aspera-tokenised
-        ``faspe://`` URLs which pridepy does not handle yet.
-        """
-        if Files.is_iprox_accession(accession):
-            raise NotImplementedError(
-                f"iProX accession {accession} is recognised but not yet supported. "
-                "iProX requires CAS authentication and Aspera-tokenised downloads; "
-                "track this in pridepy or use the iProX web interface for now."
-            )
 
     @staticmethod
     def _repo_uses_tls(accession: str) -> bool:
@@ -609,14 +641,67 @@ class Files:
             )
         return records
 
+    def _list_iprox_public_files(self, accession: str) -> List[Dict]:
+        """
+        Discover all public files for an iProX dataset.
+
+        iProX publishes the ProteomeXchange XML for every public dataset at a
+        deterministic path on its anonymous HTTPS download server::
+
+            http://download.iprox.org/<accession>/PX_<accession>.xml
+
+        We fetch that XML, walk every ``<DatasetFile>``'s ``cvParam`` entries,
+        and turn each ``Associated raw file URI`` (and sibling URIs for
+        search-engine output, result files, etc.) into a pridepy file record.
+        File downloads themselves go through plain HTTPS on the same host,
+        which supports ``Range`` requests for resume.
+        """
+        normalized_accession = accession.upper()
+        xml_url = self.IPROX_PX_XML_URL_TEMPLATE.format(accession=normalized_accession)
+        logging.info(f"Fetching iProX PX XML: {xml_url}")
+        response = requests.get(xml_url, timeout=30)
+        response.raise_for_status()
+        try:
+            root = ET.fromstring(response.content)
+        except ET.ParseError as parse_error:
+            raise RuntimeError(
+                f"Unable to parse iProX PX XML for {normalized_accession}: {parse_error}"
+            ) from parse_error
+
+        records: List[Dict] = []
+        for dataset_file in root.iter("DatasetFile"):
+            for cv in dataset_file.findall("cvParam"):
+                name = cv.attrib.get("name")
+                value = cv.attrib.get("value")
+                if not value or not name or not name.endswith("URI"):
+                    continue
+                if not value.lower().startswith(("http://", "https://")):
+                    continue
+                records.append(
+                    self._build_iprox_file_record(
+                        normalized_accession,
+                        value,
+                        category_from_px=name,
+                    )
+                )
+        if not records:
+            raise RuntimeError(
+                f"iProX PX XML for {normalized_accession} contained no downloadable HTTPS URIs"
+            )
+        return records
+
     def _list_direct_download_files(self, accession: str) -> List[Dict]:
         """
-        Dispatch to the right FTP-based listing for a direct-download repository.
+        Dispatch to the right listing transport for a direct-download
+        repository: MassIVE walks FTPS, JPOST uses PROXI JSON over HTTPS with
+        an FTP fallback, iProX uses the dataset's PX XML over HTTPS.
         """
         if self.is_massive_accession(accession):
             return self._list_massive_public_files(accession)
         if self.is_jpost_accession(accession):
             return self._list_jpost_public_files(accession)
+        if self.is_iprox_accession(accession):
+            return self._list_iprox_public_files(accession)
         raise ValueError(
             f"Accession {accession} is not a direct-download repository accession"
         )
@@ -631,28 +716,42 @@ class Files:
         parallel_files: int = 1,
     ) -> None:
         """
-        Download files from a direct-download repository (MassIVE/JPOST) via
-        anonymous FTP. Supports REST-based resume, per-file retries, and
-        parallel workers (one connection per worker, capped at file count).
+        Download files from a direct-download repository.
+
+        MassIVE and JPOST use anonymous FTP(S) with REST-based resume and
+        per-host parallel workers. iProX uses anonymous HTTPS via
+        ``download.iprox.org`` with ``Range``-based resume and per-file
+        parallel workers. URLs are partitioned by scheme so a mixed batch
+        (e.g. a JPOST PX XML that ever pointed at HTTPS) routes correctly.
         """
-        if protocol != "ftp":
+        if protocol not in ("ftp", "https", "http"):
             logging.warning(
-                "Direct downloads currently use ftp only. "
+                "Direct downloads currently use ftp / https only. "
                 f"Ignoring requested protocol '{protocol}' for {accession}."
             )
 
-        ftp_urls = [self._get_download_url(file_record, "ftp") for file_record in file_records]
-        if not ftp_urls:
+        all_urls = [self._get_download_url(record, "ftp") for record in file_records]
+        ftp_urls = [u for u in all_urls if u.lower().startswith("ftp://")]
+        http_urls = [u for u in all_urls if u.lower().startswith(("http://", "https://"))]
+        if not ftp_urls and not http_urls:
             logging.info(f"No files matched for direct-download dataset {accession}")
             return
 
-        self.download_ftp_urls(
-            ftp_urls=ftp_urls,
-            output_folder=output_folder,
-            skip_if_downloaded_already=skip_if_downloaded_already,
-            use_tls=self._repo_uses_tls(accession),
-            parallel_files=parallel_files,
-        )
+        if ftp_urls:
+            self.download_ftp_urls(
+                ftp_urls=ftp_urls,
+                output_folder=output_folder,
+                skip_if_downloaded_already=skip_if_downloaded_already,
+                use_tls=self._repo_uses_tls(accession),
+                parallel_files=parallel_files,
+            )
+        if http_urls:
+            self.download_http_urls(
+                http_urls=http_urls,
+                output_folder=output_folder,
+                skip_if_downloaded_already=skip_if_downloaded_already,
+                parallel_files=parallel_files,
+            )
 
     async def stream_all_files_metadata(self, output_file, accession=None):
         """
@@ -688,7 +787,6 @@ class Files:
         :param project_accession: PRIDE accession
         :return: raw file list in JSON format
         """
-        self._raise_if_iprox(project_accession)
         if self.is_direct_download_accession(project_accession):
             record_files = self._list_direct_download_files(project_accession)
             return [
@@ -721,7 +819,6 @@ class Files:
         :param checksum_check: Download checksum for a given project.
         :return: None
         """
-        self._raise_if_iprox(accession)
 
         if not (os.path.isdir(output_folder)):
             os.mkdir(output_folder)
@@ -1218,7 +1315,6 @@ class Files:
         :param aspera_maximum_bandwidth: Aspera maximum bandwidth
         :param checksum_check: Download checksum for a given project.
         """
-        self._raise_if_iprox(accession)
 
         if not (os.path.isdir(output_folder)):
             os.mkdir(output_folder)
@@ -1293,7 +1389,6 @@ class Files:
         :param file_name: file name
         :return: file in json format
         """
-        self._raise_if_iprox(accession)
 
         try:
             if self.is_direct_download_accession(accession):
@@ -1661,7 +1756,6 @@ class Files:
         """
         if not file_names:
             raise ValueError("file_names must contain at least one filename")
-        self._raise_if_iprox(accession)
 
         if self.is_direct_download_accession(accession):
             all_files = self._list_direct_download_files(accession)
@@ -1951,7 +2045,6 @@ class Files:
         :param categories: List of file categories to download.
         :param category: Single file category (deprecated, use categories instead).
         """
-        self._raise_if_iprox(accession)
         if categories is None:
             categories = [category] if category else ["RAW"]
         raw_files = self.get_all_category_file_list(accession, categories)
@@ -2331,50 +2424,91 @@ class Files:
                 )
 
     @staticmethod
+    def _http_download_one(
+        url: str,
+        output_folder: str,
+        skip_if_downloaded_already: bool,
+        max_retries: int = 3,
+        position: int = 0,
+    ) -> None:
+        """
+        Download a single HTTP(S) URL with HEAD-then-Range resume and retry.
+        Used as the worker target for both the serial loop and the parallel
+        ThreadPoolExecutor path. Reuses :meth:`_parallel_download` so the same
+        resume / restart-on-non-206 behaviour is shared with globus downloads.
+        """
+        local_path = Files._local_path_for_url(url, output_folder)
+        if skip_if_downloaded_already and os.path.exists(local_path):
+            logging.info(f"Skipping download as file already exists: {local_path}")
+            return
+        last_error: Optional[Exception] = None
+        for attempt in range(1, max_retries + 1):
+            try:
+                Files._parallel_download(url, local_path, position=position)
+                logging.info(f"Successfully downloaded {local_path}")
+                return
+            except Exception as e:
+                last_error = e
+                logging.warning(
+                    f"HTTP download attempt {attempt}/{max_retries} failed for {url}: {e}"
+                )
+        raise RuntimeError(
+            f"Giving up on {local_path} after {max_retries} HTTP attempts"
+        ) from last_error
+
+    @staticmethod
     def download_http_urls(
         http_urls: List[str],
         output_folder: str,
         skip_if_downloaded_already: bool,
+        parallel_files: int = 1,
+        max_retries: int = 3,
     ) -> None:
         """
-        Download a list of HTTP(S) URLs with resume support and progress bars.
+        Download a list of HTTP(S) URLs with HEAD-then-Range resume, per-file
+        retries, and an optional ``parallel_files`` worker pool.
+
+        When ``parallel_files`` > 1, downloads run concurrently using a
+        :class:`ThreadPoolExecutor`. Each worker manages its own file (a new
+        ``requests`` session is opened inside ``_parallel_download``) so the
+        only shared resource is the output directory.
         """
         if not os.path.isdir(output_folder):
             os.makedirs(output_folder, exist_ok=True)
 
-        session = Util.create_session_with_retries()
-        for url in http_urls:
-            try:
-                local_path = Files._local_path_for_url(url, output_folder)
-                if skip_if_downloaded_already and os.path.exists(local_path):
-                    logging.info("Skipping download as file already exists")
-                    continue
+        if not http_urls:
+            return
 
-                if os.path.exists(local_path):
-                    resume_size = os.path.getsize(local_path)
-                    headers = {"Range": f"bytes={resume_size}-"}
-                    mode = "ab"
-                else:
-                    resume_size = 0
-                    headers = {}
-                    mode = "wb"
-
-                with session.get(url, stream=True, headers=headers, timeout=(10, 60)) as r:
-                    r.raise_for_status()
-                    total_size = int(r.headers.get("content-length", 0)) + resume_size
-                    block_size = 1024 * 1024
-                    with tqdm(
-                        total=total_size,
-                        unit="B",
-                        unit_scale=True,
-                        desc=local_path,
-                        initial=resume_size,
-                    ) as pbar:
-                        with open(local_path, mode) as f:
-                            for chunk in r.iter_content(chunk_size=block_size):
-                                if chunk:
-                                    f.write(chunk)
-                                    pbar.update(len(chunk))
-                logging.info(f"Successfully downloaded {local_path}")
-            except Exception as e:
-                logging.error(f"HTTP download failed for {url}: {str(e)}")
+        workers = max(1, min(parallel_files, len(http_urls)))
+        if workers > 1:
+            logging.info(
+                f"Downloading {len(http_urls)} HTTP(S) file(s) with {workers} parallel workers"
+            )
+            with ThreadPoolExecutor(max_workers=workers) as executor:
+                futures = [
+                    executor.submit(
+                        Files._http_download_one,
+                        url,
+                        output_folder,
+                        skip_if_downloaded_already,
+                        max_retries,
+                        idx,
+                    )
+                    for idx, url in enumerate(http_urls)
+                ]
+                for future in as_completed(futures):
+                    try:
+                        future.result()
+                    except Exception as e:
+                        logging.error(f"Parallel HTTP download error: {e}")
+        else:
+            for url in http_urls:
+                try:
+                    Files._http_download_one(
+                        url,
+                        output_folder,
+                        skip_if_downloaded_already,
+                        max_retries,
+                    )
+                except Exception as e:
+                    logging.error(f"HTTP download failed for {url}: {e}")
