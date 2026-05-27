@@ -844,15 +844,15 @@ class Files:
 
     @staticmethod
     def _normalize_px_xml_url(px_id_or_url: str) -> str:
-        """Shim — see :func:`pridepy.commands.proteomexchange._normalize_px_xml_url`."""
-        from pridepy.commands import proteomexchange
-        return proteomexchange._normalize_px_xml_url(px_id_or_url)
+        """Shim — see :meth:`pridepy.providers.proteomexchange.ProteomeXchangeProvider._normalize_px_xml_url`."""
+        from pridepy.providers.proteomexchange import ProteomeXchangeProvider
+        return ProteomeXchangeProvider._normalize_px_xml_url(px_id_or_url)
 
     @staticmethod
     def _parse_px_xml_for_raw_file_urls(px_xml_url: str):
-        """Shim — see :func:`pridepy.commands.proteomexchange._parse_px_xml_for_raw_file_urls`."""
-        from pridepy.commands import proteomexchange
-        return proteomexchange._parse_px_xml_for_raw_file_urls(px_xml_url)
+        """Shim — see :meth:`pridepy.providers.proteomexchange.ProteomeXchangeProvider._parse_px_xml_for_raw_file_urls`."""
+        from pridepy.providers.proteomexchange import ProteomeXchangeProvider
+        return ProteomeXchangeProvider._parse_px_xml_for_raw_file_urls(px_xml_url)
 
     def download_px_raw_files(
         self,
@@ -860,9 +860,11 @@ class Files:
         output_folder: str,
         skip_if_downloaded_already: bool = True,
     ) -> None:
-        """Shim — see :func:`pridepy.commands.proteomexchange.download_px_raw_files`."""
-        from pridepy.commands import proteomexchange
-        return proteomexchange.download_px_raw_files(px_id_or_url, output_folder, skip_if_downloaded_already)
+        """Shim — see :meth:`pridepy.providers.proteomexchange.ProteomeXchangeProvider.download_from_accession_or_url`."""
+        from pridepy.providers.proteomexchange import ProteomeXchangeProvider
+        return ProteomeXchangeProvider().download_from_accession_or_url(
+            px_id_or_url, output_folder, skip_if_downloaded_already
+        )
 
     @staticmethod
     def _local_path_for_url(download_url: str, output_folder: str) -> str:

@@ -1,0 +1,192 @@
+"""ProteomeXchange provider.
+
+ProteomeXchange is a meta-repository: a PXD/PRD accession routes through
+the cross-repository XML at ``proteomecentral.proteomexchange.org``, and
+the XML's ``Associated raw file URI`` cvParams point at the actual hosting
+repository (PRIDE / MassIVE / JPOST / iProX / etc.).
+
+Unlike the other providers in this package, ``ProteomeXchangeProvider`` is
+NOT auto-registered with :mod:`pridepy.providers.registry`. PXD/PRD
+accessions would otherwise be ambiguous between PRIDE's V3 API listing and
+ProteomeXchange's XML listing; the registry continues to route PXD/PRD via
+:class:`pridepy.providers.pride.PrideProvider`. ``ProteomeXchangeProvider``
+is the explicit gateway invoked by the ``download-px-raw-files`` CLI
+command and by ``Files.download_px_raw_files`` — callers who specifically
+want the cross-repository XML view.
+
+The class accepts either:
+
+- a plain accession (``PXD039236``)
+- a ProteomeCentral dataset URL (``https://proteomecentral.proteomexchange.org/cgi/GetDataset?ID=...``)
+
+…and resolves it to the XML endpoint via :meth:`_normalize_px_xml_url`.
+"""
+import logging
+import os
+import re
+import xml.etree.ElementTree as ET
+from typing import ClassVar, Dict, List, Optional
+from urllib.parse import urlparse
+
+from pridepy.providers.base import Provider
+from pridepy.util.api_handling import Util
+
+
+class ProteomeXchangeProvider(Provider):
+    name: ClassVar[str] = "proteomexchange"
+
+    @staticmethod
+    def matches(accession: str) -> bool:
+        """Return True for PXD/PRD accessions or ProteomeCentral URLs.
+
+        Not used by :mod:`pridepy.providers.registry` (this provider is
+        deliberately not auto-registered). Provided for parity with the
+        ``Provider`` interface and so direct callers can introspect whether
+        a given input looks like something ProteomeXchange knows how to
+        handle.
+        """
+        if not accession:
+            return False
+        if accession.lower().startswith(("http://", "https://")):
+            return "proteomexchange" in accession.lower() or "cgi/GetDataset" in accession
+        return bool(re.fullmatch(r"(?:PXD|PRD)\d+", accession.upper()))
+
+    @staticmethod
+    def _normalize_px_xml_url(px_id_or_url: str) -> str:
+        """Build the ProteomeXchange XML endpoint URL from an accession or URL.
+
+        Examples accepted:
+          - ``PXD039236``
+          - ``https://proteomecentral.proteomexchange.org/cgi/GetDataset?ID=PXD039236``
+          - ``https://proteomecentral.proteomexchange.org/cgi/GetDataset?ID=PXD039236&anything``
+        """
+        if px_id_or_url.startswith("http://") or px_id_or_url.startswith("https://"):
+            parsed = urlparse(px_id_or_url)
+            query = parsed.query or ""
+            if "ID=" in query:
+                id_value = [
+                    q.split("=", 1)[1] for q in query.split("&") if q.startswith("ID=")
+                ]
+                if id_value:
+                    return (
+                        "https://proteomecentral.proteomexchange.org/cgi/GetDataset"
+                        f"?ID={id_value[0]}&outputMode=XML&test=no"
+                    )
+            if parsed.path.endswith("/cgi/GetDataset"):
+                return (
+                    "https://proteomecentral.proteomexchange.org/cgi/GetDataset"
+                    f"?{query}&outputMode=XML&test=no"
+                )
+        return (
+            "https://proteomecentral.proteomexchange.org/cgi/GetDataset"
+            f"?ID={px_id_or_url}&outputMode=XML&test=no"
+        )
+
+    @staticmethod
+    def _parse_px_xml_for_raw_file_urls(px_xml_url: str) -> List[str]:
+        """Fetch the PX XML and return every ``Associated raw file URI`` value."""
+        headers = {"Accept": "application/xml"}
+        response = Util.get_api_call(px_xml_url, headers)
+        response.raise_for_status()
+        root = ET.fromstring(response.content)
+
+        urls: List[str] = []
+        for dataset_file in root.iter("DatasetFile"):
+            for cv in dataset_file.findall("cvParam"):
+                name = cv.attrib.get("name")
+                value = cv.attrib.get("value")
+                if name == "Associated raw file URI" and value:
+                    urls.append(value)
+        return urls
+
+    def list_files(self, accession: str) -> List[Dict]:
+        """Return the dataset's raw-file URIs as minimal file records.
+
+        The PX XML doesn't expose checksums or rich category labels, so
+        each record carries just enough to drive the downloader.
+        """
+        px_xml_url = self._normalize_px_xml_url(accession)
+        logging.info(f"Fetching PX XML: {px_xml_url}")
+        urls = self._parse_px_xml_for_raw_file_urls(px_xml_url)
+        records: List[Dict] = []
+        for url in urls:
+            parsed = urlparse(url)
+            records.append(
+                {
+                    "accession": accession,
+                    "fileName": os.path.basename(parsed.path),
+                    "fileCategory": {"value": "RAW"},
+                    "publicFileLocations": [
+                        {"name": "FTP Protocol", "value": url}
+                    ],
+                    "source": "ProteomeXchange",
+                }
+            )
+        return records
+
+    def download_files(
+        self,
+        accession: str,
+        records: List[Dict],
+        output_folder: str,
+        skip_if_downloaded_already: bool,
+        protocol: str,
+        parallel_files: int = 1,
+        checksum_check: bool = False,
+        aspera_maximum_bandwidth: str = "100M",
+        username: Optional[str] = None,
+        password: Optional[str] = None,
+    ) -> None:
+        """Partition record URLs by scheme and route to the matching transport.
+
+        Routes ftp:// records to :meth:`Files.download_ftp_urls` and
+        http(s):// records to :meth:`Files.download_http_urls`, going
+        through the Files facade so test patches like
+        ``patch.object(Files, "download_ftp_urls")`` continue to intercept.
+        """
+        from pridepy.files.files import Files  # lazy: avoid module-load cycle
+
+        if not os.path.isdir(output_folder):
+            os.makedirs(output_folder, exist_ok=True)
+
+        urls = [
+            record["publicFileLocations"][0]["value"]
+            for record in records
+            if record.get("publicFileLocations")
+        ]
+        ftp_urls = [u for u in urls if u.lower().startswith("ftp://")]
+        http_urls = [u for u in urls if u.lower().startswith(("http://", "https://"))]
+
+        if ftp_urls:
+            Files.download_ftp_urls(
+                ftp_urls, output_folder, skip_if_downloaded_already
+            )
+        if http_urls:
+            Files.download_http_urls(
+                http_urls, output_folder, skip_if_downloaded_already
+            )
+
+    def download_from_accession_or_url(
+        self,
+        px_id_or_url: str,
+        output_folder: str,
+        skip_if_downloaded_already: bool = True,
+    ) -> None:
+        """End-to-end: resolve XML, list files, partition by scheme, download.
+
+        Convenience for the ``download-px-raw-files`` CLI command — combines
+        :meth:`list_files` and :meth:`download_files` with the original
+        ``download_px_raw_files`` defaults (skip-if-downloaded-already
+        defaults to ``True``, no parallel workers).
+        """
+        records = self.list_files(px_id_or_url)
+        if not records:
+            logging.info("No Associated raw file URIs found in PX XML")
+            return
+        self.download_files(
+            accession=px_id_or_url,
+            records=records,
+            output_folder=output_folder,
+            skip_if_downloaded_already=skip_if_downloaded_already,
+            protocol="ftp",
+        )
