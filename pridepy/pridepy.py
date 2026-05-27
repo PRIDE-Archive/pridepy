@@ -15,9 +15,9 @@ def main():
 
 @main.command(
     "download-all-public-raw-files",
-    help="Download all public raw files from a given PRIDE public project",
+    help="Download all public raw files from a PRIDE or MassIVE public dataset",
 )
-@click.option("-a", "--accession", required=True, help="PRIDE project accession")
+@click.option("-a", "--accession", required=True, help="PRIDE or MassIVE accession")
 @click.option(
     "-p",
     "--protocol",
@@ -59,10 +59,10 @@ def download_all_public_raw_files(
     checksum_check: bool = False,
 ):
     """
-    Command to download all public raw files from a specified PRIDE project.
+    Command to download all public raw files from a specified PRIDE or MassIVE dataset.
 
     Parameters:
-        accession (str): PRIDE project accession.
+        accession (str): PRIDE or MassIVE accession.
         protocol (str): Protocol for downloading files (ftp, aspera, globus, s3). Default is ftp.
         output_folder (str): Directory to save downloaded raw files.
         skip_if_downloaded_already (bool): Skip download if files already exist. Default is False.
@@ -89,9 +89,9 @@ def download_all_public_raw_files(
 
 @main.command(
     "download-all-public-category-files",
-    help="Download all public files of specific category from a given PRIDE public project",
+    help="Download all public files of specific category from a PRIDE or MassIVE public dataset",
 )
-@click.option("-a", "--accession", required=True, help="PRIDE project accession")
+@click.option("-a", "--accession", required=True, help="PRIDE or MassIVE accession")
 @click.option(
     "-p",
     "--protocol",
@@ -141,10 +141,10 @@ def download_all_public_category_files(
     category: str = "RAW",
 ):
     """
-    Command to download all public files of a specified category from a given PRIDE public project.
+    Command to download all public files of a specified category from a given PRIDE or MassIVE dataset.
 
     Parameters:
-        accession (str): The PRIDE project accession identifier.
+        accession (str): The PRIDE or MassIVE dataset accession identifier.
         protocol (str): The protocol to use for downloading files (ftp, aspera, globus, s3).
         output_folder (str): The directory where the files will be downloaded.
         skip_if_downloaded_already (bool): If True, skips downloading files that already exist. Default is False.
@@ -182,9 +182,9 @@ def download_all_public_category_files(
 
 @main.command(
     "download-file-by-name",
-    help="Download a single file from a given PRIDE project (public or private)",
+    help="Download a single file from a PRIDE dataset or a public MassIVE dataset",
 )
-@click.option("-a", "--accession", required=True, help="PRIDE project accession")
+@click.option("-a", "--accession", required=True, help="PRIDE or MassIVE accession")
 @click.option(
     "-p",
     "--protocol",
@@ -233,7 +233,7 @@ def download_file_by_name(
 ):
     """
     This script download single file from servers or copy from the file system
-    :param accession: PRIDE project accession
+    :param accession: PRIDE or MassIVE accession
     :param protocol: Protocol to use for download: ftp, aspera, globus, s3. Default is ftp.
     :param file_name: fileName to be downloaded
     :param output_folder: output folder to download or copy files
