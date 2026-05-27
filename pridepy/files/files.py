@@ -44,8 +44,15 @@ class Files:
     PRIDE_ARCHIVE_FTP = "ftp.pride.ebi.ac.uk"
     PRIDE_ARCHIVE_FTP_URL_PREFIX = "ftp://ftp.pride.ebi.ac.uk/"
     PRIDE_ARCHIVE_HTTPS_URL_PREFIX = "https://ftp.pride.ebi.ac.uk/"
-    MASSIVE_ARCHIVE_FTP = "massive-ftp.ucsd.edu"
-    MASSIVE_ARCHIVE_FTP_URL_PREFIX = "ftp://massive-ftp.ucsd.edu/v01/"
+    # Re-exported from providers/massive.py — kept here for back-compat.
+    from pridepy.providers.massive import (  # noqa: E402
+        MASSIVE_CATEGORY_MAP as _MASSIVE_CATEGORY_MAP,
+        MassiveProvider as _MassiveProvider,
+    )
+    MASSIVE_CATEGORY_MAP = _MASSIVE_CATEGORY_MAP
+    MASSIVE_ARCHIVE_FTP = _MassiveProvider.ARCHIVE_FTP
+    MASSIVE_ARCHIVE_FTP_URL_PREFIX = _MassiveProvider.ARCHIVE_FTP_URL_PREFIX
+    del _MASSIVE_CATEGORY_MAP, _MassiveProvider
     JPOST_ARCHIVE_FTP = "ftp.jpostdb.org"
     JPOST_ARCHIVE_FTP_URL_PREFIX = "ftp://ftp.jpostdb.org/"
     JPOST_PROXI_BASE_URL = "https://repository.jpostdb.org/proxi/datasets/"
@@ -69,18 +76,6 @@ class Files:
     S3_URL = "https://hh.fire.sdo.ebi.ac.uk"
     S3_BUCKET = "pride-public"
     PROTOCOL_ORDER = ["aspera", "s3", "ftp", "globus"]
-    MASSIVE_CATEGORY_MAP = {
-        "raw": "RAW",
-        "peak": "PEAK",
-        "ccms_peak": "PEAK",
-        "search": "SEARCH",
-        "result": "RESULT",
-        "ccms_result": "RESULT",
-        "quant": "RESULT",
-        "fasta": "FASTA",
-        "spectrum_library": "SPECTRUM_LIBRARY",
-        "library": "SPECTRUM_LIBRARY",
-    }
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
     def __init__(self):
@@ -145,48 +140,29 @@ class Files:
 
     @staticmethod
     def is_massive_accession(accession: str) -> bool:
-        """
-        Return True when the accession looks like a MassIVE dataset accession.
-        """
-        if not accession:
-            return False
-        return bool(re.fullmatch(r"R?MSV\d{9}", accession.upper()))
+        """Shim — see :meth:`pridepy.providers.massive.MassiveProvider.matches`."""
+        from pridepy.providers.massive import MassiveProvider
+        return MassiveProvider.matches(accession)
 
     @staticmethod
     def _get_massive_public_root(accession: str) -> str:
-        normalized_accession = accession.upper()
-        return f"/v01/{normalized_accession}"
+        from pridepy.providers.massive import MassiveProvider
+        return MassiveProvider._get_public_root(accession)
 
     @staticmethod
     def _get_massive_public_ftp_url(accession: str, remote_path: str) -> str:
-        root_path = Files._get_massive_public_root(accession).rstrip("/")
-        relative_path = remote_path
-        if remote_path.startswith(root_path):
-            relative_path = remote_path[len(root_path) :].lstrip("/")
-        return f"{Files.MASSIVE_ARCHIVE_FTP_URL_PREFIX}{accession.upper()}/{relative_path}"
+        from pridepy.providers.massive import MassiveProvider
+        return MassiveProvider._get_public_ftp_url(accession, remote_path)
 
     @staticmethod
     def _map_massive_collection_to_category(collection: str) -> str:
-        return Files.MASSIVE_CATEGORY_MAP.get(collection.lower(), "OTHER")
+        from pridepy.providers.massive import MassiveProvider
+        return MassiveProvider._map_collection_to_category(collection)
 
     @staticmethod
     def _build_massive_file_record(accession: str, ftp_url: str) -> Dict:
-        parsed = urlparse(ftp_url)
-        root_prefix = f"/v01/{accession.upper()}/"
-        relative_path = parsed.path
-        if relative_path.startswith(root_prefix):
-            relative_path = relative_path[len(root_prefix) :]
-        relative_path = relative_path.lstrip("/")
-        collection = relative_path.split("/", 1)[0] if relative_path else ""
-        return {
-            "accession": accession.upper(),
-            "fileName": os.path.basename(parsed.path),
-            "fileCategory": {"value": Files._map_massive_collection_to_category(collection)},
-            "publicFileLocations": [{"name": "FTP Protocol", "value": ftp_url}],
-            "relativePath": relative_path,
-            "collection": collection,
-            "source": "MassIVE",
-        }
+        from pridepy.providers.massive import MassiveProvider
+        return MassiveProvider._build_file_record(accession, ftp_url)
 
     @staticmethod
     def is_jpost_accession(accession: str) -> bool:
@@ -333,24 +309,9 @@ class Files:
         return transport._list_ftp_repo_files(host=host, remote_root=remote_root, error_label=error_label, use_tls=use_tls)
 
     def _list_massive_public_files(self, accession: str) -> List[Dict]:
-        """
-        Discover all public files for a MassIVE dataset from its anonymous FTP tree.
-        """
-        normalized_accession = accession.upper()
-        remote_root = self._get_massive_public_root(normalized_accession)
-        remote_files = self._list_ftp_repo_files(
-            host=self.MASSIVE_ARCHIVE_FTP,
-            remote_root=remote_root,
-            error_label=f"MassIVE dataset {normalized_accession}",
-            use_tls=True,
-        )
-        return [
-            self._build_massive_file_record(
-                normalized_accession,
-                self._get_massive_public_ftp_url(normalized_accession, remote_file),
-            )
-            for remote_file in remote_files
-        ]
+        """Shim — see :meth:`pridepy.providers.massive.MassiveProvider.list_files`."""
+        from pridepy.providers.massive import MassiveProvider
+        return MassiveProvider().list_files(accession)
 
     def _download_massive_file_records(
         self,
