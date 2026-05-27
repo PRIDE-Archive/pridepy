@@ -1,58 +1,73 @@
 #!/usr/bin/env python
+import importlib.resources
 import logging
 import os
+import subprocess
 import urllib
 import urllib.request
 from ftplib import FTP
 from typing import Dict, List, Optional, Tuple
 
-import requests
+import requests  # noqa: F401 — kept as a patch target for tests
 
 from pridepy.util.api_handling import Util
 
+# Module-level imports of the modular architecture. Providers and commands
+# do not import Files at module level (only lazily inside method bodies),
+# so hoisting these to the top is safe and avoids cluttering every shim
+# method body with a local import.
+from pridepy.providers import registry, transport
+from pridepy.providers import util as _provider_util
+from pridepy.providers.iprox import IproxProvider
+from pridepy.providers.jpost import JpostProvider
+from pridepy.providers.massive import MASSIVE_CATEGORY_MAP, MassiveProvider
+from pridepy.providers.pride import PrideProvider
+from pridepy.providers.proteomexchange import ProteomeXchangeProvider
+from pridepy.commands import by_list, by_url
 
-# Re-export from providers.util so external `from pridepy.files.files import Progress`
+# Re-export Progress so external `from pridepy.files.files import Progress`
 # still works.
 from pridepy.providers.util import Progress  # noqa: F401
 
 
 class Files:
     """
-    This class handles PRIDE API files endpoint.
+    This class handles PRIDE API files endpoint, and dispatches to the
+    per-repository provider classes in :mod:`pridepy.providers`.
     """
 
-    # Re-exported from providers/pride.py — kept here for back-compat.
-    from pridepy.providers.pride import PrideProvider as _PrideProvider
-    V3_API_BASE_URL = _PrideProvider.V3_API_BASE_URL
-    API_BASE_URL = _PrideProvider.API_BASE_URL
-    API_PRIVATE_URL = _PrideProvider.API_PRIVATE_URL
-    PRIDE_ARCHIVE_FTP = _PrideProvider.ARCHIVE_FTP
-    PRIDE_ARCHIVE_FTP_URL_PREFIX = _PrideProvider.ARCHIVE_FTP_URL_PREFIX
-    PRIDE_ARCHIVE_HTTPS_URL_PREFIX = _PrideProvider.ARCHIVE_HTTPS_URL_PREFIX
-    S3_URL = _PrideProvider.S3_URL
-    S3_BUCKET = _PrideProvider.S3_BUCKET
-    PROTOCOL_ORDER = _PrideProvider.PROTOCOL_ORDER
-    del _PrideProvider
-    # Re-exported from providers/massive.py — kept here for back-compat.
-    from pridepy.providers.massive import (  # noqa: E402
-        MASSIVE_CATEGORY_MAP as _MASSIVE_CATEGORY_MAP,
-        MassiveProvider as _MassiveProvider,
-    )
-    MASSIVE_CATEGORY_MAP = _MASSIVE_CATEGORY_MAP
-    MASSIVE_ARCHIVE_FTP = _MassiveProvider.ARCHIVE_FTP
-    MASSIVE_ARCHIVE_FTP_URL_PREFIX = _MassiveProvider.ARCHIVE_FTP_URL_PREFIX
-    del _MASSIVE_CATEGORY_MAP, _MassiveProvider
-    from pridepy.providers.jpost import JpostProvider as _JpostProvider
-    JPOST_ARCHIVE_FTP = _JpostProvider.ARCHIVE_FTP
-    JPOST_ARCHIVE_FTP_URL_PREFIX = _JpostProvider.ARCHIVE_FTP_URL_PREFIX
-    JPOST_PROXI_BASE_URL = _JpostProvider.PROXI_BASE_URL
-    JPOST_PROXI_CATEGORY_MAP = _JpostProvider.PROXI_CATEGORY_MAP
-    del _JpostProvider
-    from pridepy.providers.iprox import IproxProvider as _IproxProvider
-    IPROX_DOWNLOAD_BASE_URL = _IproxProvider.DOWNLOAD_BASE_URL
-    IPROX_PX_XML_URL_TEMPLATE = _IproxProvider.PX_XML_URL_TEMPLATE
-    IPROX_PX_CATEGORY_MAP = _IproxProvider.PX_CATEGORY_MAP
-    del _IproxProvider
+    # PRIDE class-attribute re-exports (kept here for back-compat).
+    V3_API_BASE_URL = PrideProvider.V3_API_BASE_URL
+    API_BASE_URL = PrideProvider.API_BASE_URL
+    API_PRIVATE_URL = PrideProvider.API_PRIVATE_URL
+    PRIDE_ARCHIVE_FTP = PrideProvider.ARCHIVE_FTP
+    PRIDE_ARCHIVE_FTP_URL_PREFIX = PrideProvider.ARCHIVE_FTP_URL_PREFIX
+    PRIDE_ARCHIVE_HTTPS_URL_PREFIX = PrideProvider.ARCHIVE_HTTPS_URL_PREFIX
+    S3_URL = PrideProvider.S3_URL
+    S3_BUCKET = PrideProvider.S3_BUCKET
+    PROTOCOL_ORDER = PrideProvider.PROTOCOL_ORDER
+
+    # MassIVE class-attribute re-exports.
+    MASSIVE_ARCHIVE_FTP = MassiveProvider.ARCHIVE_FTP
+    MASSIVE_ARCHIVE_FTP_URL_PREFIX = MassiveProvider.ARCHIVE_FTP_URL_PREFIX
+    # Note: MASSIVE_CATEGORY_MAP is the module-level constant in providers/massive.py,
+    # re-exported on Files as a class attribute via the module-level import above.
+
+    # JPOST class-attribute re-exports.
+    JPOST_ARCHIVE_FTP = JpostProvider.ARCHIVE_FTP
+    JPOST_ARCHIVE_FTP_URL_PREFIX = JpostProvider.ARCHIVE_FTP_URL_PREFIX
+    JPOST_PROXI_BASE_URL = JpostProvider.PROXI_BASE_URL
+    JPOST_PROXI_CATEGORY_MAP = JpostProvider.PROXI_CATEGORY_MAP
+
+    # iProX class-attribute re-exports.
+    IPROX_DOWNLOAD_BASE_URL = IproxProvider.DOWNLOAD_BASE_URL
+    IPROX_PX_XML_URL_TEMPLATE = IproxProvider.PX_XML_URL_TEMPLATE
+    IPROX_PX_CATEGORY_MAP = IproxProvider.PX_CATEGORY_MAP
+
+    # MassIVE category map re-exported. Class attribute shadowing the module-level
+    # constant of the same name happens cleanly in class scope.
+    MASSIVE_CATEGORY_MAP = MASSIVE_CATEGORY_MAP
+
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
     def __init__(self):
@@ -61,118 +76,97 @@ class Files:
     @staticmethod
     def _find_tsv_columns(header: str) -> Optional[Tuple[int, int]]:
         """Shim — see :func:`pridepy.providers.util._find_tsv_columns`."""
-        from pridepy.providers import util
-        return util._find_tsv_columns(header)
+        return _provider_util._find_tsv_columns(header)
 
     @staticmethod
     def _is_md5_checksum(value: str) -> bool:
         """Shim — see :func:`pridepy.providers.util._is_md5_checksum`."""
-        from pridepy.providers import util
-        return util._is_md5_checksum(value)
+        return _provider_util._is_md5_checksum(value)
 
     @staticmethod
     def read_checksum_file(checksum_file_path: str) -> Dict[str, str]:
         """Shim — see :func:`pridepy.providers.util.read_checksum_file`."""
-        from pridepy.providers import util
-        return util.read_checksum_file(checksum_file_path)
+        return _provider_util.read_checksum_file(checksum_file_path)
 
     @staticmethod
     def compute_md5(file_path: str, chunk_size: int = 4 * 1024 * 1024) -> str:
         """Shim — see :func:`pridepy.providers.util.compute_md5`."""
-        from pridepy.providers import util
-        return util.compute_md5(file_path, chunk_size)
+        return _provider_util.compute_md5(file_path, chunk_size)
 
     @staticmethod
     def validate_download(file_path: str, expected_checksum: Optional[str] = None) -> Tuple[bool, str]:
         """Shim — see :func:`pridepy.providers.util.validate_download`."""
-        from pridepy.providers import util
-        return util.validate_download(file_path, expected_checksum)
+        return _provider_util.validate_download(file_path, expected_checksum)
 
     @staticmethod
     def _remove_if_exists(file_path: str) -> None:
         """Shim — see :func:`pridepy.providers.util._remove_if_exists`."""
-        from pridepy.providers import util
-        return util._remove_if_exists(file_path)
+        return _provider_util._remove_if_exists(file_path)
 
     @staticmethod
     def _get_download_url(file_record: Dict, protocol: str) -> str:
         """Shim — see :func:`pridepy.providers.util._get_download_url`."""
-        from pridepy.providers import util
-        return util._get_download_url(file_record, protocol)
+        return _provider_util._get_download_url(file_record, protocol)
 
     @staticmethod
     def _resolve_local_path(file_record: Dict, output_folder: str) -> str:
         """Shim — see :func:`pridepy.providers.util._resolve_local_path`."""
-        from pridepy.providers import util
-        return util._resolve_local_path(file_record, output_folder)
+        return _provider_util._resolve_local_path(file_record, output_folder)
 
     @staticmethod
     def _protocol_sequence(protocol: str) -> List[str]:
         """Shim — see :meth:`pridepy.providers.pride.PrideProvider._protocol_sequence`."""
-        from pridepy.providers.pride import PrideProvider
         return PrideProvider._protocol_sequence(protocol)
 
     @staticmethod
     def is_massive_accession(accession: str) -> bool:
         """Shim — see :meth:`pridepy.providers.massive.MassiveProvider.matches`."""
-        from pridepy.providers.massive import MassiveProvider
         return MassiveProvider.matches(accession)
 
     @staticmethod
     def _get_massive_public_root(accession: str) -> str:
-        from pridepy.providers.massive import MassiveProvider
         return MassiveProvider._get_public_root(accession)
 
     @staticmethod
     def _get_massive_public_ftp_url(accession: str, remote_path: str) -> str:
-        from pridepy.providers.massive import MassiveProvider
         return MassiveProvider._get_public_ftp_url(accession, remote_path)
 
     @staticmethod
     def _map_massive_collection_to_category(collection: str) -> str:
-        from pridepy.providers.massive import MassiveProvider
         return MassiveProvider._map_collection_to_category(collection)
 
     @staticmethod
     def _build_massive_file_record(accession: str, ftp_url: str) -> Dict:
-        from pridepy.providers.massive import MassiveProvider
         return MassiveProvider._build_file_record(accession, ftp_url)
 
     @staticmethod
     def is_jpost_accession(accession: str) -> bool:
         """Shim — see :meth:`pridepy.providers.jpost.JpostProvider.matches`."""
-        from pridepy.providers.jpost import JpostProvider
         return JpostProvider.matches(accession)
 
     @staticmethod
     def _get_jpost_public_root(accession: str) -> str:
-        from pridepy.providers.jpost import JpostProvider
         return JpostProvider._get_public_root(accession)
 
     @staticmethod
     def _get_jpost_public_ftp_url(accession: str, remote_path: str) -> str:
-        from pridepy.providers.jpost import JpostProvider
         return JpostProvider._get_public_ftp_url(accession, remote_path)
 
     @staticmethod
     def _build_jpost_file_record(accession, ftp_url, category_from_proxi=None):
-        from pridepy.providers.jpost import JpostProvider
         return JpostProvider._build_file_record(accession, ftp_url, category_from_proxi)
 
     @staticmethod
     def _build_iprox_file_record(accession, https_url, category_from_px=None):
         """Shim — see :meth:`pridepy.providers.iprox.IproxProvider._build_file_record`."""
-        from pridepy.providers.iprox import IproxProvider
         return IproxProvider._build_file_record(accession, https_url, category_from_px)
 
     @staticmethod
     def _get_iprox_public_root(accession: str) -> str:
-        from pridepy.providers.iprox import IproxProvider
         return IproxProvider._get_public_root(accession)
 
     @staticmethod
     def _get_iprox_public_ftp_url(accession: str, remote_path: str) -> str:
-        from pridepy.providers.iprox import IproxProvider
         return IproxProvider._get_public_ftp_url(accession, remote_path)
 
     @staticmethod
@@ -184,7 +178,6 @@ class Files:
         validation and fallback), not the direct-download partitioned-by-URL-
         scheme path. So we filter PRIDE out here.
         """
-        from pridepy.providers import registry
         try:
             provider = registry.resolve(accession)
         except ValueError:
@@ -194,13 +187,11 @@ class Files:
     @staticmethod
     def is_iprox_accession(accession: str) -> bool:
         """Shim — see :meth:`pridepy.providers.iprox.IproxProvider.matches`."""
-        from pridepy.providers.iprox import IproxProvider
         return IproxProvider.matches(accession)
 
     @staticmethod
     def _repo_uses_tls(accession: str) -> bool:
         """Shim — returns the resolved provider's use_tls flag (False if unknown)."""
-        from pridepy.providers import registry
         try:
             provider = registry.resolve(accession)
         except ValueError:
@@ -210,24 +201,20 @@ class Files:
     @staticmethod
     def _walk_ftp_tree(ftp: FTP, remote_dir: str) -> List[str]:
         """Shim — see :func:`pridepy.providers.transport._walk_ftp_tree`."""
-        from pridepy.providers import transport
         return transport._walk_ftp_tree(ftp=ftp, remote_dir=remote_dir)
 
     @staticmethod
     def _open_ftp_connection(host: str, use_tls: bool, timeout: int = 30) -> FTP:
         """Shim — see :func:`pridepy.providers.transport._open_ftp_connection`."""
-        from pridepy.providers import transport
         return transport._open_ftp_connection(host=host, use_tls=use_tls, timeout=timeout)
 
     @staticmethod
     def _list_ftp_repo_files(host, remote_root, error_label, use_tls=False):
         """Shim — see :func:`pridepy.providers.transport._list_ftp_repo_files`."""
-        from pridepy.providers import transport
         return transport._list_ftp_repo_files(host=host, remote_root=remote_root, error_label=error_label, use_tls=use_tls)
 
     def _list_massive_public_files(self, accession: str) -> List[Dict]:
         """Shim — see :meth:`pridepy.providers.massive.MassiveProvider.list_files`."""
-        from pridepy.providers.massive import MassiveProvider
         return MassiveProvider().list_files(accession)
 
     def _download_massive_file_records(
@@ -243,7 +230,6 @@ class Files:
         Download public MassIVE files via anonymous FTP (now FTPS).
         Backward-compat shim — dispatches via the provider registry.
         """
-        from pridepy.providers import registry
         registry.resolve(accession).download_files(
             accession=accession,
             records=file_records,
@@ -261,7 +247,6 @@ class Files:
         test patches on ``_list_jpost_public_files_via_proxi`` and
         ``_list_ftp_repo_files`` continue to intercept.
         """
-        from pridepy.providers.jpost import JpostProvider
         normalized_accession = accession.upper()
         try:
             return self._list_jpost_public_files_via_proxi(normalized_accession)
@@ -286,23 +271,18 @@ class Files:
 
     def _list_jpost_public_files_via_proxi(self, accession: str) -> List[Dict]:
         """Shim — see :meth:`pridepy.providers.jpost.JpostProvider._list_via_proxi`."""
-        from pridepy.providers.jpost import JpostProvider
         return JpostProvider()._list_via_proxi(accession)
 
     def _list_iprox_public_files(self, accession: str) -> List[Dict]:
         """Shim — see :meth:`pridepy.providers.iprox.IproxProvider.list_files`."""
-        from pridepy.providers.iprox import IproxProvider
         return IproxProvider().list_files(accession)
-
 
     async def stream_all_files_metadata(self, output_file, accession=None):
         """Shim — see :meth:`pridepy.providers.pride.PrideProvider.stream_all_files_metadata`."""
-        from pridepy.providers.pride import PrideProvider
         return await PrideProvider().stream_all_files_metadata(output_file, accession)
 
     def stream_all_files_by_project(self, accession) -> List[Dict]:
         """Shim — see :meth:`pridepy.providers.pride.PrideProvider.stream_all_files_by_project`."""
-        from pridepy.providers.pride import PrideProvider
         return PrideProvider().stream_all_files_by_project(accession)
 
     def get_all_raw_file_list(self, project_accession):
@@ -310,7 +290,6 @@ class Files:
 
         Returns the dataset's file records filtered to fileCategory == "RAW".
         """
-        from pridepy.providers import registry
         provider = registry.resolve(project_accession)
         records = provider.list_files(project_accession)
         return [r for r in records if r["fileCategory"]["value"] == "RAW"]
@@ -328,7 +307,6 @@ class Files:
         """Download all RAW files for any registered provider."""
         if not os.path.isdir(output_folder):
             os.mkdir(output_folder)
-        from pridepy.providers import registry
         provider = registry.resolve(accession)
         records = self.get_all_raw_file_list(accession)
         provider.download_files(
@@ -351,7 +329,6 @@ class Files:
         max_download_retries=3,
     ):
         """Shim — see :meth:`pridepy.providers.pride.PrideProvider.download_files_from_ftp`."""
-        from pridepy.providers.pride import PrideProvider
         return PrideProvider.download_files_from_ftp(
             file_list_json,
             output_folder,
@@ -423,44 +400,13 @@ class Files:
                 logging.error(f"Aspera download failed for {new_file_path}: {str(e)}")
 
     @staticmethod
-    def _download_range(url, file_path, start, end, pbar, max_retries=3):
-        """Download a byte range directly into the target file using seek."""
-        for attempt in range(1, max_retries + 1):
-            try:
-                session = Util.create_session_with_retries()
-                headers = {"Range": f"bytes={start}-{end}"}
-                with session.get(url, headers=headers, stream=True, timeout=(15, 15)) as r:
-                    r.raise_for_status()
-                    if r.status_code != 206:
-                        raise RuntimeError(f"Server did not honor Range request: {r.status_code}")
-                    content_range = r.headers.get("Content-Range", "")
-                    if not content_range.lower().startswith(f"bytes {start}-{end}/"):
-                        raise RuntimeError(f"Unexpected Content-Range header: {content_range}")
-                    with open(file_path, "r+b") as f:
-                        f.seek(start)
-                        for chunk in r.iter_content(chunk_size=8 * 1024 * 1024):
-                            if chunk:
-                                f.write(chunk)
-                                pbar.update(len(chunk))
-                return
-            except (requests.RequestException, RuntimeError, OSError) as exc:
-                logging.warning(
-                    f"Range {start}-{end} attempt {attempt}/{max_retries} failed: {exc}"
-                )
-                if attempt >= max_retries:
-                    raise
-                time.sleep(2 * attempt)
-
-    @staticmethod
     def _parallel_download(url, file_path, position=0):
         """Shim — see :func:`pridepy.providers.transport._parallel_download`."""
-        from pridepy.providers import transport
         return transport._parallel_download(url=url, file_path=file_path, position=position)
 
     @staticmethod
     def _globus_download_one(file, output_folder, skip_if_downloaded_already, max_retries=6, position=0):
         """Shim — see :meth:`pridepy.providers.pride.PrideProvider._globus_download_one`."""
-        from pridepy.providers.pride import PrideProvider
         return PrideProvider._globus_download_one(
             file, output_folder, skip_if_downloaded_already,
             max_retries=max_retries, position=position,
@@ -473,7 +419,6 @@ class Files:
         checksum_map: Optional[Dict[str, str]] = None,
     ):
         """Shim — see :meth:`pridepy.providers.pride.PrideProvider.download_files_from_globus`."""
-        from pridepy.providers.pride import PrideProvider
         return PrideProvider.download_files_from_globus(
             file_list_json, output_folder, skip_if_downloaded_already,
             parallel_files=parallel_files,
@@ -485,14 +430,12 @@ class Files:
         file_list_json: List[Dict], output_folder: str, skip_if_downloaded_already
     ):
         """Shim — see :meth:`pridepy.providers.pride.PrideProvider.download_files_from_s3`."""
-        from pridepy.providers.pride import PrideProvider
         return PrideProvider.download_files_from_s3(
             file_list_json, output_folder, skip_if_downloaded_already,
         )
 
     def get_submitted_file_path_prefix(self, accession):
         """Shim — see :meth:`pridepy.providers.pride.PrideProvider.get_submitted_file_path_prefix`."""
-        from pridepy.providers.pride import PrideProvider
         return PrideProvider().get_submitted_file_path_prefix(accession)
 
     def download_file_by_name(
@@ -523,7 +466,6 @@ class Files:
         if not os.path.isdir(output_folder):
             os.mkdir(output_folder)
 
-        from pridepy.providers import registry
         provider = registry.resolve(accession)
 
         ## Check type of project
@@ -596,7 +538,6 @@ class Files:
         :param file_name: file name
         :return: file in json format
         """
-        from pridepy.providers import registry
         try:
             records = registry.resolve(accession).list_files(accession)
             return [r for r in records if r["fileName"] == file_name]
@@ -605,7 +546,6 @@ class Files:
 
     def download_private_file_name(self, accession, file_name, output_folder, username, password):
         """Shim — see :meth:`pridepy.providers.pride.PrideProvider.download_private_file_name`."""
-        from pridepy.providers.pride import PrideProvider
         return PrideProvider().download_private_file_name(
             accession, file_name, output_folder, username, password,
         )
@@ -613,13 +553,11 @@ class Files:
     @staticmethod
     def get_ascp_binary():
         """Shim — see :meth:`pridepy.providers.pride.PrideProvider.get_ascp_binary`."""
-        from pridepy.providers.pride import PrideProvider
         return PrideProvider.get_ascp_binary()
 
     @staticmethod
     def save_checksum_file(accession, output_folder):
         """Shim — see :meth:`pridepy.providers.pride.PrideProvider.save_checksum_file`."""
-        from pridepy.providers.pride import PrideProvider
         return PrideProvider.save_checksum_file(accession, output_folder)
 
     @staticmethod
@@ -638,7 +576,6 @@ class Files:
         :class:`PrideProvider` calls back through ``Files.X`` so those patches
         keep intercepting.
         """
-        from pridepy.providers.pride import PrideProvider
         return PrideProvider._batch_download_by_protocol(
             file_list,
             output_folder,
@@ -660,7 +597,6 @@ class Files:
         parallel_files: int = 1,
     ) -> bool:
         """Shim — see :meth:`pridepy.providers.pride.PrideProvider._download_with_fallback`."""
-        from pridepy.providers.pride import PrideProvider
         return PrideProvider._download_with_fallback(
             file_record,
             output_folder,
@@ -683,7 +619,6 @@ class Files:
         parallel_files: int = 1,
     ):
         """Shim — see :meth:`pridepy.providers.pride.PrideProvider._download_files_batch`."""
-        from pridepy.providers.pride import PrideProvider
         return PrideProvider._download_files_batch(
             file_list_json,
             accession,
@@ -707,7 +642,6 @@ class Files:
         parallel_files: int = 1,
     ) -> None:
         """Shim — see :func:`pridepy.commands.by_list.download_files_by_list`."""
-        from pridepy.commands import by_list
         return by_list.download_files_by_list(
             accession=accession,
             file_names=file_names,
@@ -722,7 +656,6 @@ class Files:
     @staticmethod
     def _extract_pride_accession(url: str) -> Optional[str]:
         """Shim — see :func:`pridepy.commands.by_url._extract_pride_accession`."""
-        from pridepy.commands import by_url
         return by_url._extract_pride_accession(url)
 
     @staticmethod
@@ -735,7 +668,6 @@ class Files:
         checksum_check: bool = False,
     ) -> None:
         """Shim — see :func:`pridepy.commands.by_url.download_files_by_url`."""
-        from pridepy.commands import by_url
         return by_url.download_files_by_url(
             urls=urls,
             output_folder=output_folder,
@@ -748,7 +680,6 @@ class Files:
     @staticmethod
     def _validate_urls_checksums(urls: List[str], output_folder: str) -> None:
         """Shim — see :func:`pridepy.commands.by_url._validate_urls_checksums`."""
-        from pridepy.commands import by_url
         return by_url._validate_urls_checksums(urls, output_folder)
 
     @staticmethod
@@ -760,25 +691,21 @@ class Files:
         position: int = 0,
     ) -> str:
         """Shim — see :func:`pridepy.commands.by_url._download_single_url`."""
-        from pridepy.commands import by_url
         return by_url._download_single_url(url, output_folder, skip_if_exists, protocol, position)
 
     @staticmethod
     def _dispatch_url_scheme(parsed, target: str, protocol: str = "ftp", position: int = 0) -> None:
         """Shim — see :func:`pridepy.commands.by_url._dispatch_url_scheme`."""
-        from pridepy.commands import by_url
         return by_url._dispatch_url_scheme(parsed, target, protocol=protocol, position=position)
 
     @staticmethod
     def _http_download_url(url: str, target: str) -> None:
         """Shim — see :func:`pridepy.commands.by_url._http_download_url`."""
-        from pridepy.commands import by_url
         return by_url._http_download_url(url, target)
 
     @staticmethod
     def _ftp_download_url(parsed, target: str) -> None:
         """Shim — see :func:`pridepy.commands.by_url._ftp_download_url`."""
-        from pridepy.commands import by_url
         return by_url._ftp_download_url(parsed, target)
 
     def download_all_category_files(
@@ -808,7 +735,6 @@ class Files:
         if categories is None:
             categories = [category] if category else ["RAW"]
         records = self.get_all_category_file_list(accession, categories)
-        from pridepy.providers import registry
         provider = registry.resolve(accession)
         provider.download_files(
             accession=accession,
@@ -834,7 +760,6 @@ class Files:
         if isinstance(categories, str):
             categories = [categories]
         category_set = {c.upper() for c in categories}
-        from pridepy.providers import registry
         records = registry.resolve(accession).list_files(accession)
         return [r for r in records if r["fileCategory"]["value"] in category_set]
 
@@ -845,13 +770,11 @@ class Files:
     @staticmethod
     def _normalize_px_xml_url(px_id_or_url: str) -> str:
         """Shim — see :meth:`pridepy.providers.proteomexchange.ProteomeXchangeProvider._normalize_px_xml_url`."""
-        from pridepy.providers.proteomexchange import ProteomeXchangeProvider
         return ProteomeXchangeProvider._normalize_px_xml_url(px_id_or_url)
 
     @staticmethod
     def _parse_px_xml_for_raw_file_urls(px_xml_url: str):
         """Shim — see :meth:`pridepy.providers.proteomexchange.ProteomeXchangeProvider._parse_px_xml_for_raw_file_urls`."""
-        from pridepy.providers.proteomexchange import ProteomeXchangeProvider
         return ProteomeXchangeProvider._parse_px_xml_for_raw_file_urls(px_xml_url)
 
     def download_px_raw_files(
@@ -861,7 +784,6 @@ class Files:
         skip_if_downloaded_already: bool = True,
     ) -> None:
         """Shim — see :meth:`pridepy.providers.proteomexchange.ProteomeXchangeProvider.download_from_accession_or_url`."""
-        from pridepy.providers.proteomexchange import ProteomeXchangeProvider
         return ProteomeXchangeProvider().download_from_accession_or_url(
             px_id_or_url, output_folder, skip_if_downloaded_already
         )
@@ -869,7 +791,6 @@ class Files:
     @staticmethod
     def _local_path_for_url(download_url: str, output_folder: str) -> str:
         """Shim — see :func:`pridepy.providers.transport._local_path_for_url`."""
-        from pridepy.providers import transport
         return transport._local_path_for_url(download_url=download_url, output_folder=output_folder)
 
     @staticmethod
@@ -882,7 +803,6 @@ class Files:
         position: int = 0,
     ) -> None:
         """Shim — see :func:`pridepy.providers.transport._download_one_ftp_path`."""
-        from pridepy.providers import transport
         return transport._download_one_ftp_path(
             ftp=ftp,
             ftp_path=ftp_path,
@@ -903,7 +823,6 @@ class Files:
         max_download_retries: int,
     ) -> None:
         """Shim — see :func:`pridepy.providers.transport._download_ftp_paths_serial`."""
-        from pridepy.providers import transport
         return transport._download_ftp_paths_serial(
             host=host,
             paths=paths,
@@ -926,7 +845,6 @@ class Files:
         parallel_files: int,
     ) -> None:
         """Shim — see :func:`pridepy.providers.transport._download_ftp_paths_parallel`."""
-        from pridepy.providers import transport
         return transport._download_ftp_paths_parallel(
             host=host,
             paths=paths,
@@ -949,7 +867,6 @@ class Files:
         parallel_files: int = 1,
     ) -> None:
         """Shim — see :func:`pridepy.providers.transport.download_ftp_urls`."""
-        from pridepy.providers import transport
         return transport.download_ftp_urls(
             ftp_urls=ftp_urls,
             output_folder=output_folder,
@@ -969,7 +886,6 @@ class Files:
         position: int = 0,
     ) -> None:
         """Shim — see :func:`pridepy.providers.transport._http_download_one`."""
-        from pridepy.providers import transport
         return transport._http_download_one(
             url=url,
             output_folder=output_folder,
@@ -987,7 +903,6 @@ class Files:
         max_retries: int = 3,
     ) -> None:
         """Shim — see :func:`pridepy.providers.transport.download_http_urls`."""
-        from pridepy.providers import transport
         return transport.download_http_urls(
             http_urls=http_urls,
             output_folder=output_folder,

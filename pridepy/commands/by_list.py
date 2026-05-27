@@ -2,6 +2,8 @@
 import logging
 from typing import List, Optional
 
+from pridepy.providers import registry
+
 
 def download_files_by_list(
     accession: str,
@@ -32,7 +34,6 @@ def download_files_by_list(
     if not file_names:
         raise ValueError("file_names must contain at least one filename")
 
-    from pridepy.providers import registry  # lazy
     provider = registry.resolve(accession)
     all_files = provider.list_files(accession)
 
