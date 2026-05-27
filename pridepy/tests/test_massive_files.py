@@ -99,4 +99,39 @@ class TestMassIVEFiles(TestCase):
             ftp_urls=["ftp://massive-ftp.ucsd.edu/v01/MSV000012345/raw/folder/sample.raw"],
             output_folder=tmp_dir,
             skip_if_downloaded_already=False,
+            use_tls=True,
+            parallel_files=1,
         )
+
+    def test_repo_uses_tls_true_for_massive_false_for_jpost(self):
+        assert Files._repo_uses_tls("MSV000012345") is True
+        assert Files._repo_uses_tls("JPST000001") is False
+        assert Files._repo_uses_tls("PXD000012") is False
+
+    def test_download_all_raw_files_threads_parallel_files_for_massive(self):
+        files = Files()
+        massive_records = [
+            Files._build_massive_file_record(
+                "MSV000012345",
+                f"ftp://massive-ftp.ucsd.edu/v01/MSV000012345/raw/run{i}.raw",
+            )
+            for i in range(3)
+        ]
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            with patch.object(
+                Files, "_list_massive_public_files", return_value=massive_records
+            ), patch.object(Files, "download_ftp_urls") as download_mock:
+                files.download_all_raw_files(
+                    accession="MSV000012345",
+                    output_folder=tmp_dir,
+                    skip_if_downloaded_already=False,
+                    protocol="ftp",
+                    aspera_maximum_bandwidth="100M",
+                    checksum_check=False,
+                    parallel_files=3,
+                )
+
+        kwargs = download_mock.call_args.kwargs
+        assert kwargs["use_tls"] is True
+        assert kwargs["parallel_files"] == 3

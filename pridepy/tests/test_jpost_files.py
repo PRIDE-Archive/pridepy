@@ -85,4 +85,6 @@ class TestJPOSTFiles(TestCase):
             ftp_urls=["ftp://ftp.jpostdb.org/JPST000001/raw/folder/sample.raw"],
             output_folder=tmp_dir,
             skip_if_downloaded_already=False,
+            use_tls=False,
+            parallel_files=1,
         )

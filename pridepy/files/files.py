@@ -65,8 +65,6 @@ class Files:
     MASSIVE_ARCHIVE_FTP_URL_PREFIX = "ftp://massive-ftp.ucsd.edu/v01/"
     JPOST_ARCHIVE_FTP = "ftp.jpostdb.org"
     JPOST_ARCHIVE_FTP_URL_PREFIX = "ftp://ftp.jpostdb.org/"
-    IPROX_ARCHIVE_FTP = "ftp.iprox.cn"
-    IPROX_ARCHIVE_FTP_URL_PREFIX = "ftp://ftp.iprox.cn/"
     S3_URL = "https://hh.fire.sdo.ebi.ac.uk"
     S3_BUCKET = "pride-public"
     PROTOCOL_ORDER = ["aspera", "s3", "ftp", "globus"]
@@ -325,46 +323,6 @@ class Files:
         }
 
     @staticmethod
-    def is_iprox_accession(accession: str) -> bool:
-        """
-        Return True when the accession looks like an iProX dataset accession.
-        """
-        if not accession:
-            return False
-        return bool(re.fullmatch(r"IPX\d{7,10}", accession.upper()))
-
-    @staticmethod
-    def _get_iprox_public_root(accession: str) -> str:
-        return f"/{accession.upper()}"
-
-    @staticmethod
-    def _get_iprox_public_ftp_url(accession: str, remote_path: str) -> str:
-        root_path = Files._get_iprox_public_root(accession).rstrip("/")
-        relative_path = remote_path
-        if remote_path.startswith(root_path):
-            relative_path = remote_path[len(root_path) :].lstrip("/")
-        return f"{Files.IPROX_ARCHIVE_FTP_URL_PREFIX}{accession.upper()}/{relative_path}"
-
-    @staticmethod
-    def _build_iprox_file_record(accession: str, ftp_url: str) -> Dict:
-        parsed = urlparse(ftp_url)
-        root_prefix = f"/{accession.upper()}/"
-        relative_path = parsed.path
-        if relative_path.startswith(root_prefix):
-            relative_path = relative_path[len(root_prefix) :]
-        relative_path = relative_path.lstrip("/")
-        collection = relative_path.split("/", 1)[0] if relative_path else ""
-        return {
-            "accession": accession.upper(),
-            "fileName": os.path.basename(parsed.path),
-            "fileCategory": {"value": Files._map_massive_collection_to_category(collection)},
-            "publicFileLocations": [{"name": "FTP Protocol", "value": ftp_url}],
-            "relativePath": relative_path,
-            "collection": collection,
-            "source": "iProX",
-        }
-
-    @staticmethod
     def is_direct_download_accession(accession: str) -> bool:
         """
         Return True when the accession is served by a public FTP repository
@@ -373,8 +331,16 @@ class Files:
         return (
             Files.is_massive_accession(accession)
             or Files.is_jpost_accession(accession)
-            or Files.is_iprox_accession(accession)
         )
+
+    @staticmethod
+    def _repo_uses_tls(accession: str) -> bool:
+        """
+        Whether the public FTP server for ``accession`` requires FTP over TLS.
+        MassIVE rejects plain anonymous FTP (``421 TLS is required``); JPOST
+        accepts plain FTP.
+        """
+        return Files.is_massive_accession(accession)
 
     @staticmethod
     def _walk_ftp_tree(ftp: FTP, remote_dir: str) -> List[str]:
@@ -417,20 +383,55 @@ class Files:
             ftp.cwd(current_dir)
         return file_paths
 
+    @staticmethod
+    def _open_ftp_connection(host: str, use_tls: bool, timeout: int = 30) -> FTP:
+        """
+        Open an anonymous FTP connection, transparently using FTPS when the
+        server requires TLS (e.g., MassIVE). When ``use_tls`` is False but the
+        server replies ``421 TLS is required`` to ``login``, transparently
+        retry with FTPS so callers don't need to know the policy in advance.
+        """
+        if use_tls:
+            ftp: FTP = ftplib.FTP_TLS(host, timeout=timeout)
+            ftp.login()
+            ftp.prot_p()
+        else:
+            ftp = FTP(host, timeout=timeout)
+            try:
+                ftp.login()
+            except ftplib.error_temp as e:
+                if "TLS" in str(e).upper():
+                    try:
+                        ftp.close()
+                    except Exception:
+                        pass
+                    ftp = ftplib.FTP_TLS(host, timeout=timeout)
+                    ftp.login()
+                    ftp.prot_p()
+                else:
+                    raise
+        ftp.set_pasv(True)
+        return ftp
+
     def _list_ftp_repo_files(
-        self, host: str, remote_root: str, error_label: str
+        self,
+        host: str,
+        remote_root: str,
+        error_label: str,
+        use_tls: bool = False,
     ) -> List[str]:
         """
-        Connect to an anonymous FTP host, walk a directory tree, and return file paths.
-        Centralizes connection lifecycle so the constructor failure case doesn't mask
-        the underlying error in ``finally`` (see PR #98 review).
+        Connect to an anonymous FTP host (FTP or FTPS), walk a directory tree,
+        and return file paths.
+
+        ``use_tls`` should be True for servers that reject plain FTP (e.g.
+        MassIVE). Centralizes connection lifecycle so a constructor failure
+        doesn't mask the underlying error in ``finally`` (PR #98 review).
         """
         ftp: Optional[FTP] = None
         try:
-            ftp = FTP(host, timeout=30)
-            ftp.login()
-            ftp.set_pasv(True)
-            logging.info(f"Connected to FTP host: {host}")
+            ftp = self._open_ftp_connection(host, use_tls=use_tls)
+            logging.info(f"Connected to FTP host: {host} (tls={use_tls})")
             return self._walk_ftp_tree(ftp, remote_root)
         except Exception as error:
             raise RuntimeError(
@@ -456,6 +457,7 @@ class Files:
             host=self.MASSIVE_ARCHIVE_FTP,
             remote_root=remote_root,
             error_label=f"MassIVE dataset {normalized_accession}",
+            use_tls=True,
         )
         return [
             self._build_massive_file_record(
@@ -472,9 +474,11 @@ class Files:
         output_folder: str,
         skip_if_downloaded_already: bool,
         protocol: str,
+        parallel_files: int = 1,
     ) -> None:
         """
-        Download public MassIVE files via anonymous FTP.
+        Download public MassIVE files via anonymous FTP (now FTPS).
+        Backward-compat wrapper around :meth:`_download_direct_download_records`.
         """
         self._download_direct_download_records(
             accession=accession,
@@ -482,6 +486,7 @@ class Files:
             output_folder=output_folder,
             skip_if_downloaded_already=skip_if_downloaded_already,
             protocol=protocol,
+            parallel_files=parallel_files,
         )
 
     def _list_jpost_public_files(self, accession: str) -> List[Dict]:
@@ -503,25 +508,6 @@ class Files:
             for remote_file in remote_files
         ]
 
-    def _list_iprox_public_files(self, accession: str) -> List[Dict]:
-        """
-        Discover all public files for an iProX dataset from its anonymous FTP tree.
-        """
-        normalized_accession = accession.upper()
-        remote_root = self._get_iprox_public_root(normalized_accession)
-        remote_files = self._list_ftp_repo_files(
-            host=self.IPROX_ARCHIVE_FTP,
-            remote_root=remote_root,
-            error_label=f"iProX dataset {normalized_accession}",
-        )
-        return [
-            self._build_iprox_file_record(
-                normalized_accession,
-                self._get_iprox_public_ftp_url(normalized_accession, remote_file),
-            )
-            for remote_file in remote_files
-        ]
-
     def _list_direct_download_files(self, accession: str) -> List[Dict]:
         """
         Dispatch to the right FTP-based listing for a direct-download repository.
@@ -530,8 +516,6 @@ class Files:
             return self._list_massive_public_files(accession)
         if self.is_jpost_accession(accession):
             return self._list_jpost_public_files(accession)
-        if self.is_iprox_accession(accession):
-            return self._list_iprox_public_files(accession)
         raise ValueError(
             f"Accession {accession} is not a direct-download repository accession"
         )
@@ -543,9 +527,12 @@ class Files:
         output_folder: str,
         skip_if_downloaded_already: bool,
         protocol: str,
+        parallel_files: int = 1,
     ) -> None:
         """
-        Download files from a direct-download repository (MassIVE/JPOST/iProX) via anonymous FTP.
+        Download files from a direct-download repository (MassIVE/JPOST) via
+        anonymous FTP. Supports REST-based resume, per-file retries, and
+        parallel workers (one connection per worker, capped at file count).
         """
         if protocol != "ftp":
             logging.warning(
@@ -562,6 +549,8 @@ class Files:
             ftp_urls=ftp_urls,
             output_folder=output_folder,
             skip_if_downloaded_already=skip_if_downloaded_already,
+            use_tls=self._repo_uses_tls(accession),
+            parallel_files=parallel_files,
         )
 
     async def stream_all_files_metadata(self, output_file, accession=None):
@@ -643,6 +632,7 @@ class Files:
                 output_folder=output_folder,
                 skip_if_downloaded_already=skip_if_downloaded_already,
                 protocol=protocol,
+                parallel_files=parallel_files,
             )
             return
 
@@ -1588,6 +1578,7 @@ class Files:
                 output_folder=output_folder,
                 skip_if_downloaded_already=skip_if_downloaded_already,
                 protocol=protocol,
+                parallel_files=parallel_files,
             )
             return
 
@@ -1864,6 +1855,7 @@ class Files:
                 output_folder=output_folder,
                 skip_if_downloaded_already=skip_if_downloaded_already,
                 protocol=protocol,
+                parallel_files=parallel_files,
             )
             return
         self.download_files(
@@ -1989,104 +1981,232 @@ class Files:
         return os.path.join(output_folder, filename)
 
     @staticmethod
+    def _download_one_ftp_path(
+        ftp: FTP,
+        ftp_path: str,
+        local_path: str,
+        skip_if_downloaded_already: bool,
+        max_download_retries: int,
+        position: int = 0,
+    ) -> None:
+        """
+        Download a single FTP path over an existing connection, with REST resume
+        and per-file retry. Raises on giving up so the caller can decide what to do.
+        """
+        if skip_if_downloaded_already and os.path.exists(local_path):
+            logging.info(f"Skipping download as file already exists: {local_path}")
+            return
+
+        attempt = 0
+        last_error: Optional[Exception] = None
+        while attempt < max_download_retries:
+            try:
+                total_size = ftp.size(ftp_path)
+                if os.path.exists(local_path):
+                    current_size = os.path.getsize(local_path)
+                    mode = "ab"
+                else:
+                    current_size = 0
+                    mode = "wb"
+
+                with open(local_path, mode) as f, tqdm(
+                    total=total_size,
+                    unit="B",
+                    unit_scale=True,
+                    desc=local_path,
+                    initial=current_size,
+                    position=position,
+                    leave=True,
+                ) as pbar:
+                    def callback(data):
+                        f.write(data)
+                        pbar.update(len(data))
+
+                    if current_size:
+                        try:
+                            ftp.sendcmd(f"REST {current_size}")
+                        except Exception:
+                            current_size = 0
+                            f.seek(0)
+                            f.truncate()
+                    ftp.retrbinary(f"RETR {ftp_path}", callback)
+                logging.info(f"Successfully downloaded {local_path}")
+                return
+            except (socket.timeout, ftplib.error_temp, ftplib.error_perm) as e:
+                attempt += 1
+                last_error = e
+                logging.error(
+                    f"Download failed for {local_path} (attempt {attempt}): {e}"
+                )
+        raise RuntimeError(
+            f"Giving up on {local_path} after {max_download_retries} attempts"
+        ) from last_error
+
+    @staticmethod
+    def _download_ftp_paths_serial(
+        host: str,
+        paths: List[str],
+        output_folder: str,
+        skip_if_downloaded_already: bool,
+        use_tls: bool,
+        max_connection_retries: int,
+        max_download_retries: int,
+    ) -> None:
+        """Download all paths from one host over a single (reused) connection."""
+        connection_attempt = 0
+        while connection_attempt < max_connection_retries:
+            try:
+                ftp = Files._open_ftp_connection(host, use_tls=use_tls)
+                logging.info(f"Connected to FTP host: {host} (tls={use_tls})")
+                for ftp_path in paths:
+                    local_path = os.path.join(output_folder, os.path.basename(ftp_path))
+                    try:
+                        Files._download_one_ftp_path(
+                            ftp=ftp,
+                            ftp_path=ftp_path,
+                            local_path=local_path,
+                            skip_if_downloaded_already=skip_if_downloaded_already,
+                            max_download_retries=max_download_retries,
+                        )
+                    except Exception as e:
+                        logging.error(
+                            f"Failed to download {ftp_path} from {host}: {e}"
+                        )
+                try:
+                    ftp.quit()
+                except Exception:
+                    try:
+                        ftp.close()
+                    except Exception:
+                        pass
+                logging.info(f"Disconnected from FTP host: {host}")
+                return
+            except (socket.timeout, ftplib.error_temp, ftplib.error_perm, OSError) as e:
+                connection_attempt += 1
+                logging.error(
+                    f"FTP connection failed (attempt {connection_attempt}): {e}"
+                )
+                if connection_attempt < max_connection_retries:
+                    logging.info("Retrying connection...")
+                    time.sleep(5)
+                else:
+                    logging.error(
+                        f"Giving up after {max_connection_retries} failed connection attempts to {host}."
+                    )
+
+    @staticmethod
+    def _download_ftp_paths_parallel(
+        host: str,
+        paths: List[str],
+        output_folder: str,
+        skip_if_downloaded_already: bool,
+        use_tls: bool,
+        max_connection_retries: int,
+        max_download_retries: int,
+        parallel_files: int,
+    ) -> None:
+        """
+        Download paths concurrently using ``parallel_files`` workers; each
+        worker opens its own FTP connection so transfers don't serialize.
+        """
+        def worker(ftp_path: str, position: int) -> None:
+            local_path = os.path.join(output_folder, os.path.basename(ftp_path))
+            if skip_if_downloaded_already and os.path.exists(local_path):
+                logging.info(f"Skipping download as file already exists: {local_path}")
+                return
+            connection_attempt = 0
+            while connection_attempt < max_connection_retries:
+                try:
+                    ftp = Files._open_ftp_connection(host, use_tls=use_tls)
+                    try:
+                        Files._download_one_ftp_path(
+                            ftp=ftp,
+                            ftp_path=ftp_path,
+                            local_path=local_path,
+                            skip_if_downloaded_already=False,
+                            max_download_retries=max_download_retries,
+                            position=position,
+                        )
+                        return
+                    finally:
+                        try:
+                            ftp.quit()
+                        except Exception:
+                            try:
+                                ftp.close()
+                            except Exception:
+                                pass
+                except (socket.timeout, ftplib.error_temp, ftplib.error_perm, OSError) as e:
+                    connection_attempt += 1
+                    logging.error(
+                        f"FTP connection failed for {ftp_path} (attempt {connection_attempt}): {e}"
+                    )
+                    if connection_attempt < max_connection_retries:
+                        time.sleep(5)
+            logging.error(f"Giving up on {ftp_path} from {host}")
+
+        with ThreadPoolExecutor(max_workers=parallel_files) as executor:
+            futures = [
+                executor.submit(worker, path, idx) for idx, path in enumerate(paths)
+            ]
+            for future in as_completed(futures):
+                try:
+                    future.result()
+                except Exception as e:
+                    logging.error(f"Parallel FTP download error: {e}")
+
+    @staticmethod
     def download_ftp_urls(
         ftp_urls: List[str],
         output_folder: str,
         skip_if_downloaded_already: bool,
         max_connection_retries: int = 3,
         max_download_retries: int = 3,
+        use_tls: bool = False,
+        parallel_files: int = 1,
     ) -> None:
         """
-        Download a list of FTP URLs using a single connection, with retries and progress bars.
+        Download a list of FTP URLs with retries, REST-based resume, and
+        optional parallel workers.
+
+        :param use_tls: Open the FTP connection with TLS (FTP_TLS / PROT P).
+            Required for hosts that reject plain anonymous FTP (e.g. MassIVE).
+            When False but the server replies ``421 TLS is required``, the
+            connection is transparently retried over TLS.
+        :param parallel_files: When >1, downloads run concurrently with that
+            many worker connections per host (capped at the number of files).
         """
         if not os.path.isdir(output_folder):
             os.makedirs(output_folder, exist_ok=True)
 
-        def connect_ftp(host: str):
-            ftp = FTP(host, timeout=30)
-            ftp.login()
-            ftp.set_pasv(True)
-            logging.info(f"Connected to FTP host: {host}")
-            return ftp
-
-        # Group URLs by host to reuse connections efficiently
         host_to_paths: Dict[str, List[str]] = {}
         for url in ftp_urls:
             parsed = urlparse(url)
             host_to_paths.setdefault(parsed.hostname, []).append(parsed.path.lstrip("/"))
 
         for host, paths in host_to_paths.items():
-            connection_attempt = 0
-            while connection_attempt < max_connection_retries:
-                try:
-                    ftp = connect_ftp(host)
-                    for ftp_path in paths:
-                        try:
-                            local_path = os.path.join(output_folder, os.path.basename(ftp_path))
-                            if skip_if_downloaded_already and os.path.exists(local_path):
-                                logging.info("Skipping download as file already exists")
-                                continue
-
-                            logging.info(f"Starting FTP download: {host}/{ftp_path}")
-                            download_attempt = 0
-                            while download_attempt < max_download_retries:
-                                try:
-                                    total_size = ftp.size(ftp_path)
-                                    # Try to resume using REST if partial file exists
-                                    if os.path.exists(local_path):
-                                        current_size = os.path.getsize(local_path)
-                                        mode = "ab"
-                                    else:
-                                        current_size = 0
-                                        mode = "wb"
-
-                                    with open(local_path, mode) as f, tqdm(
-                                        total=total_size,
-                                        unit="B",
-                                        unit_scale=True,
-                                        desc=local_path,
-                                        initial=current_size,
-                                    ) as pbar:
-                                        def callback(data):
-                                            f.write(data)
-                                            pbar.update(len(data))
-
-                                        if current_size:
-                                            try:
-                                                ftp.sendcmd(f"REST {current_size}")
-                                            except Exception:
-                                                # If REST not supported, fall back to full download
-                                                current_size = 0
-                                                f.seek(0)
-                                                f.truncate()
-                                        ftp.retrbinary(f"RETR {ftp_path}", callback)
-                                    logging.info(f"Successfully downloaded {local_path}")
-                                    break
-                                except (socket.timeout, ftplib.error_temp, ftplib.error_perm) as e:
-                                    download_attempt += 1
-                                    logging.error(
-                                        f"Download failed for {local_path} (attempt {download_attempt}): {str(e)}"
-                                    )
-                                    if download_attempt >= max_download_retries:
-                                        logging.error(
-                                            f"Giving up on {local_path} after {max_download_retries} attempts."
-                                        )
-                                        break
-                        except Exception as e:
-                            logging.error(f"Unexpected error while processing FTP path {ftp_path}: {str(e)}")
-                    ftp.quit()
-                    logging.info(f"Disconnected from FTP host: {host}")
-                    break
-                except (socket.timeout, ftplib.error_temp, ftplib.error_perm, socket.error) as e:
-                    connection_attempt += 1
-                    logging.error(f"FTP connection failed (attempt {connection_attempt}): {str(e)}")
-                    if connection_attempt < max_connection_retries:
-                        logging.info("Retrying connection...")
-                        time.sleep(5)
-                    else:
-                        logging.error(
-                            f"Giving up after {max_connection_retries} failed connection attempts to {host}."
-                        )
+            workers = max(1, min(parallel_files, len(paths)))
+            if workers > 1:
+                Files._download_ftp_paths_parallel(
+                    host=host,
+                    paths=paths,
+                    output_folder=output_folder,
+                    skip_if_downloaded_already=skip_if_downloaded_already,
+                    use_tls=use_tls,
+                    max_connection_retries=max_connection_retries,
+                    max_download_retries=max_download_retries,
+                    parallel_files=workers,
+                )
+            else:
+                Files._download_ftp_paths_serial(
+                    host=host,
+                    paths=paths,
+                    output_folder=output_folder,
+                    skip_if_downloaded_already=skip_if_downloaded_already,
+                    use_tls=use_tls,
+                    max_connection_retries=max_connection_retries,
+                    max_download_retries=max_download_retries,
+                )
 
     @staticmethod
     def download_http_urls(

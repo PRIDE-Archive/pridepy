@@ -8,7 +8,7 @@
 
 You can:
 - download public and private PRIDE files
-- download public MassIVE (`MSV...`), JPOST (`JPST...`), and iProX (`IPX...`) datasets directly from their native FTP archives
+- download public MassIVE (`MSV...`) and JPOST (`JPST...`) datasets directly from their native FTP archives
 - download by category (`RAW`, `SEARCH`, `RESULT`, etc.)
 - stream project and file metadata
 - search projects by keyword and filters
@@ -80,7 +80,7 @@ pridepy download-all-public-raw-files \
   --checksum-check
 ```
 
-### 3) Download a public MassIVE, JPOST, or iProX dataset directly
+### 3) Download a public MassIVE or JPOST dataset directly
 
 ```bash
 # MassIVE
@@ -92,14 +92,9 @@ pridepy download-all-public-raw-files \
 pridepy download-all-public-raw-files \
   -a JPST000123 \
   -o ./downloads/JPST000123
-
-# iProX
-pridepy download-all-public-raw-files \
-  -a IPX0000123000 \
-  -o ./downloads/IPX0000123000
 ```
 
-For these direct downloads, `pridepy` enumerates the dataset from the repository's public FTP tree (MassIVE at `massive-ftp.ucsd.edu`, JPOST at `ftp.jpostdb.org`, iProX at `ftp.iprox.cn`). Raw downloads follow each repository's own collection layout, so `download-all-public-raw-files` downloads the files stored under the dataset's `raw/` collection.
+For these direct downloads, `pridepy` enumerates the dataset from the repository's public FTP tree (MassIVE at `massive-ftp.ucsd.edu` over FTPS, JPOST at `ftp.jpostdb.org` over plain FTP). Raw downloads follow each repository's own collection layout, so `download-all-public-raw-files` downloads the files stored under the dataset's `raw/` collection.
 
 ### 4) Download only selected categories
 
@@ -110,7 +105,7 @@ pridepy download-all-public-category-files \
   -c RAW,SEARCH
 ```
 
-You can also request a specific MassIVE / JPOST / iProX collection through the same category interface:
+You can also request a specific MassIVE / JPOST collection through the same category interface:
 
 ```bash
 pridepy download-all-public-category-files \
@@ -255,13 +250,13 @@ print(f"RAW files: {len(raw_files)}")
 print(raw_files[0]["fileName"])
 ```
 
-For MassIVE / JPOST / iProX accessions, the same method returns the files found under the dataset's `raw/` collection:
+For MassIVE / JPOST accessions, the same method returns the files found under the dataset's `raw/` collection:
 
 ```python
 from pridepy.files.files import Files
 
 files = Files()
-for accession in ("MSV000082297", "JPST000123", "IPX0000123000"):
+for accession in ("MSV000082297", "JPST000123"):
     raw_files = files.get_all_raw_file_list(accession)
     print(f"{accession} raw files: {len(raw_files)}")
 ```
