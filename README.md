@@ -8,7 +8,7 @@
 
 You can:
 - download public and private PRIDE files
-- download public MassIVE (`MSV...`) and JPOST (`JPST...`) datasets directly from their native FTP archives
+- download public MassIVE (`MSV...`) and JPOST (`JPST...`) datasets directly. MassIVE goes through FTPS at `massive-ftp.ucsd.edu`; JPOST uses the JSON PROXI endpoint at `repository.jpostdb.org` for listings and `ftp.jpostdb.org` for transfers
 - download by category (`RAW`, `SEARCH`, `RESULT`, etc.)
 - stream project and file metadata
 - search projects by keyword and filters
@@ -94,7 +94,13 @@ pridepy download-all-public-raw-files \
   -o ./downloads/JPST000123
 ```
 
-For these direct downloads, `pridepy` enumerates the dataset from the repository's public FTP tree (MassIVE at `massive-ftp.ucsd.edu` over FTPS, JPOST at `ftp.jpostdb.org` over plain FTP). Raw downloads follow each repository's own collection layout, so `download-all-public-raw-files` downloads the files stored under the dataset's `raw/` collection.
+For these direct downloads, `pridepy` enumerates the dataset from the repository:
+- **MassIVE** lists files by walking the FTPS tree at `massive-ftp.ucsd.edu` (TLS is required by the server).
+- **JPOST** lists files through the JSON PROXI endpoint at `https://repository.jpostdb.org/proxi/datasets/<JPSTxxxxxx>` and downloads them from `ftp.jpostdb.org` over plain FTP. The PROXI listing avoids the source-IP connection limit JPOST enforces on FTP.
+
+Raw downloads follow each repository's own collection layout, so `download-all-public-raw-files` downloads the files stored under the dataset's `raw/` collection. Direct downloads support REST-based resume, per-file retries, parallel workers (`-w N` up to 3), and post-transfer size verification against the server-reported size.
+
+iProX accessions (`IPX...`) are recognised so the CLI gives you a clear "not supported yet" error rather than treating them as unknown PRIDE accessions. Native iProX download support is blocked on their REST API requiring CAS authentication and downloads going through Aspera with per-session tokens; track that work upstream.
 
 ### 4) Download only selected categories
 

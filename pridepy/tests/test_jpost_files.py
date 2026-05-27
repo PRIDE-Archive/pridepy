@@ -1,6 +1,7 @@
+import json
 import tempfile
 from unittest import TestCase
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from pridepy.files.files import Files
 
@@ -88,3 +89,65 @@ class TestJPOSTFiles(TestCase):
             use_tls=False,
             parallel_files=1,
         )
+
+    def test_proxi_listing_maps_cv_name_to_category(self):
+        files = Files()
+        proxi_response = {
+            "datasetFiles": [
+                {
+                    "accession": "PRIDE:0000404",
+                    "name": "Associated raw file URI",
+                    "value": "ftp://ftp.jpostdb.org/JPST002311/sample01.raw",
+                },
+                {
+                    "accession": "PRIDE:0000408",
+                    "name": "Search engine output file URI",
+                    "value": "ftp://ftp.jpostdb.org/JPST002311/sample01.sne",
+                },
+                {
+                    "accession": "PRIDE:0000999",
+                    "name": "Some unknown CV",
+                    "value": "ftp://ftp.jpostdb.org/JPST002311/misc/sample01.txt",
+                },
+                {
+                    "accession": "PRIDE:0000404",
+                    "name": "Associated raw file URI",
+                    "value": "https://example.org/not-ftp.raw",
+                },
+            ]
+        }
+        fake_response = MagicMock()
+        fake_response.content = json.dumps(proxi_response).encode("utf-8")
+        fake_response.raise_for_status = MagicMock()
+        with patch("pridepy.files.files.requests.get", return_value=fake_response) as req_mock:
+            records = files._list_jpost_public_files_via_proxi("JPST002311")
+
+        req_mock.assert_called_once()
+        call_url = req_mock.call_args[0][0]
+        assert call_url == "https://repository.jpostdb.org/proxi/datasets/JPST002311"
+        # Non-FTP URI ignored; three FTP entries kept.
+        assert len(records) == 3
+        cats = {r["fileName"]: r["fileCategory"]["value"] for r in records}
+        assert cats["sample01.raw"] == "RAW"
+        assert cats["sample01.sne"] == "SEARCH"
+        # Unknown CV falls back to path-based heuristic (collection "misc" -> OTHER).
+        assert cats["sample01.txt"] == "OTHER"
+
+    def test_proxi_falls_back_to_ftp_walk_on_error(self):
+        files = Files()
+        ftp_record = Files._build_jpost_file_record(
+            "JPST000001", "ftp://ftp.jpostdb.org/JPST000001/raw/x.raw"
+        )
+        with patch.object(
+            Files,
+            "_list_jpost_public_files_via_proxi",
+            side_effect=RuntimeError("proxi down"),
+        ), patch.object(
+            Files, "_list_ftp_repo_files", return_value=["/JPST000001/raw/x.raw"]
+        ) as ftp_mock:
+            result = files._list_jpost_public_files("JPST000001")
+
+        ftp_mock.assert_called_once()
+        assert len(result) == 1
+        assert result[0]["fileName"] == "x.raw"
+        assert result[0]["source"] == "JPOST"

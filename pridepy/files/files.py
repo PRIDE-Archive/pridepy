@@ -65,6 +65,16 @@ class Files:
     MASSIVE_ARCHIVE_FTP_URL_PREFIX = "ftp://massive-ftp.ucsd.edu/v01/"
     JPOST_ARCHIVE_FTP = "ftp.jpostdb.org"
     JPOST_ARCHIVE_FTP_URL_PREFIX = "ftp://ftp.jpostdb.org/"
+    JPOST_PROXI_BASE_URL = "https://repository.jpostdb.org/proxi/datasets/"
+    JPOST_PROXI_CATEGORY_MAP = {
+        "Associated raw file URI": "RAW",
+        "Result file URI": "RESULT",
+        "Search engine output file URI": "SEARCH",
+        "Peak list file URI": "PEAK",
+        "Spectrum library file URI": "SPECTRUM_LIBRARY",
+        "Sequence database URI": "FASTA",
+        "Quantification file URI": "RESULT",
+    }
     S3_URL = "https://hh.fire.sdo.ebi.ac.uk"
     S3_BUCKET = "pride-public"
     PROTOCOL_ORDER = ["aspera", "s3", "ftp", "globus"]
@@ -304,7 +314,17 @@ class Files:
         return f"{Files.JPOST_ARCHIVE_FTP_URL_PREFIX}{accession.upper()}/{relative_path}"
 
     @staticmethod
-    def _build_jpost_file_record(accession: str, ftp_url: str) -> Dict:
+    def _build_jpost_file_record(
+        accession: str, ftp_url: str, category_from_proxi: Optional[str] = None
+    ) -> Dict:
+        """
+        Build a pridepy file record for a JPOST file.
+
+        When ``category_from_proxi`` is provided (e.g. ``"Associated raw file URI"``),
+        the PROXI CV name takes precedence over the heuristic collection-from-path
+        mapping. Falls back to the same path-segment heuristic used for MassIVE
+        when the category isn't known.
+        """
         parsed = urlparse(ftp_url)
         root_prefix = f"/{accession.upper()}/"
         relative_path = parsed.path
@@ -312,10 +332,14 @@ class Files:
             relative_path = relative_path[len(root_prefix) :]
         relative_path = relative_path.lstrip("/")
         collection = relative_path.split("/", 1)[0] if relative_path else ""
+        if category_from_proxi and category_from_proxi in Files.JPOST_PROXI_CATEGORY_MAP:
+            category = Files.JPOST_PROXI_CATEGORY_MAP[category_from_proxi]
+        else:
+            category = Files._map_massive_collection_to_category(collection)
         return {
             "accession": accession.upper(),
             "fileName": os.path.basename(parsed.path),
-            "fileCategory": {"value": Files._map_massive_collection_to_category(collection)},
+            "fileCategory": {"value": category},
             "publicFileLocations": [{"name": "FTP Protocol", "value": ftp_url}],
             "relativePath": relative_path,
             "collection": collection,
@@ -332,6 +356,34 @@ class Files:
             Files.is_massive_accession(accession)
             or Files.is_jpost_accession(accession)
         )
+
+    @staticmethod
+    def is_iprox_accession(accession: str) -> bool:
+        """
+        Return True when the accession looks like an iProX dataset accession
+        (``IPX`` followed by 7-10 digits). iProX is recognised so the CLI can
+        emit a clear error rather than treating IPX as an unknown PRIDE
+        accession; direct downloads from iProX are not yet supported because
+        their listing API requires CAS authentication and downloads go through
+        Aspera with per-session tokens.
+        """
+        if not accession:
+            return False
+        return bool(re.fullmatch(r"IPX\d{7,10}", accession.upper()))
+
+    @staticmethod
+    def _raise_if_iprox(accession: str) -> None:
+        """
+        Raise a clear ``NotImplementedError`` when a user passes an iProX
+        accession. iProX downloads need CAS authentication and Aspera-tokenised
+        ``faspe://`` URLs which pridepy does not handle yet.
+        """
+        if Files.is_iprox_accession(accession):
+            raise NotImplementedError(
+                f"iProX accession {accession} is recognised but not yet supported. "
+                "iProX requires CAS authentication and Aspera-tokenised downloads; "
+                "track this in pridepy or use the iProX web interface for now."
+            )
 
     @staticmethod
     def _repo_uses_tls(accession: str) -> bool:
@@ -491,22 +543,71 @@ class Files:
 
     def _list_jpost_public_files(self, accession: str) -> List[Dict]:
         """
-        Discover all public files for a JPOST dataset from its anonymous FTP tree.
+        Discover all public files for a JPOST dataset.
+
+        Prefers the JPOST PROXI JSON endpoint at
+        ``https://repository.jpostdb.org/proxi/datasets/<acc>`` since it
+        returns file URLs with category labels and avoids the anonymous-FTP
+        rate limit that ``ftp.jpostdb.org`` applies per source IP. Falls back
+        to walking the FTP tree if PROXI is unreachable or returns no files.
         """
         normalized_accession = accession.upper()
-        remote_root = self._get_jpost_public_root(normalized_accession)
-        remote_files = self._list_ftp_repo_files(
-            host=self.JPOST_ARCHIVE_FTP,
-            remote_root=remote_root,
-            error_label=f"JPOST dataset {normalized_accession}",
-        )
-        return [
-            self._build_jpost_file_record(
-                normalized_accession,
-                self._get_jpost_public_ftp_url(normalized_accession, remote_file),
+        try:
+            return self._list_jpost_public_files_via_proxi(normalized_accession)
+        except Exception as proxi_error:
+            logging.warning(
+                f"JPOST PROXI listing failed for {normalized_accession} "
+                f"({proxi_error}); falling back to FTP tree walk."
             )
-            for remote_file in remote_files
-        ]
+            remote_root = self._get_jpost_public_root(normalized_accession)
+            remote_files = self._list_ftp_repo_files(
+                host=self.JPOST_ARCHIVE_FTP,
+                remote_root=remote_root,
+                error_label=f"JPOST dataset {normalized_accession}",
+            )
+            return [
+                self._build_jpost_file_record(
+                    normalized_accession,
+                    self._get_jpost_public_ftp_url(normalized_accession, remote_file),
+                )
+                for remote_file in remote_files
+            ]
+
+    def _list_jpost_public_files_via_proxi(self, accession: str) -> List[Dict]:
+        """
+        Fetch the JPOST PROXI dataset metadata and turn each ``datasetFiles``
+        entry into a pridepy file record. The PROXI ``name`` field is mapped to
+        a PRIDE-style category so existing RAW/SEARCH/RESULT filtering works.
+        """
+        import json as _json
+
+        proxi_url = f"{self.JPOST_PROXI_BASE_URL}{accession}"
+        logging.info(f"Fetching JPOST PROXI metadata: {proxi_url}")
+        response = requests.get(
+            proxi_url,
+            headers={"Accept": "application/json"},
+            timeout=30,
+        )
+        response.raise_for_status()
+        data = _json.loads(response.content)
+        dataset_files = data.get("datasetFiles") or []
+        records: List[Dict] = []
+        for entry in dataset_files:
+            value = (entry or {}).get("value")
+            if not value or not value.startswith("ftp://"):
+                continue
+            records.append(
+                self._build_jpost_file_record(
+                    accession,
+                    value,
+                    category_from_proxi=(entry or {}).get("name"),
+                )
+            )
+        if not records:
+            raise RuntimeError(
+                f"JPOST PROXI returned no FTP file URIs for {accession}"
+            )
+        return records
 
     def _list_direct_download_files(self, accession: str) -> List[Dict]:
         """
@@ -587,6 +688,7 @@ class Files:
         :param project_accession: PRIDE accession
         :return: raw file list in JSON format
         """
+        self._raise_if_iprox(project_accession)
         if self.is_direct_download_accession(project_accession):
             record_files = self._list_direct_download_files(project_accession)
             return [
@@ -619,6 +721,7 @@ class Files:
         :param checksum_check: Download checksum for a given project.
         :return: None
         """
+        self._raise_if_iprox(accession)
 
         if not (os.path.isdir(output_folder)):
             os.mkdir(output_folder)
@@ -1115,6 +1218,7 @@ class Files:
         :param aspera_maximum_bandwidth: Aspera maximum bandwidth
         :param checksum_check: Download checksum for a given project.
         """
+        self._raise_if_iprox(accession)
 
         if not (os.path.isdir(output_folder)):
             os.mkdir(output_folder)
@@ -1189,6 +1293,7 @@ class Files:
         :param file_name: file name
         :return: file in json format
         """
+        self._raise_if_iprox(accession)
 
         try:
             if self.is_direct_download_accession(accession):
@@ -1556,6 +1661,7 @@ class Files:
         """
         if not file_names:
             raise ValueError("file_names must contain at least one filename")
+        self._raise_if_iprox(accession)
 
         if self.is_direct_download_accession(accession):
             all_files = self._list_direct_download_files(accession)
@@ -1845,6 +1951,7 @@ class Files:
         :param categories: List of file categories to download.
         :param category: Single file category (deprecated, use categories instead).
         """
+        self._raise_if_iprox(accession)
         if categories is None:
             categories = [category] if category else ["RAW"]
         raw_files = self.get_all_category_file_list(accession, categories)
@@ -2030,6 +2137,21 @@ class Files:
                             f.seek(0)
                             f.truncate()
                     ftp.retrbinary(f"RETR {ftp_path}", callback)
+
+                # Post-transfer integrity check: server-reported size must match
+                # the local size. Catches half-finished transfers that retrbinary
+                # didn't raise on (e.g. server closed the data channel early).
+                # The next iteration will REST-resume from where we left off.
+                if total_size:
+                    final_size = os.path.getsize(local_path)
+                    if final_size != total_size:
+                        attempt += 1
+                        logging.error(
+                            f"Size mismatch for {local_path}: "
+                            f"got {final_size} bytes, expected {total_size} "
+                            f"(attempt {attempt})"
+                        )
+                        continue
                 logging.info(f"Successfully downloaded {local_path}")
                 return
             except (socket.timeout, ftplib.error_temp, ftplib.error_perm) as e:
