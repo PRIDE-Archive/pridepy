@@ -63,6 +63,10 @@ class Files:
     PRIDE_ARCHIVE_HTTPS_URL_PREFIX = "https://ftp.pride.ebi.ac.uk/"
     MASSIVE_ARCHIVE_FTP = "massive-ftp.ucsd.edu"
     MASSIVE_ARCHIVE_FTP_URL_PREFIX = "ftp://massive-ftp.ucsd.edu/v01/"
+    JPOST_ARCHIVE_FTP = "ftp.jpostdb.org"
+    JPOST_ARCHIVE_FTP_URL_PREFIX = "ftp://ftp.jpostdb.org/"
+    IPROX_ARCHIVE_FTP = "ftp.iprox.cn"
+    IPROX_ARCHIVE_FTP_URL_PREFIX = "ftp://ftp.iprox.cn/"
     S3_URL = "https://hh.fire.sdo.ebi.ac.uk"
     S3_BUCKET = "pride-public"
     PROTOCOL_ORDER = ["aspera", "s3", "ftp", "globus"]
@@ -281,6 +285,98 @@ class Files:
         }
 
     @staticmethod
+    def is_jpost_accession(accession: str) -> bool:
+        """
+        Return True when the accession looks like a JPOST dataset accession.
+        """
+        if not accession:
+            return False
+        return bool(re.fullmatch(r"JPST\d{6}", accession.upper()))
+
+    @staticmethod
+    def _get_jpost_public_root(accession: str) -> str:
+        return f"/{accession.upper()}"
+
+    @staticmethod
+    def _get_jpost_public_ftp_url(accession: str, remote_path: str) -> str:
+        root_path = Files._get_jpost_public_root(accession).rstrip("/")
+        relative_path = remote_path
+        if remote_path.startswith(root_path):
+            relative_path = remote_path[len(root_path) :].lstrip("/")
+        return f"{Files.JPOST_ARCHIVE_FTP_URL_PREFIX}{accession.upper()}/{relative_path}"
+
+    @staticmethod
+    def _build_jpost_file_record(accession: str, ftp_url: str) -> Dict:
+        parsed = urlparse(ftp_url)
+        root_prefix = f"/{accession.upper()}/"
+        relative_path = parsed.path
+        if relative_path.startswith(root_prefix):
+            relative_path = relative_path[len(root_prefix) :]
+        relative_path = relative_path.lstrip("/")
+        collection = relative_path.split("/", 1)[0] if relative_path else ""
+        return {
+            "accession": accession.upper(),
+            "fileName": os.path.basename(parsed.path),
+            "fileCategory": {"value": Files._map_massive_collection_to_category(collection)},
+            "publicFileLocations": [{"name": "FTP Protocol", "value": ftp_url}],
+            "relativePath": relative_path,
+            "collection": collection,
+            "source": "JPOST",
+        }
+
+    @staticmethod
+    def is_iprox_accession(accession: str) -> bool:
+        """
+        Return True when the accession looks like an iProX dataset accession.
+        """
+        if not accession:
+            return False
+        return bool(re.fullmatch(r"IPX\d{7,10}", accession.upper()))
+
+    @staticmethod
+    def _get_iprox_public_root(accession: str) -> str:
+        return f"/{accession.upper()}"
+
+    @staticmethod
+    def _get_iprox_public_ftp_url(accession: str, remote_path: str) -> str:
+        root_path = Files._get_iprox_public_root(accession).rstrip("/")
+        relative_path = remote_path
+        if remote_path.startswith(root_path):
+            relative_path = remote_path[len(root_path) :].lstrip("/")
+        return f"{Files.IPROX_ARCHIVE_FTP_URL_PREFIX}{accession.upper()}/{relative_path}"
+
+    @staticmethod
+    def _build_iprox_file_record(accession: str, ftp_url: str) -> Dict:
+        parsed = urlparse(ftp_url)
+        root_prefix = f"/{accession.upper()}/"
+        relative_path = parsed.path
+        if relative_path.startswith(root_prefix):
+            relative_path = relative_path[len(root_prefix) :]
+        relative_path = relative_path.lstrip("/")
+        collection = relative_path.split("/", 1)[0] if relative_path else ""
+        return {
+            "accession": accession.upper(),
+            "fileName": os.path.basename(parsed.path),
+            "fileCategory": {"value": Files._map_massive_collection_to_category(collection)},
+            "publicFileLocations": [{"name": "FTP Protocol", "value": ftp_url}],
+            "relativePath": relative_path,
+            "collection": collection,
+            "source": "iProX",
+        }
+
+    @staticmethod
+    def is_direct_download_accession(accession: str) -> bool:
+        """
+        Return True when the accession is served by a public FTP repository
+        that pridepy supports via direct downloads (no ProteomeXchange API).
+        """
+        return (
+            Files.is_massive_accession(accession)
+            or Files.is_jpost_accession(accession)
+            or Files.is_iprox_accession(accession)
+        )
+
+    @staticmethod
     def _walk_ftp_tree(ftp: FTP, remote_dir: str) -> List[str]:
         """
         Recursively list files under a remote FTP directory.
@@ -321,28 +417,46 @@ class Files:
             ftp.cwd(current_dir)
         return file_paths
 
+    def _list_ftp_repo_files(
+        self, host: str, remote_root: str, error_label: str
+    ) -> List[str]:
+        """
+        Connect to an anonymous FTP host, walk a directory tree, and return file paths.
+        Centralizes connection lifecycle so the constructor failure case doesn't mask
+        the underlying error in ``finally`` (see PR #98 review).
+        """
+        ftp: Optional[FTP] = None
+        try:
+            ftp = FTP(host, timeout=30)
+            ftp.login()
+            ftp.set_pasv(True)
+            logging.info(f"Connected to FTP host: {host}")
+            return self._walk_ftp_tree(ftp, remote_root)
+        except Exception as error:
+            raise RuntimeError(
+                f"Unable to list public files for {error_label}: {error}"
+            ) from error
+        finally:
+            if ftp is not None:
+                try:
+                    ftp.quit()
+                except Exception:
+                    try:
+                        ftp.close()
+                    except Exception:
+                        pass
+
     def _list_massive_public_files(self, accession: str) -> List[Dict]:
         """
         Discover all public files for a MassIVE dataset from its anonymous FTP tree.
         """
         normalized_accession = accession.upper()
         remote_root = self._get_massive_public_root(normalized_accession)
-        ftp = FTP(self.MASSIVE_ARCHIVE_FTP, timeout=30)
-        try:
-            ftp.login()
-            ftp.set_pasv(True)
-            logging.info(f"Connected to FTP host: {self.MASSIVE_ARCHIVE_FTP}")
-            remote_files = self._walk_ftp_tree(ftp, remote_root)
-        except Exception as error:
-            raise RuntimeError(
-                f"Unable to list public files for MassIVE dataset {normalized_accession}: {error}"
-            ) from error
-        finally:
-            try:
-                ftp.quit()
-            except Exception:
-                ftp.close()
-
+        remote_files = self._list_ftp_repo_files(
+            host=self.MASSIVE_ARCHIVE_FTP,
+            remote_root=remote_root,
+            error_label=f"MassIVE dataset {normalized_accession}",
+        )
         return [
             self._build_massive_file_record(
                 normalized_accession,
@@ -362,15 +476,86 @@ class Files:
         """
         Download public MassIVE files via anonymous FTP.
         """
+        self._download_direct_download_records(
+            accession=accession,
+            file_records=file_records,
+            output_folder=output_folder,
+            skip_if_downloaded_already=skip_if_downloaded_already,
+            protocol=protocol,
+        )
+
+    def _list_jpost_public_files(self, accession: str) -> List[Dict]:
+        """
+        Discover all public files for a JPOST dataset from its anonymous FTP tree.
+        """
+        normalized_accession = accession.upper()
+        remote_root = self._get_jpost_public_root(normalized_accession)
+        remote_files = self._list_ftp_repo_files(
+            host=self.JPOST_ARCHIVE_FTP,
+            remote_root=remote_root,
+            error_label=f"JPOST dataset {normalized_accession}",
+        )
+        return [
+            self._build_jpost_file_record(
+                normalized_accession,
+                self._get_jpost_public_ftp_url(normalized_accession, remote_file),
+            )
+            for remote_file in remote_files
+        ]
+
+    def _list_iprox_public_files(self, accession: str) -> List[Dict]:
+        """
+        Discover all public files for an iProX dataset from its anonymous FTP tree.
+        """
+        normalized_accession = accession.upper()
+        remote_root = self._get_iprox_public_root(normalized_accession)
+        remote_files = self._list_ftp_repo_files(
+            host=self.IPROX_ARCHIVE_FTP,
+            remote_root=remote_root,
+            error_label=f"iProX dataset {normalized_accession}",
+        )
+        return [
+            self._build_iprox_file_record(
+                normalized_accession,
+                self._get_iprox_public_ftp_url(normalized_accession, remote_file),
+            )
+            for remote_file in remote_files
+        ]
+
+    def _list_direct_download_files(self, accession: str) -> List[Dict]:
+        """
+        Dispatch to the right FTP-based listing for a direct-download repository.
+        """
+        if self.is_massive_accession(accession):
+            return self._list_massive_public_files(accession)
+        if self.is_jpost_accession(accession):
+            return self._list_jpost_public_files(accession)
+        if self.is_iprox_accession(accession):
+            return self._list_iprox_public_files(accession)
+        raise ValueError(
+            f"Accession {accession} is not a direct-download repository accession"
+        )
+
+    def _download_direct_download_records(
+        self,
+        accession: str,
+        file_records: List[Dict],
+        output_folder: str,
+        skip_if_downloaded_already: bool,
+        protocol: str,
+    ) -> None:
+        """
+        Download files from a direct-download repository (MassIVE/JPOST/iProX) via anonymous FTP.
+        """
         if protocol != "ftp":
             logging.warning(
-                "MassIVE direct downloads currently use ftp only. "
+                "Direct downloads currently use ftp only. "
                 f"Ignoring requested protocol '{protocol}' for {accession}."
             )
 
         ftp_urls = [self._get_download_url(file_record, "ftp") for file_record in file_records]
         if not ftp_urls:
-            logging.info(f"No files matched for MassIVE dataset {accession}")
+            logging.info(f"No files matched for direct-download dataset {accession}")
             return
 
         self.download_ftp_urls(
@@ -413,8 +598,8 @@ class Files:
         :param project_accession: PRIDE accession
         :return: raw file list in JSON format
         """
-        if self.is_massive_accession(project_accession):
-            record_files = self._list_massive_public_files(project_accession)
+        if self.is_direct_download_accession(project_accession):
+            record_files = self._list_direct_download_files(project_accession)
             return [
                 file for file in record_files if file["fileCategory"]["value"] == "RAW"
             ]
@@ -451,8 +636,8 @@ class Files:
 
         raw_files = self.get_all_raw_file_list(accession)
 
-        if self.is_massive_accession(accession):
-            self._download_massive_file_records(
+        if self.is_direct_download_accession(accession):
+            self._download_direct_download_records(
                 accession=accession,
                 file_records=raw_files,
                 output_folder=output_folder,
@@ -945,14 +1130,16 @@ class Files:
             os.mkdir(output_folder)
 
         ## Check type of project
-        if self.is_massive_accession(accession):
-            logging.info("Downloading file from public MassIVE dataset {}".format(accession))
+        if self.is_direct_download_accession(accession):
+            logging.info(
+                "Downloading file from public direct-download dataset {}".format(accession)
+            )
             response = self.get_file_from_api(accession, file_name)
             if not response:
                 raise Exception(
-                    "File name {} not found in MassIVE dataset {}".format(file_name, accession)
+                    "File name {} not found in dataset {}".format(file_name, accession)
                 )
-            self._download_massive_file_records(
+            self._download_direct_download_records(
                 accession=accession,
                 file_records=response,
                 output_folder=output_folder,
@@ -1014,8 +1201,8 @@ class Files:
         """
 
         try:
-            if self.is_massive_accession(accession):
-                files = self._list_massive_public_files(accession)
+            if self.is_direct_download_accession(accession):
+                files = self._list_direct_download_files(accession)
                 return [f for f in files if f["fileName"] == file_name]
             files = self.stream_all_files_by_project(accession)
             file = [f for f in files if f["fileName"] == file_name]
@@ -1380,8 +1567,8 @@ class Files:
         if not file_names:
             raise ValueError("file_names must contain at least one filename")
 
-        if self.is_massive_accession(accession):
-            all_files = self._list_massive_public_files(accession)
+        if self.is_direct_download_accession(accession):
+            all_files = self._list_direct_download_files(accession)
         else:
             all_files = self.stream_all_files_by_project(accession)
         requested = set(file_names)
@@ -1394,8 +1581,8 @@ class Files:
                 f"No matching files in project {accession} for: {sorted(requested)}"
             )
 
-        if self.is_massive_accession(accession):
-            self._download_massive_file_records(
+        if self.is_direct_download_accession(accession):
+            self._download_direct_download_records(
                 accession=accession,
                 file_records=matched,
                 output_folder=output_folder,
@@ -1670,8 +1857,8 @@ class Files:
         if categories is None:
             categories = [category] if category else ["RAW"]
         raw_files = self.get_all_category_file_list(accession, categories)
-        if self.is_massive_accession(accession):
-            self._download_massive_file_records(
+        if self.is_direct_download_accession(accession):
+            self._download_direct_download_records(
                 accession=accession,
                 file_records=raw_files,
                 output_folder=output_folder,
@@ -1704,8 +1891,8 @@ class Files:
             categories = [categories]
         category_set = {category.upper() for category in categories}
 
-        if self.is_massive_accession(accession):
-            record_files = self._list_massive_public_files(accession)
+        if self.is_direct_download_accession(accession):
+            record_files = self._list_direct_download_files(accession)
         else:
             record_files = self.stream_all_files_by_project(accession)
 
