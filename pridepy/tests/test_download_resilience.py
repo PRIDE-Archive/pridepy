@@ -268,3 +268,43 @@ class TestDownloadResilience(TestCase):
                         skip_if_downloaded_already=False,
                         protocol="ftp",
                     )
+
+    def test_facade_dispatches_pride_through_registry_to_fallback(self):
+        """Files().download_all_raw_files for a PXD accession must flow:
+        Files facade -> Registry.resolve -> PrideProvider.download_files
+        -> _batch_download_by_protocol (mocked).
+
+        Patching Files._batch_download_by_protocol proves the patch intercepts
+        (i.e. PrideProvider calls *back* through Files, preserving the test
+        contract for the multi-protocol orchestrator).
+        """
+        from pridepy.providers.pride import PrideProvider
+
+        fake_records = [
+            {
+                "accession": "PXD000001",
+                "fileName": "x.raw",
+                "fileCategory": {"value": "RAW"},
+                "publicFileLocations": [
+                    {"name": "FTP Protocol", "value": "ftp://ftp.pride.ebi.ac.uk/.../x.raw"}
+                ],
+            },
+        ]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(PrideProvider, "list_files", return_value=fake_records), \
+                 patch.object(Files, "_batch_download_by_protocol", return_value=[]) as batch_mock, \
+                 patch.object(Files, "validate_download", return_value=(True, "ok")), \
+                 patch.object(Files, "_download_with_fallback") as fallback_mock:
+                Files().download_all_raw_files(
+                    accession="PXD000001",
+                    output_folder=tmp,
+                    skip_if_downloaded_already=False,
+                    protocol="ftp",
+                    aspera_maximum_bandwidth="100M",
+                )
+
+        batch_mock.assert_called_once()
+        # No fallback expected because all files passed validation after
+        # the primary-protocol batch run.
+        fallback_mock.assert_not_called()
