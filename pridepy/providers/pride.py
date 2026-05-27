@@ -3,14 +3,14 @@
 PRIDE has the richest behaviour of all providers: multi-protocol batch
 download with aspera/s3/ftp/globus fallback, private-dataset path with
 username/password auth, checksum TSV validation, and submitter-path
-helpers. This module hosts all of those; the :class:`Files` facade
-delegates via lightweight shim methods.
+helpers. This module owns all of that logic; the :class:`Files` facade
+exposes a thin public surface for downstream callers.
 
-Implementation note: PRIDE-specific helpers that the existing test suite
-patches via ``patch.object(Files, "X")`` are called from inside this
-provider via ``Files.X(...)`` (lazy import) — never ``self.X`` — so the
-patches keep intercepting. This is a deliberate backward-compat choice
-documented in the refactor plan (Task 8).
+Implementation note: PRIDE provider methods route through other
+PrideProvider methods (``PrideProvider.X(...)``) or directly through the
+shared ``transport`` / ``util`` helpers — they do NOT call back into the
+``Files`` facade. Tests patch the canonical locations
+(``PrideProvider.X``, ``transport.X``, ``util.X``) directly.
 """
 import ftplib
 import importlib.resources
@@ -35,7 +35,8 @@ from botocore.config import Config
 from tqdm import tqdm
 
 from pridepy.authentication.authentication import Authentication
-from pridepy.providers import registry
+from pridepy.providers import registry, transport
+from pridepy.providers import util as _provider_util
 from pridepy.providers.base import Provider
 from pridepy.providers.util import Progress
 from pridepy.util.api_handling import Util
@@ -110,10 +111,9 @@ class PrideProvider(Provider):
         :param accession: PRIDE accession
         :return: path fragment (eg: 2018/10/PXD008644)
         """
-        # Use Files facade so test patches on get_all_raw_file_list keep working.
-        from pridepy.files.files import Files
-        results = Files().get_all_raw_file_list(accession)
-        first_file = results[0]["publicFileLocations"][0]["value"]
+        records = self.list_files(accession)
+        raw_files = [r for r in records if r["fileCategory"]["value"] == "RAW"]
+        first_file = raw_files[0]["publicFileLocations"][0]["value"]
         path_fragment = re.search(r"\d{4}/\d{2}/PXD\d*", first_file).group()
         return path_fragment
 
@@ -158,6 +158,15 @@ class PrideProvider(Provider):
             raise OSError(f"Unsupported OS or architecture: {os_type}, {arch}")
 
     @staticmethod
+    def get_output_file_name(download_url, file, output_folder):
+        """Build the local output path for ``download_url`` inside ``output_folder``."""
+        public_filepath_part = download_url.rsplit("/", 1)
+        accession = file.get("accession", "unknown-accession")
+        logging.debug(accession + " -> " + public_filepath_part[1])
+        new_file_path = os.path.join(output_folder, f"{public_filepath_part[1]}")
+        return new_file_path
+
+    @staticmethod
     def save_checksum_file(accession, output_folder):
         """
         Download and persist the checksum manifest for a PRIDE accession.
@@ -182,11 +191,8 @@ class PrideProvider(Provider):
     @staticmethod
     def _globus_download_one(file, output_folder, skip_if_downloaded_already, max_retries=6, position=0):
         """Download a single file via globus; used as a worker target."""
-        # Use Files facade so test patches on Files helpers keep working.
-        from pridepy.files.files import Files
-
-        download_url = Files._get_download_url(file, "globus")
-        new_file_path = Files.get_output_file_name(download_url, file, output_folder)
+        download_url = _provider_util._get_download_url(file, "globus")
+        new_file_path = PrideProvider.get_output_file_name(download_url, file, output_folder)
 
         if skip_if_downloaded_already and os.path.exists(new_file_path):
             logging.info(f"Skipping download as file already exists: {new_file_path}")
@@ -194,7 +200,7 @@ class PrideProvider(Provider):
 
         for attempt in range(1, max_retries + 1):
             try:
-                Files._parallel_download(download_url, new_file_path, position=position)
+                transport._parallel_download(download_url, new_file_path, position=position)
                 return
             except Exception as e:
                 logging.warning(f"Attempt {attempt}/{max_retries} failed for {file.get('fileName', '?')}: {e}")
@@ -221,8 +227,6 @@ class PrideProvider(Provider):
         :param max_connection_retries: Number of attempts to reconnect to the FTP server if the connection is lost.
         :param max_download_retries: Number of attempts to retry the download of a file in case of failure.
         """
-        from pridepy.files.files import Files
-
         if not os.path.isdir(output_folder):
             os.makedirs(output_folder)
 
@@ -249,7 +253,7 @@ class PrideProvider(Provider):
                         logging.debug("ftp_filepath:" + download_url)
 
                         # Get output file path
-                        new_file_path = Files.get_output_file_name(
+                        new_file_path = PrideProvider.get_output_file_name(
                             download_url, file, output_folder
                         )
 
@@ -328,6 +332,60 @@ class PrideProvider(Provider):
                     break
 
     @staticmethod
+    def download_files_from_aspera(
+        file_list_json: List[Dict],
+        output_folder: str,
+        skip_if_downloaded_already,
+        maximum_bandwidth: str = "100M",
+    ):
+        """
+        Download files using aspera transfer url
+        :param file_list_json: file list in json format
+        :param output_folder: folder to download the files
+        :param maximum_bandwidth: parameter in Aspera sets the maximum bandwidth for the transfer.
+        :param skip_if_downloaded_already: Boolean value to skip the download if the file has already been downloaded.
+        """
+        ascp_path = PrideProvider.get_ascp_binary()
+        key_full_path = importlib.resources.files("pridepy").joinpath(
+            "aspera/key/asperaweb_id_dsa.openssh"
+        )
+        key_path = os.path.abspath(key_full_path)
+        for file in file_list_json:
+            if file["publicFileLocations"][0]["name"] == "Aspera Protocol":
+                download_url = file["publicFileLocations"][0]["value"]
+            else:
+                download_url = file["publicFileLocations"][1]["value"]
+
+            # Create a clean filename to save the downloaded file
+            logging.debug(f"Downloading via Aspera: {download_url}")
+            new_file_path = PrideProvider.get_output_file_name(download_url, file, output_folder)
+
+            if skip_if_downloaded_already and os.path.exists(new_file_path):
+                logging.info("Skipping download as file already exists")
+                continue
+
+            try:
+                # Execute the ascp command using subprocess
+                subprocess.run(
+                    [
+                        ascp_path,
+                        "-QT",
+                        "-P",
+                        "33001",
+                        "-l",
+                        maximum_bandwidth,  # Options for Aspera: adjust as necessary
+                        "-i",
+                        key_path,
+                        download_url,
+                        new_file_path,  # Source and destination
+                    ],
+                    check=True,
+                )
+                logging.info(f"Successfully downloaded {new_file_path} via Aspera")
+            except subprocess.CalledProcessError as e:
+                logging.error(f"Aspera download failed for {new_file_path}: {str(e)}")
+
+    @staticmethod
     def download_files_from_globus(
         file_list_json: List[Dict], output_folder, skip_if_downloaded_already,
         parallel_files: int = 1,
@@ -346,9 +404,6 @@ class PrideProvider(Provider):
         :param parallel_files: number of files to download simultaneously
         :param checksum_map: mapping of file name to expected MD5 checksum
         """
-        # Use Files facade so test patches on Files._globus_download_one etc. keep working.
-        from pridepy.files.files import Files
-
         if checksum_map is None:
             checksum_map = {}
 
@@ -358,12 +413,12 @@ class PrideProvider(Provider):
         # --- Phase 0: pre-filter files that need downloading -----------------
         files_to_download: List[Dict] = []
         for file in file_list_json:
-            download_url = Files._get_download_url(file, "globus")
-            new_file_path = Files.get_output_file_name(download_url, file, output_folder)
+            download_url = _provider_util._get_download_url(file, "globus")
+            new_file_path = PrideProvider.get_output_file_name(download_url, file, output_folder)
             if skip_if_downloaded_already and os.path.exists(new_file_path):
                 expected_cs = checksum_map.get(file.get("fileName", ""))
                 if expected_cs:
-                    valid, reason = Files.validate_download(new_file_path, expected_cs)
+                    valid, reason = _provider_util.validate_download(new_file_path, expected_cs)
                     if not valid:
                         logging.warning(f"Corrupted file detected ({reason}), will re-download: {new_file_path}")
                         files_to_download.append(file)
@@ -386,11 +441,11 @@ class PrideProvider(Provider):
         if parallel_files < 2:
             for file in files_to_download:
                 try:
-                    Files._globus_download_one(
+                    PrideProvider._globus_download_one(
                         file, output_folder, False
                     )
-                    new_file_path = Files.get_output_file_name(
-                        Files._get_download_url(file, "globus"), file, output_folder
+                    new_file_path = PrideProvider.get_output_file_name(
+                        _provider_util._get_download_url(file, "globus"), file, output_folder
                     )
                     logging.info(f"Successfully downloaded {new_file_path}")
                 except Exception as e:
@@ -400,7 +455,7 @@ class PrideProvider(Provider):
             with ThreadPoolExecutor(max_workers=parallel_files) as executor:
                 futures = {
                     executor.submit(
-                        Files._globus_download_one,
+                        PrideProvider._globus_download_one,
                         file, output_folder, False,
                         position=idx,
                     ): file
@@ -422,8 +477,6 @@ class PrideProvider(Provider):
         :param output_folder: folder to download the files
         :param skip_if_downloaded_already: Boolean value to skip the download if the file has already been downloaded.
         """
-        from pridepy.files.files import Files
-
         if not os.path.isdir(output_folder):
             os.makedirs(output_folder, exist_ok=True)
 
@@ -453,7 +506,7 @@ class PrideProvider(Provider):
 
                 ftp_base_url = "ftp://ftp.pride.ebi.ac.uk/pride/data/archive/"
                 s3_path = download_url.replace(ftp_base_url, "")
-                new_file_path = Files.get_output_file_name(download_url, file, output_folder)
+                new_file_path = PrideProvider.get_output_file_name(download_url, file, output_folder)
 
                 if skip_if_downloaded_already == True and os.path.exists(new_file_path):
                     logging.info("Skipping download as file already exists")
@@ -587,20 +640,17 @@ class PrideProvider(Provider):
         Transfer a batch of files with one protocol, reusing a single
         connection where the underlying helper supports it (FTP, S3).
         """
-        # Use Files facade so test patches on each per-protocol helper keep working.
-        from pridepy.files.files import Files
-
         if not file_list:
             return
         if protocol == "ftp":
-            Files.download_files_from_ftp(
+            PrideProvider.download_files_from_ftp(
                 file_list,
                 output_folder,
                 skip_if_downloaded_already=skip_if_downloaded_already,
             )
             return
         if protocol == "aspera":
-            Files.download_files_from_aspera(
+            PrideProvider.download_files_from_aspera(
                 file_list,
                 output_folder,
                 skip_if_downloaded_already=skip_if_downloaded_already,
@@ -608,7 +658,7 @@ class PrideProvider(Provider):
             )
             return
         if protocol == "globus":
-            Files.download_files_from_globus(
+            PrideProvider.download_files_from_globus(
                 file_list,
                 output_folder,
                 skip_if_downloaded_already=skip_if_downloaded_already,
@@ -617,7 +667,7 @@ class PrideProvider(Provider):
             )
             return
         if protocol == "s3":
-            Files.download_files_from_s3(
+            PrideProvider.download_files_from_s3(
                 file_list,
                 output_folder,
                 skip_if_downloaded_already=skip_if_downloaded_already,
@@ -640,10 +690,7 @@ class PrideProvider(Provider):
         after every attempt. Intended as the per-file fallback path; batch
         download of the primary protocol is handled separately.
         """
-        # Patch-sensitive: call through Files so test patches intercept.
-        from pridepy.files.files import Files
-
-        local_path = Files._resolve_local_path(file_record, output_folder)
+        local_path = _provider_util._resolve_local_path(file_record, output_folder)
 
         for protocol in protocol_sequence:
             for attempt in range(1, max_protocol_retries + 1):
@@ -652,8 +699,8 @@ class PrideProvider(Provider):
                     f"(attempt {attempt}/{max_protocol_retries})"
                 )
                 try:
-                    Files._remove_if_exists(local_path)
-                    Files._batch_download_by_protocol(
+                    _provider_util._remove_if_exists(local_path)
+                    PrideProvider._batch_download_by_protocol(
                         [file_record],
                         output_folder,
                         protocol,
@@ -666,7 +713,7 @@ class PrideProvider(Provider):
                         f"Protocol {protocol} failed for {file_record['fileName']}: {error}"
                     )
 
-                valid, reason = Files.validate_download(local_path, expected_checksum)
+                valid, reason = _provider_util.validate_download(local_path, expected_checksum)
                 if valid:
                     logging.info(
                         f"File {file_record['fileName']} downloaded successfully via {protocol}"
@@ -676,7 +723,7 @@ class PrideProvider(Provider):
                 logging.warning(
                     f"Validation failed for {file_record['fileName']} via {protocol}: {reason}"
                 )
-                Files._remove_if_exists(local_path)
+                _provider_util._remove_if_exists(local_path)
 
             logging.warning(
                 f"Protocol {protocol} exhausted for {file_record['fileName']}, switching protocol."
@@ -730,10 +777,6 @@ class PrideProvider(Provider):
         :param aspera_maximum_bandwidth: parameter in Aspera sets the maximum bandwidth for the transfer.
         :param skip_if_downloaded_already: Boolean value to skip the download if the file has already been downloaded.
         """
-        # Patch-sensitive: call _batch_download_by_protocol and
-        # _download_with_fallback through Files so test patches intercept.
-        from pridepy.files.files import Files
-
         protocols_supported = ["ftp", "aspera", "globus", "s3"]
         if protocol not in protocols_supported:
             logging.error("Protocol should be one of ftp, aspera, globus, s3")
@@ -743,14 +786,14 @@ class PrideProvider(Provider):
 
         checksum_map: Dict[str, str] = {}
         if checksum_check:
-            checksum_file_path = Files.save_checksum_file(accession, output_folder)
-            checksum_map = Files.read_checksum_file(checksum_file_path)
+            checksum_file_path = PrideProvider.save_checksum_file(accession, output_folder)
+            checksum_map = _provider_util.read_checksum_file(checksum_file_path)
             logging.info(f"Loaded checksums for {len(checksum_map)} files")
 
         if not file_list_json:
             return
 
-        protocol_sequence = Files._protocol_sequence(protocol)
+        protocol_sequence = PrideProvider._protocol_sequence(protocol)
         primary_protocol = protocol_sequence[0]
         # Retry with the primary protocol first, then fall back to others
         fallback_sequence = protocol_sequence
@@ -762,7 +805,7 @@ class PrideProvider(Provider):
             f"Downloading {len(file_list_json)} file(s) via {primary_protocol} (batch)"
         )
         try:
-            Files._batch_download_by_protocol(
+            PrideProvider._batch_download_by_protocol(
                 file_list_json,
                 output_folder,
                 primary_protocol,
@@ -782,9 +825,9 @@ class PrideProvider(Provider):
         failed_files: List[str] = []
         for i, file_record in enumerate(file_list_json, 1):
             expected_checksum = checksum_map.get(file_record["fileName"])
-            local_path = Files._resolve_local_path(file_record, output_folder)
+            local_path = _provider_util._resolve_local_path(file_record, output_folder)
             logging.info("Validating [%d/%d] %s", i, len(file_list_json), file_record["fileName"])
-            valid, reason = Files.validate_download(local_path, expected_checksum)
+            valid, reason = _provider_util.validate_download(local_path, expected_checksum)
             if valid:
                 continue
 
@@ -792,13 +835,13 @@ class PrideProvider(Provider):
                 f"{file_record['fileName']} invalid after {primary_protocol} ({reason})"
             )
             if "checksum mismatch" in reason:
-                Files._remove_if_exists(local_path)
+                _provider_util._remove_if_exists(local_path)
 
             if not fallback_sequence:
                 failed_files.append(file_record.get("fileName", "<unknown>"))
                 continue
 
-            success = Files._download_with_fallback(
+            success = PrideProvider._download_with_fallback(
                 file_record=file_record,
                 output_folder=output_folder,
                 protocol_sequence=fallback_sequence,

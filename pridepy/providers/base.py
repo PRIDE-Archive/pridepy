@@ -1,6 +1,10 @@
 """Abstract base classes for pridepy providers."""
+import logging
 from abc import ABC, abstractmethod
 from typing import ClassVar, Dict, List, Optional
+
+from pridepy.providers import transport
+from pridepy.providers import util as _provider_util
 
 
 class Provider(ABC):
@@ -46,10 +50,8 @@ class BaseDirectDownloadProvider(Provider):
     Subclasses set the ``use_tls`` class var (True for MassIVE FTPS, False for
     JPOST plain FTP) and override :meth:`list_files`. The shared
     ``download_files`` implementation partitions record URLs by scheme:
-    ``ftp://`` URLs are handed to :meth:`Files.download_ftp_urls`; ``http(s)://``
-    URLs go to :meth:`Files.download_http_urls`. It calls **back** into
-    ``Files`` so that test patches on ``Files.download_ftp_urls`` /
-    ``Files.download_http_urls`` continue to intercept the calls.
+    ``ftp://`` URLs are handed to :func:`transport.download_ftp_urls`;
+    ``http(s)://`` URLs go to :func:`transport.download_http_urls`.
     """
 
     use_tls: ClassVar[bool] = False
@@ -67,31 +69,25 @@ class BaseDirectDownloadProvider(Provider):
         username: Optional[str] = None,
         password: Optional[str] = None,
     ) -> None:
-        # Lazy import: providers know about Files (the facade) only via the
-        # public attributes that tests may patch; avoid module-load cycle.
-        from pridepy.files.files import Files
-
         if protocol not in ("ftp", "https", "http"):
-            import logging
             logging.warning(
                 "Direct downloads currently use ftp / https only. "
                 f"Ignoring requested protocol '{protocol}' for {accession}."
             )
 
-        all_urls = [Files._get_download_url(record, "ftp") for record in records]
+        all_urls = [_provider_util._get_download_url(record, "ftp") for record in records]
         ftp_urls = [u for u in all_urls if u.lower().startswith("ftp://")]
         http_urls = [
             u for u in all_urls if u.lower().startswith(("http://", "https://"))
         ]
         if not ftp_urls and not http_urls:
-            import logging
             logging.info(
                 f"No files matched for direct-download dataset {accession}"
             )
             return
 
         if ftp_urls:
-            Files.download_ftp_urls(
+            transport.download_ftp_urls(
                 ftp_urls=ftp_urls,
                 output_folder=output_folder,
                 skip_if_downloaded_already=skip_if_downloaded_already,
@@ -99,7 +95,7 @@ class BaseDirectDownloadProvider(Provider):
                 parallel_files=parallel_files,
             )
         if http_urls:
-            Files.download_http_urls(
+            transport.download_http_urls(
                 http_urls=http_urls,
                 output_folder=output_folder,
                 skip_if_downloaded_already=skip_if_downloaded_already,

@@ -4,6 +4,7 @@ from unittest import TestCase
 from unittest.mock import MagicMock, patch
 
 from pridepy.files.files import Files
+from pridepy.providers import transport
 from pridepy.providers.jpost import JpostProvider
 
 
@@ -19,7 +20,7 @@ class TestJPOSTFiles(TestCase):
         assert Files.is_direct_download_accession("JPST000001")
 
     def test_build_jpost_file_record_maps_collection_to_category(self):
-        record = Files._build_jpost_file_record(
+        record = JpostProvider._build_file_record(
             "JPST000001",
             "ftp://ftp.jpostdb.org/JPST000001/peak/sample.mzML",
         )
@@ -30,7 +31,7 @@ class TestJPOSTFiles(TestCase):
         assert record["source"] == "JPOST"
 
     def test_build_jpost_file_record_marks_raw_collection_as_raw(self):
-        record = Files._build_jpost_file_record(
+        record = JpostProvider._build_file_record(
             "JPST000001",
             "ftp://ftp.jpostdb.org/JPST000001/raw/run01.raw",
         )
@@ -41,11 +42,11 @@ class TestJPOSTFiles(TestCase):
     def test_get_all_raw_file_list_filters_jpost_records(self):
         files = Files()
         jpost_records = [
-            Files._build_jpost_file_record(
+            JpostProvider._build_file_record(
                 "JPST000001",
                 "ftp://ftp.jpostdb.org/JPST000001/raw/run1.raw",
             ),
-            Files._build_jpost_file_record(
+            JpostProvider._build_file_record(
                 "JPST000001",
                 "ftp://ftp.jpostdb.org/JPST000001/result/results.tsv",
             ),
@@ -59,7 +60,7 @@ class TestJPOSTFiles(TestCase):
 
     def test_download_file_by_name_uses_jpost_ftp_listing(self):
         files = Files()
-        file_record = Files._build_jpost_file_record(
+        file_record = JpostProvider._build_file_record(
             "JPST000001",
             "ftp://ftp.jpostdb.org/JPST000001/raw/folder/sample.raw",
         )
@@ -67,7 +68,7 @@ class TestJPOSTFiles(TestCase):
         with tempfile.TemporaryDirectory() as tmp_dir:
             with patch.object(
                 JpostProvider, "list_files", return_value=[file_record]
-            ), patch.object(Files, "download_ftp_urls") as download_mock:
+            ), patch.object(transport, "download_ftp_urls") as download_mock:
                 files.download_file_by_name(
                     accession="JPST000001",
                     file_name="sample.raw",
@@ -89,7 +90,6 @@ class TestJPOSTFiles(TestCase):
         )
 
     def test_proxi_listing_maps_cv_name_to_category(self):
-        files = Files()
         proxi_response = {
             "datasetFiles": [
                 {
@@ -117,8 +117,8 @@ class TestJPOSTFiles(TestCase):
         fake_response = MagicMock()
         fake_response.content = json.dumps(proxi_response).encode("utf-8")
         fake_response.raise_for_status = MagicMock()
-        with patch("pridepy.files.files.requests.get", return_value=fake_response) as req_mock:
-            records = files._list_jpost_public_files_via_proxi("JPST002311")
+        with patch("pridepy.providers.jpost.requests.get", return_value=fake_response) as req_mock:
+            records = JpostProvider()._list_via_proxi("JPST002311")
 
         req_mock.assert_called_once()
         call_url = req_mock.call_args[0][0]
@@ -132,18 +132,14 @@ class TestJPOSTFiles(TestCase):
         assert cats["sample01.txt"] == "OTHER"
 
     def test_proxi_falls_back_to_ftp_walk_on_error(self):
-        files = Files()
-        ftp_record = Files._build_jpost_file_record(
-            "JPST000001", "ftp://ftp.jpostdb.org/JPST000001/raw/x.raw"
-        )
         with patch.object(
-            Files,
-            "_list_jpost_public_files_via_proxi",
+            JpostProvider,
+            "_list_via_proxi",
             side_effect=RuntimeError("proxi down"),
         ), patch.object(
-            Files, "_list_ftp_repo_files", return_value=["/JPST000001/raw/x.raw"]
+            transport, "_list_ftp_repo_files", return_value=["/JPST000001/raw/x.raw"]
         ) as ftp_mock:
-            result = files._list_jpost_public_files("JPST000001")
+            result = JpostProvider().list_files("JPST000001")
 
         ftp_mock.assert_called_once()
         assert len(result) == 1

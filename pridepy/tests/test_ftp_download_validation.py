@@ -12,7 +12,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from pridepy.files.files import Files
+from pridepy.providers import transport
 
 
 def _make_fake_ftp(expected_size, write_bytes_per_call):
@@ -43,7 +43,7 @@ class TestSizeMismatchValidation(TestCase):
             local_path = os.path.join(tmp, "f.bin")
             ftp = _make_fake_ftp(expected_size=100, write_bytes_per_call=[50, 50])
 
-            Files._download_one_ftp_path(
+            transport._download_one_ftp_path(
                 ftp=ftp,
                 ftp_path="/JPST000001/f.bin",
                 local_path=local_path,
@@ -64,7 +64,7 @@ class TestSizeMismatchValidation(TestCase):
             ftp = _make_fake_ftp(expected_size=100, write_bytes_per_call=[10, 10, 10])
 
             with pytest.raises(RuntimeError, match="Giving up"):
-                Files._download_one_ftp_path(
+                transport._download_one_ftp_path(
                     ftp=ftp,
                     ftp_path="/JPST000001/f.bin",
                     local_path=local_path,
@@ -79,7 +79,7 @@ class TestSizeMismatchValidation(TestCase):
             local_path = os.path.join(tmp, "f.bin")
             ftp = _make_fake_ftp(expected_size=50, write_bytes_per_call=[50])
 
-            Files._download_one_ftp_path(
+            transport._download_one_ftp_path(
                 ftp=ftp,
                 ftp_path="/JPST000001/f.bin",
                 local_path=local_path,

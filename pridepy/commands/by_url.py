@@ -15,6 +15,9 @@ from urllib.parse import urlparse
 
 from tqdm import tqdm
 
+from pridepy.providers import transport
+from pridepy.providers import util as _provider_util
+from pridepy.providers.pride import PrideProvider
 from pridepy.util.api_handling import Util
 
 
@@ -38,8 +41,6 @@ def _validate_urls_checksums(urls: List[str], output_folder: str) -> None:
 
     :raises RuntimeError: if one or more files fail validation
     """
-    from pridepy.files.files import Files
-
     accession_urls: Dict[str, List[str]] = {}
     for url in urls:
         acc = _extract_pride_accession(url)
@@ -52,8 +53,8 @@ def _validate_urls_checksums(urls: List[str], output_folder: str) -> None:
 
     validation_failures: List[str] = []
     for acc, acc_urls in accession_urls.items():
-        checksum_file_path = Files.save_checksum_file(acc, output_folder)
-        checksum_map = Files.read_checksum_file(checksum_file_path)
+        checksum_file_path = PrideProvider.save_checksum_file(acc, output_folder)
+        checksum_map = _provider_util.read_checksum_file(checksum_file_path)
         logging.info(
             "Loaded checksums for %d files (project %s)",
             len(checksum_map), acc,
@@ -63,7 +64,7 @@ def _validate_urls_checksums(urls: List[str], output_folder: str) -> None:
             target = os.path.join(output_folder, file_name)
             expected = checksum_map.get(file_name)
             logging.info("Validating %s", file_name)
-            valid, reason = Files.validate_download(target, expected)
+            valid, reason = _provider_util.validate_download(target, expected)
             if not valid:
                 logging.error("Validation failed for %s: %s", file_name, reason)
                 validation_failures.append(f"{file_name} ({reason})")
@@ -129,19 +130,17 @@ def _dispatch_url_scheme(parsed, target: str, protocol: str = "ftp", position: i
     """Route a parsed URL to its protocol-specific downloader.
 
     ``protocol='globus'`` swaps the http/https single-connection streamer
-    for :func:`pridepy.files.files.Files._parallel_download` (single-connection with progress bar).
-    ftp:// URLs are unaffected.
+    for :func:`pridepy.providers.transport._parallel_download` (single-connection
+    with progress bar). ftp:// URLs are unaffected.
     """
-    from pridepy.files.files import Files
-
     scheme = (parsed.scheme or "").lower()
     if scheme in ("http", "https"):
         if protocol == "globus":
-            Files._parallel_download(parsed.geturl(), target, position=position)
+            transport._parallel_download(parsed.geturl(), target, position=position)
         else:
-            Files._http_download_url(parsed.geturl(), target)
+            _http_download_url(parsed.geturl(), target)
     elif scheme == "ftp":
-        Files._ftp_download_url(parsed, target)
+        _ftp_download_url(parsed, target)
     else:
         raise ValueError(f"Unsupported URL scheme: {scheme}")
 
@@ -154,8 +153,6 @@ def _download_single_url(
     position: int = 0,
 ) -> str:
     """Download one URL, dispatched by scheme; return the local file path."""
-    from pridepy.files.files import Files
-
     parsed = urlparse(url)
     if not (parsed.scheme or "").lower():
         raise ValueError(f"URL missing scheme: {url}")
@@ -169,11 +166,11 @@ def _download_single_url(
         logging.info("Skipping %s: already downloaded", file_name)
         return target
 
-    Files._dispatch_url_scheme(parsed, target, protocol, position=position)
+    _dispatch_url_scheme(parsed, target, protocol, position=position)
 
-    ok, reason = Files.validate_download(target)
+    ok, reason = _provider_util.validate_download(target)
     if not ok:
-        Files._remove_if_exists(target)
+        _provider_util._remove_if_exists(target)
         raise RuntimeError(f"Download invalid: {reason} ({target})")
     return target
 
@@ -211,12 +208,11 @@ def download_files_by_url(
 
     parallel_files = min(parallel_files, 3, len(urls))
     failures: List[Tuple[str, str]] = []
-    from pridepy.files.files import Files
 
     if parallel_files < 2:
         for url in urls:
             try:
-                Files._download_single_url(
+                _download_single_url(
                     url, output_folder, skip_if_downloaded_already, protocol,
                 )
             except Exception as exc:  # pylint: disable=broad-except
@@ -230,7 +226,7 @@ def download_files_by_url(
         with ThreadPoolExecutor(max_workers=parallel_files) as executor:
             futures = {
                 executor.submit(
-                    Files._download_single_url,
+                    _download_single_url,
                     url, output_folder, skip_if_downloaded_already, protocol,
                     position=idx,
                 ): url

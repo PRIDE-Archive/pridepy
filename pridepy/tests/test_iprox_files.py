@@ -14,6 +14,9 @@ from unittest import TestCase
 from unittest.mock import MagicMock, patch
 
 from pridepy.files.files import Files
+from pridepy.providers import transport
+from pridepy.providers.iprox import IproxProvider
+from pridepy.providers.pride import PrideProvider
 
 
 IPROX_XML_FIXTURE = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -61,7 +64,7 @@ class TestIProXFiles(TestCase):
         assert Files.is_direct_download_accession("IPX0017413000")
 
     def test_build_iprox_file_record_maps_px_cv_to_category(self):
-        record = Files._build_iprox_file_record(
+        record = IproxProvider._build_file_record(
             "IPX0017413000",
             "http://download.iprox.org/IPX0017413000/IPX0017413001/sample.raw",
             category_from_px="Associated raw file URI",
@@ -74,14 +77,13 @@ class TestIProXFiles(TestCase):
         assert record["publicFileLocations"][0]["value"].startswith("http://")
 
     def test_list_iprox_public_files_parses_px_xml(self):
-        files = Files()
         fake_response = MagicMock()
         fake_response.content = IPROX_XML_FIXTURE
         fake_response.raise_for_status = MagicMock()
         with patch(
-            "pridepy.files.files.requests.get", return_value=fake_response
+            "pridepy.providers.iprox.requests.get", return_value=fake_response
         ) as req_mock:
-            records = files._list_iprox_public_files("IPX0017413000")
+            records = IproxProvider().list_files("IPX0017413000")
 
         # The fetch hits the deterministic PX XML URL.
         req_mock.assert_called_once()
@@ -108,8 +110,8 @@ class TestIProXFiles(TestCase):
         fake_response.content = IPROX_XML_FIXTURE
         fake_response.raise_for_status = MagicMock()
         with patch(
-            "pridepy.files.files.requests.get", return_value=fake_response
-        ), patch.object(Files, "stream_all_files_by_project") as pride_mock:
+            "pridepy.providers.iprox.requests.get", return_value=fake_response
+        ), patch.object(PrideProvider, "stream_all_files_by_project") as pride_mock:
             raw_files = files.get_all_raw_file_list("IPX0017413000")
 
         pride_mock.assert_not_called()
@@ -121,9 +123,9 @@ class TestIProXFiles(TestCase):
         fake_response.content = IPROX_XML_FIXTURE
         fake_response.raise_for_status = MagicMock()
         with tempfile.TemporaryDirectory() as tmp_dir, patch(
-            "pridepy.files.files.requests.get", return_value=fake_response
-        ), patch.object(Files, "download_http_urls") as http_mock, patch.object(
-            Files, "download_ftp_urls"
+            "pridepy.providers.iprox.requests.get", return_value=fake_response
+        ), patch.object(transport, "download_http_urls") as http_mock, patch.object(
+            transport, "download_ftp_urls"
         ) as ftp_mock:
             files.download_file_by_name(
                 accession="IPX0017413000",

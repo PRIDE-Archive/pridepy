@@ -28,6 +28,7 @@ import xml.etree.ElementTree as ET
 from typing import ClassVar, Dict, List, Optional
 from urllib.parse import urlparse
 
+from pridepy.providers import transport
 from pridepy.providers.base import Provider
 from pridepy.util.api_handling import Util
 
@@ -139,13 +140,9 @@ class ProteomeXchangeProvider(Provider):
     ) -> None:
         """Partition record URLs by scheme and route to the matching transport.
 
-        Routes ftp:// records to :meth:`Files.download_ftp_urls` and
-        http(s):// records to :meth:`Files.download_http_urls`, going
-        through the Files facade so test patches like
-        ``patch.object(Files, "download_ftp_urls")`` continue to intercept.
+        Routes ftp:// records to :func:`transport.download_ftp_urls` and
+        http(s):// records to :func:`transport.download_http_urls`.
         """
-        from pridepy.files.files import Files  # lazy: avoid module-load cycle
-
         if not os.path.isdir(output_folder):
             os.makedirs(output_folder, exist_ok=True)
 
@@ -158,11 +155,11 @@ class ProteomeXchangeProvider(Provider):
         http_urls = [u for u in urls if u.lower().startswith(("http://", "https://"))]
 
         if ftp_urls:
-            Files.download_ftp_urls(
+            transport.download_ftp_urls(
                 ftp_urls, output_folder, skip_if_downloaded_already
             )
         if http_urls:
-            Files.download_http_urls(
+            transport.download_http_urls(
                 http_urls, output_folder, skip_if_downloaded_already
             )
 

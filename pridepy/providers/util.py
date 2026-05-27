@@ -133,7 +133,9 @@ def _get_download_url(file_record: Dict, protocol: str) -> str:
     arbitrary non-Aspera location would produce a URL the caller cannot
     actually transfer with).
     """
-    from pridepy.files.files import Files
+    # Lazy import to avoid module-load cycle with PrideProvider (which lives
+    # in the providers package and imports back into util via _resolve_local_path).
+    from pridepy.providers.pride import PrideProvider
 
     locations = file_record.get("publicFileLocations", [])
     if not locations:
@@ -159,8 +161,8 @@ def _get_download_url(file_record: Dict, protocol: str) -> str:
         return ftp_url
     if protocol == "globus":
         return ftp_url.replace(
-            Files.PRIDE_ARCHIVE_FTP_URL_PREFIX,
-            Files.PRIDE_ARCHIVE_HTTPS_URL_PREFIX,
+            PrideProvider.ARCHIVE_FTP_URL_PREFIX,
+            PrideProvider.ARCHIVE_HTTPS_URL_PREFIX,
             1,
         )
     if protocol == "s3":
@@ -172,12 +174,13 @@ def _resolve_local_path(file_record: Dict, output_folder: str) -> str:
     """
     Compute the canonical local path for a file regardless of transfer protocol.
     """
-    from pridepy.files.files import Files
+    # Lazy import to avoid module-load cycle with PrideProvider.
+    from pridepy.providers.pride import PrideProvider
 
     try:
         canonical_url = _get_download_url(file_record, "ftp")
     except ValueError:
         canonical_url = ""
     if canonical_url:
-        return Files.get_output_file_name(canonical_url, file_record, output_folder)
+        return PrideProvider.get_output_file_name(canonical_url, file_record, output_folder)
     return os.path.join(output_folder, file_record["fileName"])

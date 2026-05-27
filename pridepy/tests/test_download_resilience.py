@@ -4,7 +4,13 @@ import tempfile
 from unittest import TestCase
 from unittest.mock import Mock, patch
 
+from pridepy.commands import by_url
 from pridepy.files.files import Files
+from pridepy.providers import transport
+from pridepy.providers import util as provider_util
+from pridepy.providers.massive import MassiveProvider
+from pridepy.providers.pride import PrideProvider
+from pridepy.providers import registry
 
 
 class TestDownloadResilience(TestCase):
@@ -40,7 +46,7 @@ class TestDownloadResilience(TestCase):
             ]
         }
 
-        download_url = Files._get_download_url(file_record, "globus")
+        download_url = provider_util._get_download_url(file_record, "globus")
 
         assert download_url == "https://ftp.pride.ebi.ac.uk/path/file.raw"
 
@@ -61,10 +67,10 @@ class TestDownloadResilience(TestCase):
             session.get.return_value = stream_response
 
             with patch(
-                "pridepy.files.files.Util.create_session_with_retries",
+                "pridepy.providers.transport.Util.create_session_with_retries",
                 return_value=session,
             ):
-                Files._parallel_download(
+                transport._parallel_download(
                     "https://example.org/file.raw",
                     output_file,
                 )
@@ -86,10 +92,10 @@ class TestDownloadResilience(TestCase):
             session.get.return_value = fallback_response
 
             with patch(
-                "pridepy.files.files.Util.create_session_with_retries",
+                "pridepy.providers.transport.Util.create_session_with_retries",
                 return_value=session,
             ):
-                Files._parallel_download(
+                transport._parallel_download(
                     "https://example.org/file.raw",
                     output_file,
                 )
@@ -114,10 +120,10 @@ class TestDownloadResilience(TestCase):
             session.get.return_value = fallback_response
 
             with patch(
-                "pridepy.files.files.Util.create_session_with_retries",
+                "pridepy.providers.transport.Util.create_session_with_retries",
                 return_value=session,
             ):
-                Files._parallel_download(
+                transport._parallel_download(
                     "https://example.org/file.raw",
                     output_file,
                 )
@@ -142,8 +148,8 @@ class TestDownloadResilience(TestCase):
             assert "checksum mismatch" in reason
 
     def test_protocol_sequence_prefers_requested_then_fallback(self):
-        assert Files._protocol_sequence("ftp") == ["ftp", "aspera", "s3", "globus"]
-        assert Files._protocol_sequence("aspera") == ["aspera", "s3", "ftp", "globus"]
+        assert PrideProvider._protocol_sequence("ftp") == ["ftp", "aspera", "s3", "globus"]
+        assert PrideProvider._protocol_sequence("aspera") == ["aspera", "s3", "ftp", "globus"]
 
     def test_download_with_fallback_switches_protocol_after_invalid_file(self):
         file_record = {
@@ -168,8 +174,8 @@ class TestDownloadResilience(TestCase):
                     with open(local_path, "wb") as handle:
                         handle.write(b"abc")
 
-            with patch.object(Files, "_batch_download_by_protocol", side_effect=fake_batch):
-                success = Files._download_with_fallback(
+            with patch.object(PrideProvider, "_batch_download_by_protocol", side_effect=fake_batch):
+                success = PrideProvider._download_with_fallback(
                     file_record=file_record,
                     output_folder=tmp_dir,
                     protocol_sequence=["aspera", "s3"],
@@ -201,9 +207,9 @@ class TestDownloadResilience(TestCase):
                 with open(local_path, "wb") as handle:
                     handle.write(b"data")
 
-            with patch.object(Files, "_batch_download_by_protocol", side_effect=fake_batch) as batch_mock, \
-                 patch.object(Files, "_download_with_fallback") as fallback_mock:
-                Files.download_files(
+            with patch.object(PrideProvider, "_batch_download_by_protocol", side_effect=fake_batch) as batch_mock, \
+                 patch.object(PrideProvider, "_download_with_fallback") as fallback_mock:
+                PrideProvider._download_files_batch(
                     file_list_json=[file_record],
                     accession="PXD000000",
                     output_folder=tmp_dir,
@@ -229,8 +235,8 @@ class TestDownloadResilience(TestCase):
         ]
 
         with tempfile.TemporaryDirectory() as tmp_dir:
-            with patch.object(Files, "_globus_download_one") as mock_one:
-                Files.download_files_from_globus(
+            with patch.object(PrideProvider, "_globus_download_one") as mock_one:
+                PrideProvider.download_files_from_globus(
                     file_list_json=file_records,
                     output_folder=tmp_dir,
                     skip_if_downloaded_already=False,
@@ -243,7 +249,7 @@ class TestDownloadResilience(TestCase):
     def test_url_parallel_workers_capped_to_url_count(self):
         """download_files_by_url must cap workers to len(urls)."""
         with tempfile.TemporaryDirectory() as tmp_dir:
-            with patch.object(Files, "_download_single_url") as mock_single:
+            with patch.object(by_url, "_download_single_url") as mock_single:
                 Files.download_files_by_url(
                     urls=["https://example.org/a.raw"],
                     output_folder=tmp_dir,
@@ -258,10 +264,10 @@ class TestDownloadResilience(TestCase):
         with tempfile.TemporaryDirectory() as tmp_dir:
             file_list = [{"fileName": "missing.raw"}]
 
-            with patch.object(Files, "_batch_download_by_protocol"), \
-                 patch.object(Files, "_download_with_fallback", return_value=False):
+            with patch.object(PrideProvider, "_batch_download_by_protocol"), \
+                 patch.object(PrideProvider, "_download_with_fallback", return_value=False):
                 with self.assertRaisesRegex(RuntimeError, "missing.raw"):
-                    Files.download_files(
+                    PrideProvider._download_files_batch(
                         file_list_json=file_list,
                         accession="PXD000000",
                         output_folder=tmp_dir,
@@ -274,12 +280,10 @@ class TestDownloadResilience(TestCase):
         Files facade -> Registry.resolve -> PrideProvider.download_files
         -> _batch_download_by_protocol (mocked).
 
-        Patching Files._batch_download_by_protocol proves the patch intercepts
-        (i.e. PrideProvider calls *back* through Files, preserving the test
-        contract for the multi-protocol orchestrator).
+        Patching PrideProvider._batch_download_by_protocol proves the patch
+        intercepts (i.e. PrideProvider owns the multi-protocol orchestrator
+        and no longer routes through Files).
         """
-        from pridepy.providers.pride import PrideProvider
-
         fake_records = [
             {
                 "accession": "PXD000001",
@@ -293,9 +297,9 @@ class TestDownloadResilience(TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             with patch.object(PrideProvider, "list_files", return_value=fake_records), \
-                 patch.object(Files, "_batch_download_by_protocol", return_value=[]) as batch_mock, \
-                 patch.object(Files, "validate_download", return_value=(True, "ok")), \
-                 patch.object(Files, "_download_with_fallback") as fallback_mock:
+                 patch.object(PrideProvider, "_batch_download_by_protocol", return_value=[]) as batch_mock, \
+                 patch.object(provider_util, "validate_download", return_value=(True, "ok")), \
+                 patch.object(PrideProvider, "_download_with_fallback") as fallback_mock:
                 Files().download_all_raw_files(
                     accession="PXD000001",
                     output_folder=tmp,

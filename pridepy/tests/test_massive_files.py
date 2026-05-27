@@ -3,6 +3,7 @@ from unittest import TestCase
 from unittest.mock import patch
 
 from pridepy.files.files import Files
+from pridepy.providers import transport
 from pridepy.providers.massive import MassiveProvider
 
 
@@ -14,7 +15,7 @@ class TestMassIVEFiles(TestCase):
         assert not Files.is_massive_accession("MSV123")
 
     def test_build_massive_file_record_maps_collection_to_category(self):
-        record = Files._build_massive_file_record(
+        record = MassiveProvider._build_file_record(
             "MSV000012345",
             "ftp://massive-ftp.ucsd.edu/v01/MSV000012345/ccms_peak/converted/sample.mzML",
         )
@@ -24,7 +25,7 @@ class TestMassIVEFiles(TestCase):
         assert record["fileCategory"]["value"] == "PEAK"
 
     def test_build_massive_file_record_marks_raw_collection_as_raw(self):
-        record = Files._build_massive_file_record(
+        record = MassiveProvider._build_file_record(
             "MSV000012345",
             "ftp://massive-ftp.ucsd.edu/v01/MSV000012345/raw/run01.raw",
         )
@@ -33,7 +34,7 @@ class TestMassIVEFiles(TestCase):
         assert record["fileCategory"]["value"] == "RAW"
 
     def test_build_massive_file_record_keeps_non_raw_collection_even_for_raw_like_file_names(self):
-        record = Files._build_massive_file_record(
+        record = MassiveProvider._build_file_record(
             "MSV000012345",
             "ftp://massive-ftp.ucsd.edu/v01/MSV000012345/uploads/run01.raw",
         )
@@ -42,7 +43,7 @@ class TestMassIVEFiles(TestCase):
         assert record["fileCategory"]["value"] == "OTHER"
 
     def test_build_massive_file_record_marks_ab_sciex_scan_sidecar_as_raw_when_under_raw(self):
-        record = Files._build_massive_file_record(
+        record = MassiveProvider._build_file_record(
             "MSV000012345",
             "ftp://massive-ftp.ucsd.edu/v01/MSV000012345/raw/sample.wiff.scan",
         )
@@ -53,15 +54,15 @@ class TestMassIVEFiles(TestCase):
     def test_get_all_raw_file_list_filters_massive_records(self):
         files = Files()
         massive_records = [
-            Files._build_massive_file_record(
+            MassiveProvider._build_file_record(
                 "MSV000012345",
                 "ftp://massive-ftp.ucsd.edu/v01/MSV000012345/raw/run1.raw",
             ),
-            Files._build_massive_file_record(
+            MassiveProvider._build_file_record(
                 "MSV000012345",
                 "ftp://massive-ftp.ucsd.edu/v01/MSV000012345/quant/results.tsv",
             ),
-            Files._build_massive_file_record(
+            MassiveProvider._build_file_record(
                 "MSV000012345",
                 "ftp://massive-ftp.ucsd.edu/v01/MSV000012345/uploads/run2.mzML",
             ),
@@ -75,14 +76,14 @@ class TestMassIVEFiles(TestCase):
 
     def test_download_file_by_name_uses_massive_ftp_listing(self):
         files = Files()
-        file_record = Files._build_massive_file_record(
+        file_record = MassiveProvider._build_file_record(
             "MSV000012345",
             "ftp://massive-ftp.ucsd.edu/v01/MSV000012345/raw/folder/sample.raw",
         )
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             with patch.object(MassiveProvider, "list_files", return_value=[file_record]), patch.object(
-                Files, "download_ftp_urls"
+                transport, "download_ftp_urls"
             ) as download_mock:
                 files.download_file_by_name(
                     accession="MSV000012345",
@@ -112,7 +113,7 @@ class TestMassIVEFiles(TestCase):
     def test_download_all_raw_files_threads_parallel_files_for_massive(self):
         files = Files()
         massive_records = [
-            Files._build_massive_file_record(
+            MassiveProvider._build_file_record(
                 "MSV000012345",
                 f"ftp://massive-ftp.ucsd.edu/v01/MSV000012345/raw/run{i}.raw",
             )
@@ -122,7 +123,7 @@ class TestMassIVEFiles(TestCase):
         with tempfile.TemporaryDirectory() as tmp_dir:
             with patch.object(
                 MassiveProvider, "list_files", return_value=massive_records
-            ), patch.object(Files, "download_ftp_urls") as download_mock:
+            ), patch.object(transport, "download_ftp_urls") as download_mock:
                 files.download_all_raw_files(
                     accession="MSV000012345",
                     output_folder=tmp_dir,
@@ -143,7 +144,7 @@ class TestMassIVEFiles(TestCase):
 
         provider = MassiveProvider()
         records = [
-            Files._build_massive_file_record(
+            MassiveProvider._build_file_record(
                 "MSV000012345",
                 "ftp://massive-ftp.ucsd.edu/v01/MSV000012345/raw/a.raw",
             ),
@@ -157,8 +158,8 @@ class TestMassIVEFiles(TestCase):
                 ],
             },
         ]
-        with patch.object(Files, "download_ftp_urls") as ftp_mock, \
-             patch.object(Files, "download_http_urls") as http_mock:
+        with patch.object(transport, "download_ftp_urls") as ftp_mock, \
+             patch.object(transport, "download_http_urls") as http_mock:
             provider.download_files(
                 accession="MSV000012345",
                 records=records,
