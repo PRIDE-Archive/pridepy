@@ -9,7 +9,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from ftplib import FTP
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlparse
-import xml.etree.ElementTree as ET
 
 import requests
 from tqdm import tqdm
@@ -1047,53 +1046,15 @@ class Files:
 
     @staticmethod
     def _normalize_px_xml_url(px_id_or_url: str) -> str:
-        """
-        Build the ProteomeXchange XML endpoint from a dataset accession or a dataset web URL.
-        Examples accepted:
-          - PXD039236
-          - https://proteomecentral.proteomexchange.org/cgi/GetDataset?ID=PXD039236
-          - https://proteomecentral.proteomexchange.org/cgi/GetDataset?ID=PXD039236&anything
-        """
-        if px_id_or_url.startswith("http://") or px_id_or_url.startswith("https://"):
-            parsed = urlparse(px_id_or_url)
-            # keep the ID param value if present; otherwise fallback to the path tail
-            query = parsed.query or ""
-            if "ID=" in query:
-                id_value = [q.split("=", 1)[1] for q in query.split("&") if q.startswith("ID=")]
-                if id_value:
-                    return (
-                        f"https://proteomecentral.proteomexchange.org/cgi/GetDataset?ID={id_value[0]}&outputMode=XML&test=no"
-                    )
-            # If the input URL already requests XML, just ensure flags
-            if parsed.path.endswith("/cgi/GetDataset"):
-                return (
-                    f"https://proteomecentral.proteomexchange.org/cgi/GetDataset?{query}&outputMode=XML&test=no"
-                )
-        # Assume it's a plain accession if not a URL
-        return (
-            f"https://proteomecentral.proteomexchange.org/cgi/GetDataset?ID={px_id_or_url}&outputMode=XML&test=no"
-        )
+        """Shim — see :func:`pridepy.commands.proteomexchange._normalize_px_xml_url`."""
+        from pridepy.commands import proteomexchange
+        return proteomexchange._normalize_px_xml_url(px_id_or_url)
 
     @staticmethod
-    def _parse_px_xml_for_raw_file_urls(px_xml_url: str) -> List[str]:
-        """
-        Parse the PX XML and return a list of associated raw file URIs.
-        We extract cvParam with name "Associated raw file URI" under each DatasetFile.
-        """
-        headers = {"Accept": "application/xml"}
-        response = Util.get_api_call(px_xml_url, headers)
-        response.raise_for_status()
-        root = ET.fromstring(response.content)
-
-        urls: List[str] = []
-        # The XML namespace is often absent in PX XML; access elements directly
-        for dataset_file in root.iter("DatasetFile"):
-            for cv in dataset_file.findall("cvParam"):
-                name = cv.attrib.get("name")
-                value = cv.attrib.get("value")
-                if name == "Associated raw file URI" and value:
-                    urls.append(value)
-        return urls
+    def _parse_px_xml_for_raw_file_urls(px_xml_url: str):
+        """Shim — see :func:`pridepy.commands.proteomexchange._parse_px_xml_for_raw_file_urls`."""
+        from pridepy.commands import proteomexchange
+        return proteomexchange._parse_px_xml_for_raw_file_urls(px_xml_url)
 
     def download_px_raw_files(
         self,
@@ -1101,27 +1062,9 @@ class Files:
         output_folder: str,
         skip_if_downloaded_already: bool = True,
     ) -> None:
-        """
-        Download all raw files referenced by a ProteomeXchange dataset.
-        Prefer FTP when the URL is ftp://, otherwise use HTTP(S). Supports resume and skip.
-        """
-        if not os.path.isdir(output_folder):
-            os.makedirs(output_folder, exist_ok=True)
-
-        px_xml_url = self._normalize_px_xml_url(px_id_or_url)
-        logging.info(f"Fetching PX XML: {px_xml_url}")
-        urls = self._parse_px_xml_for_raw_file_urls(px_xml_url)
-        if not urls:
-            logging.info("No Associated raw file URIs found in PX XML")
-            return
-
-        ftp_urls = [u for u in urls if u.lower().startswith("ftp://")]
-        http_urls = [u for u in urls if u.lower().startswith("http://") or u.lower().startswith("https://")]
-
-        if ftp_urls:
-            self.download_ftp_urls(ftp_urls, output_folder, skip_if_downloaded_already)
-        if http_urls:
-            self.download_http_urls(http_urls, output_folder, skip_if_downloaded_already)
+        """Shim — see :func:`pridepy.commands.proteomexchange.download_px_raw_files`."""
+        from pridepy.commands import proteomexchange
+        return proteomexchange.download_px_raw_files(px_id_or_url, output_folder, skip_if_downloaded_already)
 
     @staticmethod
     def _local_path_for_url(download_url: str, output_folder: str) -> str:
