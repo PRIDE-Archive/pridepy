@@ -5,6 +5,7 @@ import importlib.resources
 import logging
 import os
 import platform
+import posixpath
 import re
 import subprocess
 import urllib
@@ -60,9 +61,23 @@ class Files:
     PRIDE_ARCHIVE_FTP = "ftp.pride.ebi.ac.uk"
     PRIDE_ARCHIVE_FTP_URL_PREFIX = "ftp://ftp.pride.ebi.ac.uk/"
     PRIDE_ARCHIVE_HTTPS_URL_PREFIX = "https://ftp.pride.ebi.ac.uk/"
+    MASSIVE_ARCHIVE_FTP = "massive-ftp.ucsd.edu"
+    MASSIVE_ARCHIVE_FTP_URL_PREFIX = "ftp://massive-ftp.ucsd.edu/v01/"
     S3_URL = "https://hh.fire.sdo.ebi.ac.uk"
     S3_BUCKET = "pride-public"
     PROTOCOL_ORDER = ["aspera", "s3", "ftp", "globus"]
+    MASSIVE_CATEGORY_MAP = {
+        "raw": "RAW",
+        "peak": "PEAK",
+        "ccms_peak": "PEAK",
+        "search": "SEARCH",
+        "result": "RESULT",
+        "ccms_result": "RESULT",
+        "quant": "RESULT",
+        "fasta": "FASTA",
+        "spectrum_library": "SPECTRUM_LIBRARY",
+        "library": "SPECTRUM_LIBRARY",
+    }
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
     def __init__(self):
@@ -220,6 +235,150 @@ class Files:
             return []
         return [protocol] + [p for p in Files.PROTOCOL_ORDER if p != protocol]
 
+    @staticmethod
+    def is_massive_accession(accession: str) -> bool:
+        """
+        Return True when the accession looks like a MassIVE dataset accession.
+        """
+        if not accession:
+            return False
+        return bool(re.fullmatch(r"R?MSV\d{9}", accession.upper()))
+
+    @staticmethod
+    def _get_massive_public_root(accession: str) -> str:
+        normalized_accession = accession.upper()
+        return f"/v01/{normalized_accession}"
+
+    @staticmethod
+    def _get_massive_public_ftp_url(accession: str, remote_path: str) -> str:
+        root_path = Files._get_massive_public_root(accession).rstrip("/")
+        relative_path = remote_path
+        if remote_path.startswith(root_path):
+            relative_path = remote_path[len(root_path) :].lstrip("/")
+        return f"{Files.MASSIVE_ARCHIVE_FTP_URL_PREFIX}{accession.upper()}/{relative_path}"
+
+    @staticmethod
+    def _map_massive_collection_to_category(collection: str) -> str:
+        return Files.MASSIVE_CATEGORY_MAP.get(collection.lower(), "OTHER")
+
+    @staticmethod
+    def _build_massive_file_record(accession: str, ftp_url: str) -> Dict:
+        parsed = urlparse(ftp_url)
+        root_prefix = f"/v01/{accession.upper()}/"
+        relative_path = parsed.path
+        if relative_path.startswith(root_prefix):
+            relative_path = relative_path[len(root_prefix) :]
+        relative_path = relative_path.lstrip("/")
+        collection = relative_path.split("/", 1)[0] if relative_path else ""
+        return {
+            "accession": accession.upper(),
+            "fileName": os.path.basename(parsed.path),
+            "fileCategory": {"value": Files._map_massive_collection_to_category(collection)},
+            "publicFileLocations": [{"name": "FTP Protocol", "value": ftp_url}],
+            "relativePath": relative_path,
+            "collection": collection,
+            "source": "MassIVE",
+        }
+
+    @staticmethod
+    def _walk_ftp_tree(ftp: FTP, remote_dir: str) -> List[str]:
+        """
+        Recursively list files under a remote FTP directory.
+        """
+        file_paths: List[str] = []
+        try:
+            entries = list(ftp.mlsd(remote_dir))
+            for name, facts in entries:
+                if name in {".", ".."}:
+                    continue
+                child_path = posixpath.join(remote_dir.rstrip("/"), name)
+                if facts.get("type") == "dir":
+                    file_paths.extend(Files._walk_ftp_tree(ftp, child_path))
+                elif facts.get("type") == "file":
+                    file_paths.append(child_path)
+            return file_paths
+        except (AttributeError, ftplib.error_perm):
+            pass
+
+        current_dir = ftp.pwd()
+        listing: List[str] = []
+        try:
+            ftp.cwd(remote_dir)
+            ftp.retrlines("LIST", listing.append)
+            for entry in listing:
+                parts = entry.split(maxsplit=8)
+                if len(parts) < 9:
+                    continue
+                name = parts[8]
+                if name in {".", ".."}:
+                    continue
+                child_path = posixpath.join(remote_dir.rstrip("/"), name)
+                if entry.startswith("d"):
+                    file_paths.extend(Files._walk_ftp_tree(ftp, child_path))
+                else:
+                    file_paths.append(child_path)
+        finally:
+            ftp.cwd(current_dir)
+        return file_paths
+
+    def _list_massive_public_files(self, accession: str) -> List[Dict]:
+        """
+        Discover all public files for a MassIVE dataset from its anonymous FTP tree.
+        """
+        normalized_accession = accession.upper()
+        remote_root = self._get_massive_public_root(normalized_accession)
+        ftp = FTP(self.MASSIVE_ARCHIVE_FTP, timeout=30)
+        try:
+            ftp.login()
+            ftp.set_pasv(True)
+            logging.info(f"Connected to FTP host: {self.MASSIVE_ARCHIVE_FTP}")
+            remote_files = self._walk_ftp_tree(ftp, remote_root)
+        except Exception as error:
+            raise RuntimeError(
+                f"Unable to list public files for MassIVE dataset {normalized_accession}: {error}"
+            ) from error
+        finally:
+            try:
+                ftp.quit()
+            except Exception:
+                ftp.close()
+
+        return [
+            self._build_massive_file_record(
+                normalized_accession,
+                self._get_massive_public_ftp_url(normalized_accession, remote_file),
+            )
+            for remote_file in remote_files
+        ]
+
+    def _download_massive_file_records(
+        self,
+        accession: str,
+        file_records: List[Dict],
+        output_folder: str,
+        skip_if_downloaded_already: bool,
+        protocol: str,
+    ) -> None:
+        """
+        Download public MassIVE files via anonymous FTP.
+        """
+        if protocol != "ftp":
+            logging.warning(
+                "MassIVE direct downloads currently use ftp only. "
+                f"Ignoring requested protocol '{protocol}' for {accession}."
+            )
+
+        ftp_urls = [self._get_download_url(file_record, "ftp") for file_record in file_records]
+        if not ftp_urls:
+            logging.info(f"No files matched for MassIVE dataset {accession}")
+            return
+
+        self.download_ftp_urls(
+            ftp_urls=ftp_urls,
+            output_folder=output_folder,
+            skip_if_downloaded_already=skip_if_downloaded_already,
+        )
+
     async def stream_all_files_metadata(self, output_file, accession=None):
         """
         get stream all project files from PRIDE API in JSON format
@@ -254,6 +413,11 @@ class Files:
         :param project_accession: PRIDE accession
         :return: raw file list in JSON format
         """
+        if self.is_massive_accession(project_accession):
+            record_files = self._list_massive_public_files(project_accession)
+            return [
+                file for file in record_files if file["fileCategory"]["value"] == "RAW"
+            ]
 
         record_files = self.stream_all_files_by_project(project_accession)
 
@@ -286,6 +450,16 @@ class Files:
             os.mkdir(output_folder)
 
         raw_files = self.get_all_raw_file_list(accession)
+
+        if self.is_massive_accession(accession):
+            self._download_massive_file_records(
+                accession=accession,
+                file_records=raw_files,
+                output_folder=output_folder,
+                skip_if_downloaded_already=skip_if_downloaded_already,
+                protocol=protocol,
+            )
+            return
 
         self.download_files(
             raw_files,
@@ -350,9 +524,8 @@ class Files:
                             continue
 
                         # Extract file path from the download URL
-                        ftp_file_path = download_url.replace(
-                            f"ftp://{Files.PRIDE_ARCHIVE_FTP}/", ""
-                        )
+                        parsed_url = urlparse(download_url)
+                        ftp_file_path = urllib.parse.unquote(parsed_url.path.lstrip("/"))
 
                         logging.info(f"Starting FTP download: {ftp_file_path}")
 
@@ -772,6 +945,22 @@ class Files:
             os.mkdir(output_folder)
 
         ## Check type of project
+        if self.is_massive_accession(accession):
+            logging.info("Downloading file from public MassIVE dataset {}".format(accession))
+            response = self.get_file_from_api(accession, file_name)
+            if not response:
+                raise Exception(
+                    "File name {} not found in MassIVE dataset {}".format(file_name, accession)
+                )
+            self._download_massive_file_records(
+                accession=accession,
+                file_records=response,
+                output_folder=output_folder,
+                skip_if_downloaded_already=skip_if_downloaded_already,
+                protocol=protocol,
+            )
+            return
+
         public_project = False
         project_status = Util.get_api_call(self.API_BASE_URL + "/status/{}".format(accession))
 
@@ -825,6 +1014,9 @@ class Files:
         """
 
         try:
+            if self.is_massive_accession(accession):
+                files = self._list_massive_public_files(accession)
+                return [f for f in files if f["fileName"] == file_name]
             files = self.stream_all_files_by_project(accession)
             file = [f for f in files if f["fileName"] == file_name]
             return file
@@ -1175,7 +1367,7 @@ class Files:
         delegates to :meth:`download_files` so the existing batch + protocol
         fallback engine is reused.
 
-        :param accession: PRIDE project accession (public)
+        :param accession: PRIDE or MassIVE project accession (public)
         :param file_names: filenames to download
         :param output_folder: directory to write downloaded files into
         :param skip_if_downloaded_already: skip files already present locally
@@ -1188,7 +1380,10 @@ class Files:
         if not file_names:
             raise ValueError("file_names must contain at least one filename")
 
-        all_files = self.stream_all_files_by_project(accession)
+        if self.is_massive_accession(accession):
+            all_files = self._list_massive_public_files(accession)
+        else:
+            all_files = self.stream_all_files_by_project(accession)
         requested = set(file_names)
         matched = [f for f in all_files if f.get("fileName") in requested]
         missing = sorted(requested - {f.get("fileName") for f in matched})
@@ -1198,6 +1393,16 @@ class Files:
             raise ValueError(
                 f"No matching files in project {accession} for: {sorted(requested)}"
             )
+
+        if self.is_massive_accession(accession):
+            self._download_massive_file_records(
+                accession=accession,
+                file_records=matched,
+                output_folder=output_folder,
+                skip_if_downloaded_already=skip_if_downloaded_already,
+                protocol=protocol,
+            )
+            return
 
         self.download_files(
             matched,
@@ -1465,6 +1670,15 @@ class Files:
         if categories is None:
             categories = [category] if category else ["RAW"]
         raw_files = self.get_all_category_file_list(accession, categories)
+        if self.is_massive_accession(accession):
+            self._download_massive_file_records(
+                accession=accession,
+                file_records=raw_files,
+                output_folder=output_folder,
+                skip_if_downloaded_already=skip_if_downloaded_already,
+                protocol=protocol,
+            )
+            return
         self.download_files(
             raw_files,
             accession,
@@ -1486,10 +1700,15 @@ class Files:
         :param categories: A single category string or list of categories to filter by.
         :return: A list of files matching the specified categories.
         """
-        record_files = self.stream_all_files_by_project(accession)
         if isinstance(categories, str):
             categories = [categories]
-        category_set = set(categories)
+        category_set = {category.upper() for category in categories}
+
+        if self.is_massive_accession(accession):
+            record_files = self._list_massive_public_files(accession)
+        else:
+            record_files = self.stream_all_files_by_project(accession)
+
         category_files = [
             file for file in record_files if file["fileCategory"]["value"] in category_set
         ]

@@ -8,6 +8,7 @@
 
 You can:
 - download public and private PRIDE files
+- download public MassIVE datasets directly from `MSV...` accessions
 - download by category (`RAW`, `SEARCH`, `RESULT`, etc.)
 - stream project and file metadata
 - search projects by keyword and filters
@@ -79,7 +80,17 @@ pridepy download-all-public-raw-files \
   --checksum-check
 ```
 
-### 3) Download only selected categories
+### 3) Download a public MassIVE dataset directly
+
+```bash
+pridepy download-all-public-raw-files \
+  -a MSV000082297 \
+  -o ./downloads/MSV000082297
+```
+
+For direct `MSV...` downloads, `pridepy` enumerates the dataset from MassIVE's public FTP tree. Raw downloads follow MassIVE's own collection layout, so `download-all-public-raw-files` downloads the files stored under the dataset's `raw/` collection.
+
+### 4) Download only selected categories
 
 ```bash
 pridepy download-all-public-category-files \
@@ -88,7 +99,16 @@ pridepy download-all-public-category-files \
   -c RAW,SEARCH
 ```
 
-### 4) Download one file by name
+You can also request a specific MassIVE collection through the same category interface:
+
+```bash
+pridepy download-all-public-category-files \
+  -a MSV000082297 \
+  -o ./downloads/MSV000082297-results \
+  -c RESULT
+```
+
+### 5) Download one file by name
 
 ```bash
 pridepy download-file-by-name \
@@ -98,7 +118,7 @@ pridepy download-file-by-name \
   --checksum-check
 ```
 
-### 5) Download raw files from ProteomeXchange
+### 6) Download raw files from ProteomeXchange
 
 ```bash
 pridepy download-px-raw-files \
@@ -222,6 +242,16 @@ files = Files()
 raw_files = files.get_all_raw_file_list("PXD008644")
 print(f"RAW files: {len(raw_files)}")
 print(raw_files[0]["fileName"])
+```
+
+For MassIVE accessions, the same method returns the files found under the dataset's `raw/` collection:
+
+```python
+from pridepy.files.files import Files
+
+files = Files()
+raw_files = files.get_all_raw_file_list("MSV000082297")
+print(f"MassIVE raw files: {len(raw_files)}")
 ```
 
 ### Example: search projects
