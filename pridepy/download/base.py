@@ -230,7 +230,7 @@ class Provider(ABC):
         """
         if protocol not in ("ftp", "https", "http"):
             logging.warning(
-                "Direct downloads currently use ftp / https only. "
+                "Direct downloads currently use ftp / http(s) only. "
                 f"Ignoring requested protocol '{protocol}' for {accession}."
             )
 

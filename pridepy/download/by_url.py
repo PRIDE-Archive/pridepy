@@ -26,6 +26,11 @@ def _http_download_url(url: str, target: str) -> None:
     with session.get(url, stream=True, timeout=60) as response:
         response.raise_for_status()
         total = int(response.headers.get("Content-Length", 0))
+        # When the server applied Content-Encoding (gzip/deflate), requests
+        # decompresses transparently, so the on-disk size is the decompressed
+        # size while Content-Length is the compressed size — skip the size
+        # check to avoid a false "incomplete" on an intact file.
+        content_encoding = response.headers.get("Content-Encoding")
         with open(target, "wb") as out, tqdm(
             total=total,
             unit="B",
@@ -36,11 +41,13 @@ def _http_download_url(url: str, target: str) -> None:
                 if chunk:
                     out.write(chunk)
                     pbar.update(len(chunk))
-    if total and os.path.getsize(target) != total:
-        raise RuntimeError(
-            f"Incomplete download for {target}: got {os.path.getsize(target)} "
-            f"bytes, expected {total}"
-        )
+    if total and not content_encoding:
+        actual = os.path.getsize(target)
+        if actual != total:
+            raise RuntimeError(
+                f"Incomplete download for {target}: got {actual} bytes, "
+                f"expected {total}"
+            )
 
 
 def _ftp_download_url(parsed, target: str) -> None:
@@ -71,11 +78,13 @@ def _ftp_download_url(parsed, target: str) -> None:
                 pbar.update(len(data))
 
             ftp.retrbinary(f"RETR {remote_path}", _callback)
-    if total and os.path.getsize(target) != total:
-        raise RuntimeError(
-            f"Incomplete download for {target}: got {os.path.getsize(target)} "
-            f"bytes, expected {total}"
-        )
+    if total:
+        actual = os.path.getsize(target)
+        if actual != total:
+            raise RuntimeError(
+                f"Incomplete download for {target}: got {actual} bytes, "
+                f"expected {total}"
+            )
 
 
 def _dispatch_url_scheme(parsed, target: str, protocol: str = "ftp", position: int = 0) -> None:

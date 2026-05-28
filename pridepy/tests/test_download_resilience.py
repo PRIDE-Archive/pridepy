@@ -144,6 +144,7 @@ class TestDownloadResilience(TestCase):
 
             stream_response = Mock()
             stream_response.raise_for_status.return_value = None
+            stream_response.headers = {}  # no Content-Encoding -> size check active
             stream_response.iter_content.return_value = [b"ab"]  # only 2 of 5 bytes
             stream_response.__enter__ = Mock(return_value=stream_response)
             stream_response.__exit__ = Mock(return_value=None)
@@ -276,6 +277,50 @@ class TestDownloadResilience(TestCase):
             ):
                 with self.assertRaisesRegex(RuntimeError, "Incomplete download"):
                     by_url._http_download_url("https://example.org/a.raw", target)
+
+    def test_by_url_http_download_skips_size_check_when_encoded(self):
+        """A gzip/deflate response is decompressed by requests, so the on-disk
+        size won't match Content-Length — the size check must be skipped to
+        avoid a false 'Incomplete download' on an intact file."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            target = os.path.join(tmp_dir, "a.txt")
+            session = Mock()
+            response = Mock()
+            response.raise_for_status.return_value = None
+            # Content-Length is the compressed size; decompressed payload is larger.
+            response.headers = {"Content-Length": "5", "Content-Encoding": "gzip"}
+            response.iter_content.return_value = [b"abcdefghij"]  # 10 decompressed bytes
+            response.__enter__ = Mock(return_value=response)
+            response.__exit__ = Mock(return_value=None)
+            session.get.return_value = response
+            with patch(
+                "pridepy.download.by_url.Util.create_session_with_retries",
+                return_value=session,
+            ):
+                by_url._http_download_url("https://example.org/a.txt", target)
+            with open(target, "rb") as handle:
+                assert handle.read() == b"abcdefghij"
+
+    def test_proteomexchange_relative_paths_handle_root_common_prefix(self):
+        """When raw URIs live in different top-level directories (common
+        prefix is '/'), the paths must still be disambiguated, not collapsed
+        to a colliding basename."""
+        urls = [
+            "ftp://ftp.example.org/run1/sample.raw",
+            "ftp://ftp.example.org/run2/sample.raw",
+        ]
+        with patch.object(
+            ProteomeXchangeProvider, "_normalize_px_xml_url", return_value="http://x"
+        ), patch.object(
+            ProteomeXchangeProvider,
+            "_parse_px_xml_for_raw_file_urls",
+            return_value=urls,
+        ):
+            records = ProteomeXchangeProvider().list_files("PXD1")
+        assert {r["relativePath"] for r in records} == {
+            "run1/sample.raw",
+            "run2/sample.raw",
+        }
 
     def test_download_files_propagates_transport_failure(self):
         """Provider.download_files must propagate a transport failure so the

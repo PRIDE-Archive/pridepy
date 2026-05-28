@@ -65,9 +65,10 @@ class IproxProvider(Provider):
     ) -> Dict:
         """Build a pridepy file record for an iProX file.
 
-        ``file_url`` is the file URI from the PX XML (plain ``http://`` on
-        download.iprox.org). ``category_from_px`` is the ``cvParam`` ``name``
-        from the dataset's ProteomeXchange XML (e.g. ``"Associated raw file URI"``).
+        ``file_url`` is the file URI from the PX XML (``http://`` on
+        download.iprox.org; ``https://`` is also accepted if present).
+        ``category_from_px`` is the ``cvParam`` ``name`` from the dataset's
+        ProteomeXchange XML (e.g. ``"Associated raw file URI"``).
         """
         from pridepy.download.massive import MassiveProvider
         parsed = urlparse(file_url)

@@ -122,7 +122,12 @@ class ProteomeXchangeProvider(Provider):
             common = ""
         rels: List[str] = []
         for path in paths:
-            if common and (path == common or path.startswith(common + "/")):
+            # ``common`` is the shared ancestor of every path's directory, so
+            # each path starts with it; strip it to keep the disambiguating
+            # remainder. ``common`` can legitimately be ``"/"`` (files in
+            # different top-level dirs) — handle that by stripping it too,
+            # rather than collapsing to the (colliding) basename.
+            if common:
                 rel = path[len(common):].lstrip("/")
             else:
                 rel = posixpath.basename(path)

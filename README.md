@@ -195,7 +195,7 @@ Command-specific options:
 | `-F, --url-list` | Manifest file, one URL per line | — |
 | `-u, --urls` | Comma-separated URL(s) | — |
 | `-p, --protocol` | `ftp` (per-scheme) or `globus` (resume-capable http/https) | `ftp` |
-| `-w, --parallel-files` | Download 1–3 files concurrently (globus only) | `1` |
+| `-w, --parallel-files` | Download 1–3 files concurrently (any scheme) | `1` |
 | `--checksum-check` | Validate against PRIDE checksums (accession inferred from PRIDE URL paths; only PRIDE archive URLs supported) | off |
 
 </details>

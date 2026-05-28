@@ -402,6 +402,7 @@ def download_ftp_urls(
         ``output_folder/<relative_path>`` so identically-named files in
         different collections don't collide. When omitted, the URL basename
         is used (legacy flat layout).
+    :raises RuntimeError: after attempting every file, if one or more failed.
     """
     if not os.path.isdir(output_folder):
         os.makedirs(output_folder, exist_ok=True)
@@ -476,8 +477,10 @@ def _parallel_download(url, file_path, position=0):
             logging.info(f"Resuming download from {resume_size} bytes: {file_path}")
 
     headers = {"Range": f"bytes={resume_size}-"} if resume_size > 0 else {}
+    content_encoding = None
     with session.get(url, headers=headers, stream=True, timeout=(30, 60)) as r:
         r.raise_for_status()
+        content_encoding = r.headers.get("Content-Encoding")
         if resume_size > 0 and r.status_code != 206:
             logging.warning("Server did not honor Range request (status %s), restarting download", r.status_code)
             resume_size = 0
@@ -494,7 +497,9 @@ def _parallel_download(url, file_path, position=0):
     # must match the server-reported Content-Length. A server that closes the
     # data channel mid-stream without raising leaves a truncated file; raising
     # here lets the caller's retry loop re-download (Range-resuming when able).
-    if total_size:
+    # Skipped when the server applied Content-Encoding (gzip/deflate): requests
+    # decompresses transparently, so on-disk size won't match Content-Length.
+    if total_size and not content_encoding:
         actual_size = os.path.getsize(file_path)
         if actual_size != total_size:
             raise RuntimeError(
@@ -560,6 +565,7 @@ def download_http_urls(
 
     :param relative_paths: Optional per-URL dataset-relative destination
         paths (parallel to ``http_urls``); see :func:`download_ftp_urls`.
+    :raises RuntimeError: after attempting every URL, if one or more failed.
     """
     if not os.path.isdir(output_folder):
         os.makedirs(output_folder, exist_ok=True)
