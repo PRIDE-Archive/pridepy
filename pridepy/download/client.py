@@ -7,12 +7,9 @@ a small set of high-level operations (CLI entry points + a handful of
 one-line shims for downstream Python users).
 """
 import logging
-import os
 from typing import Dict, List, Optional, Tuple
 
 import requests  # noqa: F401 — kept as a patch target for tests
-
-from pridepy.util.api_handling import Util
 
 from pridepy.download import registry, transport
 from pridepy.download import util as _provider_util
@@ -21,7 +18,7 @@ from pridepy.download.jpost import JpostProvider
 from pridepy.download.massive import MASSIVE_CATEGORY_MAP, MassiveProvider
 from pridepy.download.pride import PrideProvider
 from pridepy.download.proteomexchange import ProteomeXchangeProvider
-from pridepy.download import by_list, by_url
+from pridepy.download import by_url
 
 # Re-export Progress so external `from pridepy.download.client import Progress`
 # (and the legacy `from pridepy.files.files import Progress`) still works.
@@ -158,21 +155,15 @@ class Client:
         """Shim — see :meth:`PrideProvider.stream_all_files_metadata`."""
         return await PrideProvider().stream_all_files_metadata(output_file, accession)
 
-    def get_all_raw_file_list(self, project_accession):
+    def get_all_raw_file_list(self, accession):
         """Get raw file list for any registered provider (records with fileCategory == "RAW")."""
-        provider = registry.resolve(project_accession)
-        records = provider.list_files(project_accession)
-        return [r for r in records if r["fileCategory"]["value"] == "RAW"]
+        return registry.resolve(accession).get_raw_files(accession)
 
     def get_all_category_file_list(
         self, accession: str, categories: "str | List[str]"
     ) -> List[Dict]:
         """Retrieve project files belonging to the given categories."""
-        if isinstance(categories, str):
-            categories = [categories]
-        category_set = {c.upper() for c in categories}
-        records = registry.resolve(accession).list_files(accession)
-        return [r for r in records if r["fileCategory"]["value"] in category_set]
+        return registry.resolve(accession).get_category_files(accession, categories)
 
     def get_submitted_file_path_prefix(self, accession):
         """Shim — see :meth:`PrideProvider.get_submitted_file_path_prefix`."""
@@ -181,8 +172,7 @@ class Client:
     def get_file_from_api(self, accession, file_name) -> List[Dict]:
         """Return records matching ``file_name`` from the provider's listing."""
         try:
-            records = registry.resolve(accession).list_files(accession)
-            return [r for r in records if r["fileName"] == file_name]
+            return registry.resolve(accession).find_file(accession, file_name)
         except Exception as e:
             raise Exception("File not found " + str(e))
 
@@ -199,19 +189,14 @@ class Client:
         parallel_files: int = 1,
     ):
         """Download all RAW files for any registered provider."""
-        if not os.path.isdir(output_folder):
-            os.mkdir(output_folder)
-        provider = registry.resolve(accession)
-        records = self.get_all_raw_file_list(accession)
-        provider.download_files(
-            accession=accession,
-            records=records,
-            output_folder=output_folder,
+        return registry.resolve(accession).download_all_raw(
+            accession,
+            output_folder,
             skip_if_downloaded_already=skip_if_downloaded_already,
             protocol=protocol,
-            parallel_files=parallel_files,
-            checksum_check=checksum_check,
             aspera_maximum_bandwidth=aspera_maximum_bandwidth,
+            checksum_check=checksum_check,
+            parallel_files=parallel_files,
         )
 
     def download_all_category_files(
@@ -229,17 +214,15 @@ class Client:
         """Download all files of the given categories from a project."""
         if categories is None:
             categories = [category] if category else ["RAW"]
-        records = self.get_all_category_file_list(accession, categories)
-        provider = registry.resolve(accession)
-        provider.download_files(
-            accession=accession,
-            records=records,
-            output_folder=output_folder,
+        return registry.resolve(accession).download_category(
+            accession,
+            output_folder,
+            categories,
             skip_if_downloaded_already=skip_if_downloaded_already,
             protocol=protocol,
-            parallel_files=parallel_files,
-            checksum_check=checksum_check,
             aspera_maximum_bandwidth=aspera_maximum_bandwidth,
+            checksum_check=checksum_check,
+            parallel_files=parallel_files,
         )
 
     def download_file_by_name(
@@ -256,77 +239,21 @@ class Client:
     ):
         """Download a single file by name.
 
-        PRIDE supports public / private modes via the V2 private API. Other
-        providers (MassIVE / JPOST / iProX) only support public downloads.
+        Dispatches to the resolved provider. PRIDE overrides this to handle
+        its public / private split via the V2 private API; the direct-download
+        providers (MassIVE / JPOST / iProX) use the inherited public path.
         """
-        if not os.path.isdir(output_folder):
-            os.mkdir(output_folder)
-
-        provider = registry.resolve(accession)
-
-        # Direct-download providers always use the public path.
-        if provider.name in ("massive", "jpost", "iprox"):
-            logging.info(
-                "Downloading file from public direct-download dataset {}".format(accession)
-            )
-            response = self.get_file_from_api(accession, file_name)
-            if not response:
-                raise Exception(
-                    "File name {} not found in dataset {}".format(file_name, accession)
-                )
-            provider.download_files(
-                accession=accession,
-                records=response,
-                output_folder=output_folder,
-                skip_if_downloaded_already=skip_if_downloaded_already,
-                protocol=protocol,
-            )
-            return
-
-        # PRIDE has a public/private split that needs status interrogation.
-        public_project = False
-        project_status = Util.get_api_call(self.API_BASE_URL + "/status/{}".format(accession))
-
-        if project_status.status_code == 200:
-            if project_status.text == "PRIVATE":
-                public_project = False
-            elif project_status.text == "PUBLIC":
-                public_project = True
-            else:
-                raise Exception("Dataset {} is not present in PRIDE Archive".format(accession))
-
-        if public_project:
-            logging.info("Downloading file from public dataset {}".format(accession))
-            response = self.get_file_from_api(accession, file_name)
-            PrideProvider._download_files_batch(
-                file_list_json=response,
-                accession=accession,
-                output_folder=output_folder,
-                skip_if_downloaded_already=skip_if_downloaded_already,
-                protocol=protocol,
-                aspera_maximum_bandwidth=aspera_maximum_bandwidth,
-                checksum_check=checksum_check,
-            )
-        elif not public_project and (username is not None and password is not None):
-            logging.info("Downloading file from private dataset {}".format(accession))
-            PrideProvider().download_private_file_name(
-                accession=accession,
-                file_name=file_name,
-                output_folder=output_folder,
-                username=username,
-                password=password,
-            )
-        else:
-            logging.error(
-                "For a private dataset {} you must provide a username and password".format(
-                    accession
-                )
-            )
-            raise Exception(
-                "For a private dataset {} you must provide a username and password".format(
-                    accession
-                )
-            )
+        return registry.resolve(accession).download_by_name(
+            accession,
+            file_name,
+            output_folder,
+            skip_if_downloaded_already=skip_if_downloaded_already,
+            protocol=protocol,
+            username=username,
+            password=password,
+            aspera_maximum_bandwidth=aspera_maximum_bandwidth,
+            checksum_check=checksum_check,
+        )
 
     def download_files_by_list(
         self,
@@ -339,11 +266,11 @@ class Client:
         checksum_check: bool = False,
         parallel_files: int = 1,
     ) -> None:
-        """Delegate to :func:`pridepy.download.by_list.download_files_by_list`."""
-        return by_list.download_files_by_list(
-            accession=accession,
-            file_names=file_names,
-            output_folder=output_folder,
+        """Download a subset of project files identified by a filename list."""
+        return registry.resolve(accession).download_by_filenames(
+            accession,
+            file_names,
+            output_folder,
             skip_if_downloaded_already=skip_if_downloaded_already,
             protocol=protocol,
             aspera_maximum_bandwidth=aspera_maximum_bandwidth,
