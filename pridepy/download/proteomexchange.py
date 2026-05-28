@@ -25,10 +25,9 @@ import logging
 import os
 import re
 import xml.etree.ElementTree as ET
-from typing import ClassVar, Dict, List, Optional
+from typing import ClassVar, Dict, List
 from urllib.parse import urlparse
 
-from pridepy.download import transport
 from pridepy.download.base import Provider
 from pridepy.util.api_handling import Util
 
@@ -124,44 +123,6 @@ class ProteomeXchangeProvider(Provider):
                 }
             )
         return records
-
-    def download_files(
-        self,
-        accession: str,
-        records: List[Dict],
-        output_folder: str,
-        skip_if_downloaded_already: bool,
-        protocol: str,
-        parallel_files: int = 1,
-        checksum_check: bool = False,
-        aspera_maximum_bandwidth: str = "100M",
-        username: Optional[str] = None,
-        password: Optional[str] = None,
-    ) -> None:
-        """Partition record URLs by scheme and route to the matching transport.
-
-        Routes ftp:// records to :func:`transport.download_ftp_urls` and
-        http(s):// records to :func:`transport.download_http_urls`.
-        """
-        if not os.path.isdir(output_folder):
-            os.makedirs(output_folder, exist_ok=True)
-
-        urls = [
-            record["publicFileLocations"][0]["value"]
-            for record in records
-            if record.get("publicFileLocations")
-        ]
-        ftp_urls = [u for u in urls if u.lower().startswith("ftp://")]
-        http_urls = [u for u in urls if u.lower().startswith(("http://", "https://"))]
-
-        if ftp_urls:
-            transport.download_ftp_urls(
-                ftp_urls, output_folder, skip_if_downloaded_already
-            )
-        if http_urls:
-            transport.download_http_urls(
-                http_urls, output_folder, skip_if_downloaded_already
-            )
 
     def download_from_accession_or_url(
         self,

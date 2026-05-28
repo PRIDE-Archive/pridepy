@@ -19,11 +19,11 @@ from urllib.parse import urlparse
 import requests
 
 from pridepy.download import registry
-from pridepy.download.base import BaseDirectDownloadProvider
+from pridepy.download.base import Provider
 
 
 @registry.register
-class JpostProvider(BaseDirectDownloadProvider):
+class JpostProvider(Provider):
     name: ClassVar[str] = "jpost"
     use_tls: ClassVar[bool] = False
 

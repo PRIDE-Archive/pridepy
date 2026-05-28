@@ -10,7 +10,7 @@ from typing import ClassVar, Dict, List
 from urllib.parse import urlparse
 
 from pridepy.download import registry
-from pridepy.download.base import BaseDirectDownloadProvider
+from pridepy.download.base import Provider
 
 
 MASSIVE_CATEGORY_MAP = {
@@ -28,7 +28,7 @@ MASSIVE_CATEGORY_MAP = {
 
 
 @registry.register
-class MassiveProvider(BaseDirectDownloadProvider):
+class MassiveProvider(Provider):
     name: ClassVar[str] = "massive"
     use_tls: ClassVar[bool] = True
 

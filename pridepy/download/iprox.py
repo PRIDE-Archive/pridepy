@@ -21,12 +21,12 @@ from urllib.parse import urlparse
 import requests
 
 from pridepy.download import registry
-from pridepy.download.base import BaseDirectDownloadProvider
+from pridepy.download.base import Provider
 from pridepy.download.jpost import JpostProvider
 
 
 @registry.register
-class IproxProvider(BaseDirectDownloadProvider):
+class IproxProvider(Provider):
     name: ClassVar[str] = "iprox"
     use_tls: ClassVar[bool] = False  # download.iprox.org serves over plain HTTP
 
@@ -86,7 +86,7 @@ class IproxProvider(BaseDirectDownloadProvider):
             "fileCategory": {"value": category},
             # "FTP Protocol" is the existing label the download dispatcher uses
             # to locate a file URL; here it actually points at HTTPS.
-            # BaseDirectDownloadProvider.download_files routes by URL scheme.
+            # Provider.download_files routes by URL scheme.
             "publicFileLocations": [{"name": "FTP Protocol", "value": https_url}],
             "relativePath": relative_path,
             "collection": collection,
