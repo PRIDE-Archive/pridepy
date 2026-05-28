@@ -3,13 +3,14 @@
 PRIDE has the richest behaviour of all providers: multi-protocol batch
 download with aspera/s3/ftp/globus fallback, private-dataset path with
 username/password auth, checksum TSV validation, and submitter-path
-helpers. This module owns all of that logic; the :class:`Files` facade
-exposes a thin public surface for downstream callers.
+helpers. This module owns all of that logic; the
+:class:`~pridepy.download.client.Client` facade exposes a thin public
+surface for downstream callers.
 
 Implementation note: PRIDE provider methods route through other
 PrideProvider methods (``PrideProvider.X(...)``) or directly through the
 shared ``transport`` / ``util`` helpers — they do NOT call back into the
-``Files`` facade. Tests patch the canonical locations
+``Client`` facade. Tests patch the canonical locations
 (``PrideProvider.X``, ``transport.X``, ``util.X``) directly.
 """
 import ftplib

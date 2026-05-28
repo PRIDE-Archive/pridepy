@@ -11,7 +11,7 @@ accessions would otherwise be ambiguous between PRIDE's V3 API listing and
 ProteomeXchange's XML listing; the registry continues to route PXD/PRD via
 :class:`pridepy.download.pride.PrideProvider`. ``ProteomeXchangeProvider``
 is the explicit gateway invoked by the ``download-px-raw-files`` CLI
-command and by ``Files.download_px_raw_files`` — callers who specifically
+command and by ``Client.download_px_raw_files`` — callers who specifically
 want the cross-repository XML view.
 
 The class accepts either:

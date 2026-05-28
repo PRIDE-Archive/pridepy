@@ -1,10 +1,10 @@
-"""Cross-cutting utilities used by providers and the Files facade.
+"""Cross-cutting utilities used by providers and the Client facade.
 
 Pure functions (and one tiny Progress class) for checksums, record-shape
-helpers, and download progress. Originally on ``Files`` as @staticmethods;
-moved here so providers can use them without depending on Files at import
-time, and Files keeps shim re-exports for backward compatibility with
-existing test patches.
+helpers, and download progress. Originally on the facade as @staticmethods;
+moved here so providers can use them without depending on the facade at
+import time, while :class:`~pridepy.download.client.Client` keeps shim
+re-exports for backward compatibility with existing test patches.
 """
 import hashlib
 import logging

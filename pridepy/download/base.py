@@ -1,12 +1,14 @@
 """Abstract base class for pridepy providers.
 
 The :class:`Provider` base implements the download *workflow* via the
-Template Method pattern: concrete adapters only fill in the holes
+Template Method pattern: most adapters only fill in the holes
 (:meth:`matches`, :meth:`list_files`) while the shared listing-filter and
 download-orchestration methods live here. Adapters that need different
-transport behaviour (e.g. PRIDE's multi-protocol fallback) override
-:meth:`download_files`; everything else routes through the inherited
-default that partitions record URLs by scheme.
+behaviour override the relevant hooks — e.g. PRIDE overrides
+:meth:`get_download_url`, :meth:`download_files` (multi-protocol fallback),
+and :meth:`download_by_name` (public/private split). Everything not
+overridden routes through the inherited default that partitions record URLs
+by scheme.
 """
 import logging
 from abc import ABC, abstractmethod
@@ -20,7 +22,6 @@ class Provider(ABC):
 
     name: ClassVar[str]  # "pride", "massive", "jpost", "iprox"
     use_tls: ClassVar[bool] = False
-    supports_checksum: ClassVar[bool] = False
 
     # ------------------------------------------------------------------
     # Abstract holes — adapters must implement these.
