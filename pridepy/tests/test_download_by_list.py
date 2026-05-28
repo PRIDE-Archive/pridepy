@@ -12,8 +12,9 @@ from unittest.mock import patch
 import click
 import pytest
 
-from pridepy.files.files import Files
+from pridepy.download.client import Client as Files
 from pridepy.pridepy import _read_filename_arguments
+from pridepy.download.pride import PrideProvider
 
 
 class TestDownloadFilesByList(TestCase):
@@ -36,8 +37,8 @@ class TestDownloadFilesByList(TestCase):
             {"fileName": "c.raw"},
         ]
         with patch.object(
-            files_obj, "stream_all_files_by_project", return_value=api_response
-        ), patch.object(files_obj, "download_files") as mock_download:
+            PrideProvider, "list_files", return_value=api_response
+        ), patch.object(PrideProvider, "download_files") as mock_download:
             files_obj.download_files_by_list(
                 accession="PXD001819",
                 file_names=["a.raw", "c.raw"],
@@ -46,16 +47,16 @@ class TestDownloadFilesByList(TestCase):
                 protocol="ftp",
             )
 
-        args, _ = mock_download.call_args
-        matched = args[0]
+        _, kwargs = mock_download.call_args
+        matched = kwargs["records"]
         assert {f["fileName"] for f in matched} == {"a.raw", "c.raw"}
 
     def test_warns_on_partial_match(self):
         files_obj = Files()
         api_response = [{"fileName": "a.raw"}]
         with patch.object(
-            files_obj, "stream_all_files_by_project", return_value=api_response
-        ), patch.object(files_obj, "download_files") as mock_download, self.assertLogs(
+            PrideProvider, "list_files", return_value=api_response
+        ), patch.object(PrideProvider, "download_files") as mock_download, self.assertLogs(
             level="WARNING"
         ) as log_ctx:
             files_obj.download_files_by_list(
@@ -71,7 +72,7 @@ class TestDownloadFilesByList(TestCase):
     def test_raises_when_no_files_match(self):
         files_obj = Files()
         with patch.object(
-            files_obj, "stream_all_files_by_project", return_value=[]
+            PrideProvider, "list_files", return_value=[]
         ):
             with pytest.raises(ValueError, match="No matching files"):
                 files_obj.download_files_by_list(

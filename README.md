@@ -8,7 +8,7 @@
 
 You can:
 - download public and private PRIDE files
-- download public MassIVE datasets directly from `MSV...` accessions
+- download public MassIVE (`MSV...`), JPOST (`JPST...`), and iProX (`IPX...`) datasets directly. MassIVE goes through FTPS at `massive-ftp.ucsd.edu`, with an automatic HTTPS fallback (via the GNPS2 file index and the `massive.ucsd.edu` ProteoSAFe endpoint) for networks that block FTP/FTPS; JPOST uses the JSON PROXI endpoint at `repository.jpostdb.org` for listings and `ftp.jpostdb.org` for transfers; iProX fetches the dataset's ProteomeXchange XML from `download.iprox.org` and downloads files over anonymous HTTP
 - download by category (`RAW`, `SEARCH`, `RESULT`, etc.)
 - stream project and file metadata
 - search projects by keyword and filters
@@ -54,9 +54,57 @@ uv sync --extra dev
 uv run pridepy --help
 ```
 
-## Quick Start (New Users)
+## Command Overview
 
-### 1) Download all raw files for a project (robust mode)
+```bash
+pridepy --help
+```
+
+| Command | Purpose |
+| --- | --- |
+| `download-all-public-raw-files` | Download every public RAW file of a dataset |
+| `download-all-public-category-files` | Download files of one or more categories (RAW, SEARCH, …) |
+| `download-file-by-name` | Download a single file (public or private) |
+| `download-files-by-list` | Download a named subset of files from a manifest/CSV |
+| `download-files-by-url` | Download files from raw `http`/`https`/`ftp` URLs |
+| `download-px-raw-files` | Download RAW files resolved from a ProteomeXchange accession |
+| `list-private-files` | List files of a private project (needs credentials) |
+| `stream-files-metadata` | Stream file metadata (one project or all) to JSON |
+| `stream-projects-metadata` | Stream all project metadata to JSON |
+| `search-projects-by-keywords-and-filters` | Search projects by keyword and filters |
+
+The download commands work for PRIDE accessions and, transparently, for native
+MassIVE (`MSV…`), JPOST (`JPST…`), and iProX (`IPX…`) accessions — see
+[Download from ProteomeXchange and other repositories](#download-from-proteomexchange-and-other-repositories).
+
+## PRIDE File Downloads
+
+PRIDE downloads start with FTP and fall back across the remaining protocols
+(`ftp -> aspera -> s3 -> globus`) when a transfer fails. They support resume,
+per-file retries, parallel workers, and optional checksum validation. Empty or
+corrupt files are retried automatically.
+
+<details>
+<summary><strong>Common download options</strong> (shared across the download commands)</summary>
+
+These options are shared by `download-all-public-raw-files`,
+`download-all-public-category-files`, `download-file-by-name`, and
+`download-files-by-list`:
+
+| Option | Description | Default |
+| --- | --- | --- |
+| `-a, --accession` | Dataset accession (e.g. `PXD008644`) | required |
+| `-o, --output-folder` | Destination directory | required |
+| `-p, --protocol` | Transfer protocol: `ftp`, `aspera`, `globus`, `s3` (FTP-first with fallback) | `ftp` |
+| `-w, --parallel-files` | Download 1–3 files concurrently — primarily for `globus`; not available on `download-file-by-name` | `1` |
+| `--skip-if-downloaded-already` | Resume: skip files already present locally | off |
+| `--checksum-check` | Download PRIDE checksums and validate each file | off |
+| `--aspera-maximum-bandwidth` | Aspera cap, e.g. `50M`, `100M`, `200M` (Aspera only) | `100M` |
+
+</details>
+
+<details>
+<summary><strong>Download all raw files</strong> (robust mode)</summary>
 
 ```bash
 pridepy download-all-public-raw-files \
@@ -65,12 +113,7 @@ pridepy download-all-public-raw-files \
   --checksum-check
 ```
 
-What this does:
-- default `ftp` starts with FTP and falls back (`ftp -> aspera -> s3 -> globus`)
-- `--checksum-check` downloads project checksums and validates files
-- empty/corrupt files are retried automatically
-
-### 2) Continue interrupted downloads safely
+Continue an interrupted download safely by adding `--skip-if-downloaded-already`:
 
 ```bash
 pridepy download-all-public-raw-files \
@@ -80,17 +123,10 @@ pridepy download-all-public-raw-files \
   --checksum-check
 ```
 
-### 3) Download a public MassIVE dataset directly
+</details>
 
-```bash
-pridepy download-all-public-raw-files \
-  -a MSV000082297 \
-  -o ./downloads/MSV000082297
-```
-
-For direct `MSV...` downloads, `pridepy` enumerates the dataset from MassIVE's public FTP tree. Raw downloads follow MassIVE's own collection layout, so `download-all-public-raw-files` downloads the files stored under the dataset's `raw/` collection.
-
-### 4) Download only selected categories
+<details>
+<summary><strong>Download only selected categories</strong></summary>
 
 ```bash
 pridepy download-all-public-category-files \
@@ -99,16 +135,13 @@ pridepy download-all-public-category-files \
   -c RAW,SEARCH
 ```
 
-You can also request a specific MassIVE collection through the same category interface:
+`-c, --category` takes one or more comma-separated categories. Valid values:
+`RAW`, `PEAK`, `SEARCH`, `RESULT`, `SPECTRUM_LIBRARY`, `OTHER`, `FASTA`.
 
-```bash
-pridepy download-all-public-category-files \
-  -a MSV000082297 \
-  -o ./downloads/MSV000082297-results \
-  -c RESULT
-```
+</details>
 
-### 5) Download one file by name
+<details>
+<summary><strong>Download one file by name</strong></summary>
 
 ```bash
 pridepy download-file-by-name \
@@ -118,15 +151,12 @@ pridepy download-file-by-name \
   --checksum-check
 ```
 
-### 6) Download raw files from ProteomeXchange
+`-f, --file-name` is the file to download.
 
-```bash
-pridepy download-px-raw-files \
-  -a PXD039236 \
-  -o ./downloads/PXD039236
-```
+</details>
 
-### 6) Download a named subset of files (manifest)
+<details>
+<summary><strong>Download a named subset of files</strong> (manifest)</summary>
 
 ```bash
 pridepy download-files-by-list \
@@ -137,18 +167,15 @@ pridepy download-files-by-list \
 ```
 
 `files.txt` is one filename per line (blank lines and `#` comments are
-ignored). Internally each filename is resolved against the project metadata
-API and downloaded via the same batch + protocol-fallback engine as
-`download-all-public-raw-files`. Use `-f a.raw,b.raw,c.raw` instead of
-`-F` for a small inline list.
+ignored). Each filename is resolved against the project metadata and downloaded
+via the same batch + protocol-fallback engine as `download-all-public-raw-files`.
+Use `-f a.raw,b.raw,c.raw` instead of `-F` for a small inline list (you can
+combine both).
 
-Useful options:
+</details>
 
-- `-p globus` — use the globus download strategy (HTTP Range + resume)
-- `-w 3` — download up to 3 files in parallel (globus only, max 3)
-- `--checksum-check` — validate files against PRIDE checksums after download
-
-### 7) Download files from raw URLs
+<details>
+<summary><strong>Download files from raw URLs</strong></summary>
 
 ```bash
 pridepy download-files-by-url \
@@ -157,70 +184,33 @@ pridepy download-files-by-url \
 ```
 
 `urls.txt` is one fully-qualified URL per line. Schemes `http`, `https`, and
-`ftp` are dispatched to the matching downloader. Use `-u/--urls` for one or
-more comma-separated URLs, e.g. `--urls https://a.com/x.raw,ftp://b.com/y.raw`.
-Note: URLs containing literal commas are not supported with `--urls`; use a
-manifest file (`-F`) instead.
+`ftp` are dispatched to the matching downloader. Use `-u, --urls` for one or
+more comma-separated URLs, e.g. `--urls https://a.com/x.raw,ftp://b.com/y.raw`
+(URLs containing literal commas must use a manifest file instead).
 
-Useful options:
+Command-specific options:
 
-- `-p globus` — use globus download strategy for http/https URLs (resume-capable)
-- `-w 3` — download up to 3 files in parallel (globus only, max 3)
-- `--checksum-check` — validate against PRIDE checksums (accession inferred
-  from PRIDE URL paths; only PRIDE archive URLs are supported)
+| Option | Description | Default |
+| --- | --- | --- |
+| `-F, --url-list` | Manifest file, one URL per line | — |
+| `-u, --urls` | Comma-separated URL(s) | — |
+| `-p, --protocol` | `ftp` (per-scheme) or `globus` (resume-capable http/https) | `ftp` |
+| `-w, --parallel-files` | Download 1–3 files concurrently (any scheme) | `1` |
+| `--checksum-check` | Validate against PRIDE checksums (accession inferred from PRIDE URL paths; only PRIDE archive URLs supported) | off |
 
-## CLI Command Overview
+</details>
 
-```bash
-pridepy --help
-```
+<details>
+<summary><strong>Private (restricted) files</strong></summary>
 
-Main commands:
-- `download-all-public-raw-files`
-- `download-all-public-category-files`
-- `download-file-by-name`
-- `download-files-by-list`
-- `download-files-by-url`
-- `download-px-raw-files`
-- `list-private-files`
-- `stream-files-metadata`
-- `stream-projects-metadata`
-- `search-projects-by-keywords-and-filters`
-
-## More CLI Examples
-
-### Search projects
-
-```bash
-pridepy search-projects-by-keywords-and-filters \
-  -k human \
-  -f projectTags==ProteomeTools,organismsPart==Pancreas \
-  -sd DESC \
-  -sf accession \
-  -sf submissionDate
-```
-
-### Stream all project metadata to JSON
-
-```bash
-pridepy stream-projects-metadata -o all_pride_projects.json
-```
-
-### Stream all file metadata for one accession
-
-```bash
-pridepy stream-files-metadata -a PXD005011 -o PXD005011_files.json
-```
-
-### Download private files
-
-List files:
+List the files of a private project with your PRIDE credentials:
 
 ```bash
 pridepy list-private-files -a PXD022105 -u YOUR_USER -p YOUR_PASSWORD
 ```
 
-Download a private file:
+Download a private file by passing `--username`/`--password` to
+`download-file-by-name`:
 
 ```bash
 pridepy download-file-by-name \
@@ -231,30 +221,166 @@ pridepy download-file-by-name \
   --password YOUR_PASSWORD
 ```
 
+</details>
+
+## Metadata and Search
+
+<details>
+<summary><strong>Stream all project metadata to JSON</strong></summary>
+
+```bash
+pridepy stream-projects-metadata -o all_pride_projects.json
+```
+
+| Option | Description | Default |
+| --- | --- | --- |
+| `-o, --output-file` | JSON file to write all project metadata to | required |
+
+</details>
+
+<details>
+<summary><strong>Stream file metadata</strong></summary>
+
+```bash
+# All file metadata for one accession
+pridepy stream-files-metadata -a PXD005011 -o PXD005011_files.json
+```
+
+| Option | Description | Default |
+| --- | --- | --- |
+| `-o, --output-file` | JSON file to write file metadata to | required |
+| `-a, --accession` | Limit to one project (omit to stream all files) | optional |
+
+</details>
+
+<details>
+<summary><strong>Search projects by keywords and filters</strong></summary>
+
+```bash
+pridepy search-projects-by-keywords-and-filters \
+  -k human \
+  -f projectTags==ProteomeTools,organismsPart==Pancreas \
+  -sd DESC \
+  -sf accession \
+  -sf submissionDate
+```
+
+| Option | Description | Default |
+| --- | --- | --- |
+| `-k, --keyword` | Keyword searched across project fields | required |
+| `-f, --filters` | `field==value` filters, comma-separated (e.g. `accession==PRD000001`) | — |
+| `-ps, --page-size` | Results per page (1–1000) | `100` |
+| `-p, --page` | Page number (0-based) | `0` |
+| `-sd, --sort-direction` | `ASC` or `DESC` | `DESC` |
+| `-sf, --sort-fields` | Sort field(s), repeatable. One of: `accession`, `submissionDate`, `diseases`, `organismsPart`, `organisms`, `instruments`, `softwares`, `avgDownloadsPerFile`, `downloadCount`, `publicationDate` | `submissionDate` |
+
+</details>
+
+## Download from ProteomeXchange and other repositories
+
+A ProteomeXchange (`PXD…` / `PRD…`) accession is a cross-repository identifier:
+the dataset may be hosted at PRIDE, MassIVE, JPOST, iProX, or elsewhere.
+`pridepy` lets you start from the ProteomeXchange accession, or go straight to
+the hosting repository using its **native** accession.
+
+<details>
+<summary><strong>Start from a ProteomeXchange accession</strong></summary>
+
+`download-px-raw-files` resolves the dataset's ProteomeXchange XML and downloads
+the RAW files it references, regardless of which repository hosts them:
+
+```bash
+pridepy download-px-raw-files \
+  -a PXD039236 \
+  -o ./downloads/PXD039236
+```
+
+| Option | Description | Default |
+| --- | --- | --- |
+| `-a, --accession` | ProteomeXchange accession (e.g. `PXD039236`). `--px` is a deprecated alias | required |
+| `-o, --output-folder` | Destination directory | required |
+| `--skip-if-downloaded-already` | Skip files already present locally | off |
+
+</details>
+
+<details>
+<summary><strong>Go directly to the hosting repository</strong> (native MassIVE / JPOST / iProX accessions)</summary>
+
+Datasets that do not have a ProteomeXchange accession — or where you already
+know the native accession — can be downloaded directly. The standard download
+commands accept MassIVE, JPOST, and iProX accessions transparently:
+
+```bash
+# MassIVE (FTPS at massive-ftp.ucsd.edu)
+pridepy download-all-public-raw-files \
+  -a MSV000082297 \
+  -o ./downloads/MSV000082297
+
+# JPOST (PROXI listing + ftp.jpostdb.org)
+pridepy download-all-public-raw-files \
+  -a JPST002311 \
+  -o ./downloads/JPST002311
+
+# iProX (ProteomeXchange XML + anonymous HTTP at download.iprox.org)
+pridepy download-all-public-raw-files \
+  -a IPX0017413000 \
+  -o ./downloads/IPX0017413000
+```
+
+How each repository is enumerated:
+
+- **MassIVE** walks the FTPS tree at `massive-ftp.ucsd.edu` (the server requires TLS). If FTP/FTPS is blocked by the network, `pridepy` automatically falls back to HTTPS: it lists the dataset from the GNPS2 file index (`datasetcache.gnps2.org`) and downloads each file from the ProteoSAFe endpoint at `massive.ucsd.edu` (byte-identical to the FTPS copy).
+- **JPOST** lists files through the JSON PROXI endpoint at `https://repository.jpostdb.org/proxi/datasets/<JPSTxxxxxx>` and downloads from `ftp.jpostdb.org` over plain FTP. The PROXI listing avoids the source-IP connection limit JPOST enforces on FTP.
+- **iProX** fetches the dataset's ProteomeXchange XML from `http://download.iprox.org/<accession>/PX_<accession>.xml`, then downloads each referenced file from the same host over anonymous HTTP (with `Range` support for resume). iProX also exposes Aspera (`faspe://`) with username/password for very large bulk transfers; `pridepy` uses the public HTTP endpoint so no iProX credentials are required.
+
+`download-all-public-raw-files` retrieves the files stored under the dataset's
+`raw/` collection, saving them under `output_folder` with the dataset's
+sub-directory layout preserved (so identically-named files in different
+collections don't overwrite each other). These direct downloads support resume
+(REST for FTP, byte-Range for HTTP), per-file retries, parallel workers (`-w`
+up to 3), and post-transfer size verification against the server-reported size.
+
+You can also request a specific collection from these repositories through the
+same category interface:
+
+```bash
+pridepy download-all-public-category-files \
+  -a MSV000082297 \
+  -o ./downloads/MSV000082297-results \
+  -c RESULT
+```
+
+</details>
+
 ## Python API Examples
 
-### Example: get raw files for a project
+<details>
+<summary><strong>Get raw files for a project</strong></summary>
 
 ```python
-from pridepy.files.files import Files
+from pridepy.download.client import Client
 
-files = Files()
-raw_files = files.get_all_raw_file_list("PXD008644")
+client = Client()
+raw_files = client.get_all_raw_file_list("PXD008644")
 print(f"RAW files: {len(raw_files)}")
 print(raw_files[0]["fileName"])
 ```
 
-For MassIVE accessions, the same method returns the files found under the dataset's `raw/` collection:
+For MassIVE / JPOST / iProX accessions, the same method returns the files found under the dataset's `raw/` collection:
 
 ```python
-from pridepy.files.files import Files
+from pridepy.download.client import Client
 
-files = Files()
-raw_files = files.get_all_raw_file_list("MSV000082297")
-print(f"MassIVE raw files: {len(raw_files)}")
+client = Client()
+for accession in ("MSV000082297", "JPST002311", "IPX0017413000"):
+    raw_files = client.get_all_raw_file_list(accession)
+    print(f"{accession} raw files: {len(raw_files)}")
 ```
 
-### Example: search projects
+</details>
+
+<details>
+<summary><strong>Search projects</strong></summary>
 
 ```python
 from pridepy.project.project import Project
@@ -270,6 +396,8 @@ results = project.search_by_keywords_and_filters(
 )
 print(f"Hits: {len(results)}")
 ```
+
+</details>
 
 ## Development and Release (uv)
 

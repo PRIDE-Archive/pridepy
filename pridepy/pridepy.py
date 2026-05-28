@@ -2,7 +2,7 @@
 import asyncio
 import logging
 import click
-from pridepy.files.files import Files
+from pridepy.download.client import Client as Files
 from pridepy.project.project import Project
 
 PROTOCOL_CHOICES = click.Choice(["ftp", "aspera", "globus", "s3"], case_sensitive=False)
@@ -416,10 +416,10 @@ def stream_files_metadata(accession, output_file):
     "-sf",
     "--sort-fields",
     required=False,
-    default=["submission_date"],
+    default=["submissionDate"],
     multiple=True,
     help="Field(s) for sorting the results on. Default for this "
-    "request is submission_date. More fields can be separated by "
+    "request is submissionDate. More fields can be separated by "
     "comma and passed. Example: submissionDate,accession",
     type=click.Choice(
         "accession,submissionDate,diseases,organismsPart,organisms,instruments,softwares,"
@@ -640,7 +640,7 @@ def download_files_by_list(
     "--parallel-files",
     default=1,
     type=click.IntRange(1, 3),
-    help="Number of files to download simultaneously (1-3). Primarily used by globus protocol. Default is 1.",
+    help="Number of files to download simultaneously (1-3), for any URL scheme. Default is 1.",
 )
 def download_files_by_url(
     url_list_path,
