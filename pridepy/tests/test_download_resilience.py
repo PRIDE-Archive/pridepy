@@ -257,6 +257,26 @@ class TestDownloadResilience(TestCase):
                         skip_if_downloaded_already=False,
                     )
 
+    def test_by_url_http_download_raises_on_truncated_content(self):
+        """by_url's HTTP downloader must reject a stream shorter than
+        Content-Length instead of accepting a truncated file."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            target = os.path.join(tmp_dir, "a.raw")
+            session = Mock()
+            response = Mock()
+            response.raise_for_status.return_value = None
+            response.headers = {"Content-Length": "5"}
+            response.iter_content.return_value = [b"ab"]  # only 2 of 5 bytes
+            response.__enter__ = Mock(return_value=response)
+            response.__exit__ = Mock(return_value=None)
+            session.get.return_value = response
+            with patch(
+                "pridepy.download.by_url.Util.create_session_with_retries",
+                return_value=session,
+            ):
+                with self.assertRaisesRegex(RuntimeError, "Incomplete download"):
+                    by_url._http_download_url("https://example.org/a.raw", target)
+
     def test_download_files_propagates_transport_failure(self):
         """Provider.download_files must propagate a transport failure so the
         direct-download path doesn't report false success (parity with PRIDE)."""

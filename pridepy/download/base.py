@@ -50,9 +50,11 @@ class Provider(ABC):
         """Resolve the download URL for ``record``.
 
         Default: return the ``"FTP Protocol"`` public-file-location value
-        (direct-download adapters store their public URL there — ftp:// for
-        MassIVE/JPOST, http(s):// for iProX). Adapters with richer,
-        protocol-aware resolution (PRIDE: aspera/globus/s3) override this.
+        (most direct-download adapters store their public URL there — ftp://
+        for MassIVE/JPOST, http:// for iProX). Records that use a different
+        location name (e.g. MassIVE's HTTPS fallback uses ``"HTTPS"``) fall
+        through to the first location. Adapters with richer, protocol-aware
+        resolution (PRIDE: aspera/globus/s3) override this.
         """
         locations = record.get("publicFileLocations", [])
         if not locations:

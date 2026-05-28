@@ -36,6 +36,11 @@ def _http_download_url(url: str, target: str) -> None:
                 if chunk:
                     out.write(chunk)
                     pbar.update(len(chunk))
+    if total and os.path.getsize(target) != total:
+        raise RuntimeError(
+            f"Incomplete download for {target}: got {os.path.getsize(target)} "
+            f"bytes, expected {total}"
+        )
 
 
 def _ftp_download_url(parsed, target: str) -> None:
@@ -66,6 +71,11 @@ def _ftp_download_url(parsed, target: str) -> None:
                 pbar.update(len(data))
 
             ftp.retrbinary(f"RETR {remote_path}", _callback)
+    if total and os.path.getsize(target) != total:
+        raise RuntimeError(
+            f"Incomplete download for {target}: got {os.path.getsize(target)} "
+            f"bytes, expected {total}"
+        )
 
 
 def _dispatch_url_scheme(parsed, target: str, protocol: str = "ftp", position: int = 0) -> None:
@@ -108,7 +118,13 @@ def _download_single_url(
         logging.info("Skipping %s: already downloaded", file_name)
         return target
 
-    _dispatch_url_scheme(parsed, target, protocol, position=position)
+    try:
+        _dispatch_url_scheme(parsed, target, protocol, position=position)
+    except Exception:
+        # Don't leave a truncated/partial file behind — a non-empty partial
+        # would otherwise be wrongly skipped on the next run.
+        _provider_util._remove_if_exists(target)
+        raise
 
     ok, reason = _provider_util.validate_download(target)
     if not ok:

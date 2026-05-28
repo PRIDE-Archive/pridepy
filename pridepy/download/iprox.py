@@ -61,15 +61,16 @@ class IproxProvider(Provider):
 
     @classmethod
     def _build_file_record(
-        cls, accession: str, https_url: str, category_from_px: Optional[str] = None
+        cls, accession: str, file_url: str, category_from_px: Optional[str] = None
     ) -> Dict:
         """Build a pridepy file record for an iProX file.
 
-        ``category_from_px`` is the ``cvParam`` ``name`` from the dataset's
-        ProteomeXchange XML (e.g. ``"Associated raw file URI"``).
+        ``file_url`` is the file URI from the PX XML (plain ``http://`` on
+        download.iprox.org). ``category_from_px`` is the ``cvParam`` ``name``
+        from the dataset's ProteomeXchange XML (e.g. ``"Associated raw file URI"``).
         """
         from pridepy.download.massive import MassiveProvider
-        parsed = urlparse(https_url)
+        parsed = urlparse(file_url)
         root_prefix = f"/{accession.upper()}/"
         relative_path = parsed.path
         if relative_path.startswith(root_prefix):
@@ -85,9 +86,9 @@ class IproxProvider(Provider):
             "fileName": os.path.basename(parsed.path),
             "fileCategory": {"value": category},
             # "FTP Protocol" is the existing label the download dispatcher uses
-            # to locate a file URL; here it actually points at HTTPS.
-            # Provider.download_files routes by URL scheme.
-            "publicFileLocations": [{"name": "FTP Protocol", "value": https_url}],
+            # to locate a file URL; here it actually points at HTTP
+            # (download.iprox.org). Provider.download_files routes by URL scheme.
+            "publicFileLocations": [{"name": "FTP Protocol", "value": file_url}],
             "relativePath": relative_path,
             "collection": collection,
             "source": "iProX",
@@ -124,6 +125,7 @@ class IproxProvider(Provider):
                 )
         if not records:
             raise RuntimeError(
-                f"iProX PX XML for {normalized} contained no downloadable HTTPS URIs"
+                f"iProX PX XML for {normalized} contained no downloadable "
+                f"HTTP/HTTPS URIs"
             )
         return records

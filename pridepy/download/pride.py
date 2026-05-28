@@ -864,8 +864,8 @@ class PrideProvider(Provider):
         """Override Provider.download_files with the multi-protocol orchestrator.
 
         Reuses the legacy batch downloader: Phase 1 batches the requested
-        protocol over a single connection, Phase 2 validates every file, and
-        Phase 3 falls back per-file across the remaining protocols.
+        protocol over a single connection; Phase 2 validates every file and,
+        for any that fail, falls back per-file across the remaining protocols.
         """
         PrideProvider._download_files_batch(
             file_list_json=records,
@@ -957,11 +957,11 @@ class PrideProvider(Provider):
         parallel_files: int = 1,
     ):
         """
-        Download files using either FTP or Aspera transfer protocol.
+        Download files using the ftp, aspera, globus, or s3 transfer protocol.
         :param file_list_json: File list in JSON format
         :param accession:  Project accession
         :param output_folder: Folder to download the files
-        :param protocol: ftp, aspera, globus
+        :param protocol: ftp, aspera, globus, s3
         :param aspera_maximum_bandwidth: parameter in Aspera sets the maximum bandwidth for the transfer.
         :param skip_if_downloaded_already: Boolean value to skip the download if the file has already been downloaded.
         """
