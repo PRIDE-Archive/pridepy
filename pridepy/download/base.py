@@ -13,7 +13,6 @@ from abc import ABC, abstractmethod
 from typing import ClassVar, Dict, List, Optional
 
 from pridepy.download import transport
-from pridepy.download import util as _util
 
 
 class Provider(ABC):
@@ -47,8 +46,20 @@ class Provider(ABC):
     # ------------------------------------------------------------------
 
     def get_download_url(self, record: Dict, protocol: str = "ftp") -> str:
-        """Resolve the download URL for ``record`` and ``protocol``."""
-        return _util._get_download_url(record, protocol)
+        """Resolve the download URL for ``record``.
+
+        Default: return the ``"FTP Protocol"`` public-file-location value
+        (direct-download adapters store their public URL there — ftp:// for
+        MassIVE/JPOST, http(s):// for iProX). Adapters with richer,
+        protocol-aware resolution (PRIDE: aspera/globus/s3) override this.
+        """
+        locations = record.get("publicFileLocations", [])
+        if not locations:
+            raise ValueError("No public file locations present")
+        for location in locations:
+            if location.get("name") == "FTP Protocol":
+                return location.get("value")
+        return locations[0].get("value")
 
     # ------------------------------------------------------------------
     # Shared listing filters.

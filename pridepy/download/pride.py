@@ -167,6 +167,121 @@ class PrideProvider(Provider):
         return new_file_path
 
     @staticmethod
+    def _get_download_url(file_record: Dict, protocol: str) -> str:
+        """Resolve the PRIDE public download URL for a file and protocol.
+
+        Raises ValueError when the requested protocol has no suitable location.
+        Aspera requires a dedicated "Aspera Protocol" entry; ftp/s3/globus
+        derive their URL from the "FTP Protocol" entry (falling back to an
+        arbitrary non-Aspera location would produce a URL the caller cannot
+        actually transfer with). The globus URL is the FTP path rewritten to
+        the PRIDE archive HTTPS prefix.
+        """
+        locations = file_record.get("publicFileLocations", [])
+        if not locations:
+            raise ValueError("No public file locations present")
+
+        aspera_url = None
+        ftp_url = None
+        for location in locations:
+            name = location.get("name")
+            if name == "Aspera Protocol":
+                aspera_url = location.get("value")
+            elif name == "FTP Protocol":
+                ftp_url = location.get("value")
+
+        if protocol == "aspera":
+            if not aspera_url:
+                raise ValueError("Aspera URL not available")
+            return aspera_url
+
+        if not ftp_url:
+            raise ValueError("FTP URL not available")
+        if protocol == "ftp":
+            return ftp_url
+        if protocol == "globus":
+            return ftp_url.replace(
+                PrideProvider.ARCHIVE_FTP_URL_PREFIX,
+                PrideProvider.ARCHIVE_HTTPS_URL_PREFIX,
+                1,
+            )
+        if protocol == "s3":
+            return ftp_url
+        raise ValueError(f"Unsupported protocol: {protocol}")
+
+    def get_download_url(self, record: Dict, protocol: str = "ftp") -> str:
+        """Override the base hook with PRIDE's multi-protocol resolution."""
+        return PrideProvider._get_download_url(record, protocol)
+
+    @staticmethod
+    def _resolve_local_path(file_record: Dict, output_folder: str) -> str:
+        """Compute the canonical local path for a file regardless of protocol."""
+        try:
+            canonical_url = PrideProvider._get_download_url(file_record, "ftp")
+        except ValueError:
+            canonical_url = ""
+        if canonical_url:
+            return PrideProvider.get_output_file_name(canonical_url, file_record, output_folder)
+        return os.path.join(output_folder, file_record["fileName"])
+
+    @staticmethod
+    def extract_accession_from_url(url: str) -> Optional[str]:
+        """Extract a PRIDE accession (PXD/PRD followed by digits) from a URL.
+
+        PRIDE archive URLs follow the pattern
+        ``…/pride/data/archive/YYYY/MM/<ACCESSION>/filename``.
+        Returns ``None`` when no accession can be identified.
+        """
+        match = re.search(r"((?:PXD|PRD)\d{4,})", url)
+        return match.group(1) if match else None
+
+    @staticmethod
+    def validate_urls_checksums(urls: List[str], output_folder: str) -> None:
+        """Validate downloaded files against the PRIDE checksum API.
+
+        Accessions are inferred from URL paths via
+        :meth:`extract_accession_from_url`. URLs that do not contain a
+        recognisable PRIDE accession are skipped with a warning.
+
+        :raises RuntimeError: if one or more files fail validation
+        """
+        accession_urls: Dict[str, List[str]] = {}
+        for url in urls:
+            acc = PrideProvider.extract_accession_from_url(url)
+            if acc:
+                accession_urls.setdefault(acc, []).append(url)
+            else:
+                logging.warning(
+                    "Cannot infer PRIDE accession from URL, skipping checksum: %s", url
+                )
+
+        validation_failures: List[str] = []
+        for acc, acc_urls in accession_urls.items():
+            checksum_file_path = PrideProvider.save_checksum_file(acc, output_folder)
+            checksum_map = _provider_util.read_checksum_file(checksum_file_path)
+            logging.info(
+                "Loaded checksums for %d files (project %s)",
+                len(checksum_map), acc,
+            )
+            for url in acc_urls:
+                file_name = os.path.basename(urlparse(url).path)
+                target = os.path.join(output_folder, file_name)
+                expected = checksum_map.get(file_name)
+                logging.info("Validating %s", file_name)
+                valid, reason = _provider_util.validate_download(target, expected)
+                if not valid:
+                    logging.error("Validation failed for %s: %s", file_name, reason)
+                    validation_failures.append(f"{file_name} ({reason})")
+                else:
+                    logging.info("Checksum OK: %s", file_name)
+
+        if validation_failures:
+            raise RuntimeError(
+                f"Checksum validation failed for {len(validation_failures)} file(s): "
+                + ", ".join(validation_failures)
+            )
+
+    @staticmethod
     def save_checksum_file(accession, output_folder):
         """
         Download and persist the checksum manifest for a PRIDE accession.
@@ -191,7 +306,7 @@ class PrideProvider(Provider):
     @staticmethod
     def _globus_download_one(file, output_folder, skip_if_downloaded_already, max_retries=6, position=0):
         """Download a single file via globus; used as a worker target."""
-        download_url = _provider_util._get_download_url(file, "globus")
+        download_url = PrideProvider._get_download_url(file, "globus")
         new_file_path = PrideProvider.get_output_file_name(download_url, file, output_folder)
 
         if skip_if_downloaded_already and os.path.exists(new_file_path):
@@ -413,7 +528,7 @@ class PrideProvider(Provider):
         # --- Phase 0: pre-filter files that need downloading -----------------
         files_to_download: List[Dict] = []
         for file in file_list_json:
-            download_url = _provider_util._get_download_url(file, "globus")
+            download_url = PrideProvider._get_download_url(file, "globus")
             new_file_path = PrideProvider.get_output_file_name(download_url, file, output_folder)
             if skip_if_downloaded_already and os.path.exists(new_file_path):
                 expected_cs = checksum_map.get(file.get("fileName", ""))
@@ -445,7 +560,7 @@ class PrideProvider(Provider):
                         file, output_folder, False
                     )
                     new_file_path = PrideProvider.get_output_file_name(
-                        _provider_util._get_download_url(file, "globus"), file, output_folder
+                        PrideProvider._get_download_url(file, "globus"), file, output_folder
                     )
                     logging.info(f"Successfully downloaded {new_file_path}")
                 except Exception as e:
@@ -690,7 +805,7 @@ class PrideProvider(Provider):
         after every attempt. Intended as the per-file fallback path; batch
         download of the primary protocol is handled separately.
         """
-        local_path = _provider_util._resolve_local_path(file_record, output_folder)
+        local_path = PrideProvider._resolve_local_path(file_record, output_folder)
 
         for protocol in protocol_sequence:
             for attempt in range(1, max_protocol_retries + 1):
@@ -897,7 +1012,7 @@ class PrideProvider(Provider):
         failed_files: List[str] = []
         for i, file_record in enumerate(file_list_json, 1):
             expected_checksum = checksum_map.get(file_record["fileName"])
-            local_path = _provider_util._resolve_local_path(file_record, output_folder)
+            local_path = PrideProvider._resolve_local_path(file_record, output_folder)
             logging.info("Validating [%d/%d] %s", i, len(file_list_json), file_record["fileName"])
             valid, reason = _provider_util.validate_download(local_path, expected_checksum)
             if valid:

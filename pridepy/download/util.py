@@ -9,7 +9,7 @@ existing test patches.
 import hashlib
 import logging
 import os
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 from tqdm import tqdm
 
@@ -121,66 +121,3 @@ def _remove_if_exists(file_path: str) -> None:
     """
     if os.path.exists(file_path):
         os.remove(file_path)
-
-
-def _get_download_url(file_record: Dict, protocol: str) -> str:
-    """
-    Resolve the public download URL for a file and protocol.
-
-    Raises ValueError when the requested protocol has no suitable location.
-    Aspera requires a dedicated "Aspera Protocol" entry; ftp/s3/globus
-    derive their URL from the "FTP Protocol" entry (falling back to an
-    arbitrary non-Aspera location would produce a URL the caller cannot
-    actually transfer with).
-    """
-    # Lazy import to avoid module-load cycle with PrideProvider (which lives
-    # in the providers package and imports back into util via _resolve_local_path).
-    from pridepy.download.pride import PrideProvider
-
-    locations = file_record.get("publicFileLocations", [])
-    if not locations:
-        raise ValueError("No public file locations present")
-
-    aspera_url = None
-    ftp_url = None
-    for location in locations:
-        name = location.get("name")
-        if name == "Aspera Protocol":
-            aspera_url = location.get("value")
-        elif name == "FTP Protocol":
-            ftp_url = location.get("value")
-
-    if protocol == "aspera":
-        if not aspera_url:
-            raise ValueError("Aspera URL not available")
-        return aspera_url
-
-    if not ftp_url:
-        raise ValueError("FTP URL not available")
-    if protocol == "ftp":
-        return ftp_url
-    if protocol == "globus":
-        return ftp_url.replace(
-            PrideProvider.ARCHIVE_FTP_URL_PREFIX,
-            PrideProvider.ARCHIVE_HTTPS_URL_PREFIX,
-            1,
-        )
-    if protocol == "s3":
-        return ftp_url
-    raise ValueError(f"Unsupported protocol: {protocol}")
-
-
-def _resolve_local_path(file_record: Dict, output_folder: str) -> str:
-    """
-    Compute the canonical local path for a file regardless of transfer protocol.
-    """
-    # Lazy import to avoid module-load cycle with PrideProvider.
-    from pridepy.download.pride import PrideProvider
-
-    try:
-        canonical_url = _get_download_url(file_record, "ftp")
-    except ValueError:
-        canonical_url = ""
-    if canonical_url:
-        return PrideProvider.get_output_file_name(canonical_url, file_record, output_folder)
-    return os.path.join(output_folder, file_record["fileName"])

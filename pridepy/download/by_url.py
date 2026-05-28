@@ -7,10 +7,9 @@ inferred from the URL path.
 import ftplib
 import logging
 import os
-import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from ftplib import FTP
-from typing import Dict, List, Optional, Tuple
+from typing import List, Tuple
 from urllib.parse import urlparse
 
 from tqdm import tqdm
@@ -19,63 +18,6 @@ from pridepy.download import transport
 from pridepy.download import util as _provider_util
 from pridepy.download.pride import PrideProvider
 from pridepy.util.api_handling import Util
-
-
-def _extract_pride_accession(url: str) -> Optional[str]:
-    """Extract a PRIDE accession (PXD/PRD followed by digits) from a URL path.
-
-    PRIDE archive URLs follow the pattern
-    ``…/pride/data/archive/YYYY/MM/<ACCESSION>/filename``.
-    Returns ``None`` when no accession can be identified.
-    """
-    match = re.search(r"((?:PXD|PRD)\d{4,})", url)
-    return match.group(1) if match else None
-
-
-def _validate_urls_checksums(urls: List[str], output_folder: str) -> None:
-    """Validate downloaded files against PRIDE checksum API.
-
-    Accessions are inferred from URL paths via
-    :func:`_extract_pride_accession`.  URLs that do not contain a
-    recognisable PRIDE accession are skipped with a warning.
-
-    :raises RuntimeError: if one or more files fail validation
-    """
-    accession_urls: Dict[str, List[str]] = {}
-    for url in urls:
-        acc = _extract_pride_accession(url)
-        if acc:
-            accession_urls.setdefault(acc, []).append(url)
-        else:
-            logging.warning(
-                "Cannot infer PRIDE accession from URL, skipping checksum: %s", url
-            )
-
-    validation_failures: List[str] = []
-    for acc, acc_urls in accession_urls.items():
-        checksum_file_path = PrideProvider.save_checksum_file(acc, output_folder)
-        checksum_map = _provider_util.read_checksum_file(checksum_file_path)
-        logging.info(
-            "Loaded checksums for %d files (project %s)",
-            len(checksum_map), acc,
-        )
-        for url in acc_urls:
-            file_name = os.path.basename(urlparse(url).path)
-            target = os.path.join(output_folder, file_name)
-            expected = checksum_map.get(file_name)
-            logging.info("Validating %s", file_name)
-            valid, reason = _provider_util.validate_download(target, expected)
-            if not valid:
-                logging.error("Validation failed for %s: %s", file_name, reason)
-                validation_failures.append(f"{file_name} ({reason})")
-            else:
-                logging.info("Checksum OK: %s", file_name)
-
-    if validation_failures:
-        raise RuntimeError(
-            f"Checksum validation failed for {len(validation_failures)} file(s): "
-            + ", ".join(validation_failures)
-        )
 
 
 def _http_download_url(url: str, target: str) -> None:
@@ -247,4 +189,4 @@ def download_files_by_url(
         )
 
     if checksum_check:
-        _validate_urls_checksums(urls, output_folder)
+        PrideProvider.validate_urls_checksums(urls, output_folder)

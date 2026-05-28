@@ -46,7 +46,7 @@ class TestDownloadResilience(TestCase):
             ]
         }
 
-        download_url = provider_util._get_download_url(file_record, "globus")
+        download_url = PrideProvider._get_download_url(file_record, "globus")
 
         assert download_url == "https://ftp.pride.ebi.ac.uk/path/file.raw"
 
