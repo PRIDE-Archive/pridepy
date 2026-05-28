@@ -243,14 +243,19 @@ def _download_ftp_paths_serial(
     use_tls: bool,
     max_connection_retries: int,
     max_download_retries: int,
-) -> None:
+) -> List[str]:
     """Download all paths from one host over a single (reused) connection.
 
     ``items`` is a list of ``(ftp_path, local_path)`` pairs; ``local_path``
     is the precomputed destination (already including any sub-directories).
+
+    Returns the list of ``ftp_path`` values that could not be downloaded
+    (connection never established, or per-file giving up) so the caller can
+    surface a failure instead of reporting false success.
     """
     connection_attempt = 0
     while connection_attempt < max_connection_retries:
+        failed: List[str] = []
         try:
             ftp = _open_ftp_connection(host, use_tls=use_tls)
             logging.info(f"Connected to FTP host: {host} (tls={use_tls})")
@@ -270,6 +275,7 @@ def _download_ftp_paths_serial(
                     logging.error(
                         f"Failed to download {ftp_path} from {host}: {e}"
                     )
+                    failed.append(ftp_path)
             try:
                 ftp.quit()
             except Exception:
@@ -278,7 +284,7 @@ def _download_ftp_paths_serial(
                 except Exception:
                     pass
             logging.info(f"Disconnected from FTP host: {host}")
-            return
+            return failed
         except (socket.timeout, ftplib.error_temp, ftplib.error_perm, OSError) as e:
             connection_attempt += 1
             logging.error(
@@ -291,6 +297,8 @@ def _download_ftp_paths_serial(
                 logging.error(
                     f"Giving up after {max_connection_retries} failed connection attempts to {host}."
                 )
+                return [ftp_path for ftp_path, _ in items]
+    return [ftp_path for ftp_path, _ in items]
 
 
 def _download_ftp_paths_parallel(
@@ -301,18 +309,19 @@ def _download_ftp_paths_parallel(
     max_connection_retries: int,
     max_download_retries: int,
     parallel_files: int,
-) -> None:
+) -> List[str]:
     """
     Download paths concurrently using ``parallel_files`` workers; each
     worker opens its own FTP connection so transfers don't serialize.
 
-    ``items`` is a list of ``(ftp_path, local_path)`` pairs.
+    ``items`` is a list of ``(ftp_path, local_path)`` pairs. Returns the list
+    of ``ftp_path`` values that failed so the caller can surface a failure.
     """
-    def worker(item: Tuple[str, str], position: int) -> None:
+    def worker(item: Tuple[str, str], position: int) -> Optional[str]:
         ftp_path, local_path = item
         if skip_if_downloaded_already and os.path.exists(local_path):
             logging.info(f"Skipping download as file already exists: {local_path}")
-            return
+            return None
         parent = os.path.dirname(local_path)
         if parent:
             os.makedirs(parent, exist_ok=True)
@@ -329,7 +338,7 @@ def _download_ftp_paths_parallel(
                         max_download_retries=max_download_retries,
                         position=position,
                     )
-                    return
+                    return None
                 finally:
                     try:
                         ftp.quit()
@@ -345,17 +354,27 @@ def _download_ftp_paths_parallel(
                 )
                 if connection_attempt < max_connection_retries:
                     time.sleep(5)
+            except Exception as e:
+                logging.error(f"Failed to download {ftp_path} from {host}: {e}")
+                return ftp_path
         logging.error(f"Giving up on {ftp_path} from {host}")
+        return ftp_path
 
+    failed: List[str] = []
     with ThreadPoolExecutor(max_workers=parallel_files) as executor:
-        futures = [
-            executor.submit(worker, item, idx) for idx, item in enumerate(items)
-        ]
-        for future in as_completed(futures):
+        future_to_path = {
+            executor.submit(worker, item, idx): item[0]
+            for idx, item in enumerate(items)
+        }
+        for future in as_completed(future_to_path):
             try:
-                future.result()
+                result = future.result()
+                if result is not None:
+                    failed.append(result)
             except Exception as e:
                 logging.error(f"Parallel FTP download error: {e}")
+                failed.append(future_to_path[future])
+    return failed
 
 
 def download_ftp_urls(
@@ -399,10 +418,11 @@ def download_ftp_urls(
         local_path = _dest_path(output_folder, remote_path, relpath)
         host_to_items.setdefault(parsed.hostname, []).append((remote_path, local_path))
 
+    failed: List[str] = []
     for host, items in host_to_items.items():
         workers = max(1, min(parallel_files, len(items)))
         if workers > 1:
-            _download_ftp_paths_parallel(
+            failed.extend(_download_ftp_paths_parallel(
                 host=host,
                 items=items,
                 skip_if_downloaded_already=skip_if_downloaded_already,
@@ -410,16 +430,21 @@ def download_ftp_urls(
                 max_connection_retries=max_connection_retries,
                 max_download_retries=max_download_retries,
                 parallel_files=workers,
-            )
+            ))
         else:
-            _download_ftp_paths_serial(
+            failed.extend(_download_ftp_paths_serial(
                 host=host,
                 items=items,
                 skip_if_downloaded_already=skip_if_downloaded_already,
                 use_tls=use_tls,
                 max_connection_retries=max_connection_retries,
                 max_download_retries=max_download_retries,
-            )
+            ))
+
+    if failed:
+        raise RuntimeError(
+            f"Failed to download {len(failed)} FTP file(s): {failed}"
+        )
 
 
 def _parallel_download(url, file_path, position=0):
@@ -547,13 +572,14 @@ def download_http_urls(
             return relative_paths[idx]
         return None
 
+    failed: List[str] = []
     workers = max(1, min(parallel_files, len(http_urls)))
     if workers > 1:
         logging.info(
             f"Downloading {len(http_urls)} HTTP(S) file(s) with {workers} parallel workers"
         )
         with ThreadPoolExecutor(max_workers=workers) as executor:
-            futures = [
+            future_to_url = {
                 executor.submit(
                     _http_download_one,
                     url,
@@ -562,14 +588,16 @@ def download_http_urls(
                     max_retries,
                     idx,
                     _rel(idx),
-                )
+                ): url
                 for idx, url in enumerate(http_urls)
-            ]
-            for future in as_completed(futures):
+            }
+            for future in as_completed(future_to_url):
+                url = future_to_url[future]
                 try:
                     future.result()
                 except Exception as e:
-                    logging.error(f"Parallel HTTP download error: {e}")
+                    logging.error(f"HTTP download failed for {url}: {e}")
+                    failed.append(url)
     else:
         for idx, url in enumerate(http_urls):
             try:
@@ -582,3 +610,9 @@ def download_http_urls(
                 )
             except Exception as e:
                 logging.error(f"HTTP download failed for {url}: {e}")
+                failed.append(url)
+
+    if failed:
+        raise RuntimeError(
+            f"Failed to download {len(failed)} HTTP(S) file(s): {failed}"
+        )

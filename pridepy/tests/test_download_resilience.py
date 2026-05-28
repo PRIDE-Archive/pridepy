@@ -10,6 +10,7 @@ from pridepy.download import transport
 from pridepy.download import util as provider_util
 from pridepy.download.massive import MassiveProvider
 from pridepy.download.pride import PrideProvider
+from pridepy.download.proteomexchange import ProteomeXchangeProvider
 from pridepy.download import registry
 
 
@@ -224,6 +225,90 @@ class TestDownloadResilience(TestCase):
                 parallel_files=1,
             )
         assert http_mock.call_args.kwargs["relative_paths"] == ["raw/d1/run.raw"]
+
+    def test_download_http_urls_raises_when_a_file_fails(self):
+        """A failed HTTP transfer must surface as an exception, not be
+        swallowed into a false success."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            with patch.object(
+                transport, "_parallel_download", side_effect=RuntimeError("boom")
+            ):
+                with self.assertRaisesRegex(RuntimeError, "Failed to download"):
+                    transport.download_http_urls(
+                        http_urls=["https://example.org/a.raw"],
+                        output_folder=tmp_dir,
+                        skip_if_downloaded_already=False,
+                        max_retries=1,
+                    )
+
+    def test_download_ftp_urls_raises_when_a_file_fails(self):
+        """A failed FTP transfer must surface as an exception."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fake_ftp = Mock()
+            with patch.object(
+                transport, "_open_ftp_connection", return_value=fake_ftp
+            ), patch.object(
+                transport, "_download_one_ftp_path", side_effect=RuntimeError("boom")
+            ):
+                with self.assertRaisesRegex(RuntimeError, "Failed to download"):
+                    transport.download_ftp_urls(
+                        ftp_urls=["ftp://ftp.example.org/p/a.raw"],
+                        output_folder=tmp_dir,
+                        skip_if_downloaded_already=False,
+                    )
+
+    def test_download_files_propagates_transport_failure(self):
+        """Provider.download_files must propagate a transport failure so the
+        direct-download path doesn't report false success (parity with PRIDE)."""
+        provider = MassiveProvider()
+        record = MassiveProvider._build_file_record(
+            "MSV000012345",
+            "ftp://massive-ftp.ucsd.edu/v01/MSV000012345/raw/a.raw",
+        )
+        with patch.object(
+            transport, "download_ftp_urls", side_effect=RuntimeError("download failed")
+        ):
+            with self.assertRaises(RuntimeError):
+                provider.download_files(
+                    accession="MSV000012345",
+                    records=[record],
+                    output_folder="/tmp/does-not-matter",
+                    skip_if_downloaded_already=False,
+                    protocol="ftp",
+                )
+
+    def test_proteomexchange_relative_paths_disambiguate_duplicate_basenames(self):
+        """download-px-raw-files must not flatten duplicate basenames from
+        different directories onto the same local file."""
+        urls = [
+            "ftp://ftp.pride.ebi.ac.uk/pride/PXD1/run1/sample.raw",
+            "ftp://ftp.pride.ebi.ac.uk/pride/PXD1/run2/sample.raw",
+        ]
+        with patch.object(
+            ProteomeXchangeProvider, "_normalize_px_xml_url", return_value="http://x"
+        ), patch.object(
+            ProteomeXchangeProvider,
+            "_parse_px_xml_for_raw_file_urls",
+            return_value=urls,
+        ):
+            records = ProteomeXchangeProvider().list_files("PXD1")
+
+        assert {r["relativePath"] for r in records} == {
+            "run1/sample.raw",
+            "run2/sample.raw",
+        }
+
+    def test_proteomexchange_single_file_relative_path_is_basename(self):
+        urls = ["ftp://ftp.pride.ebi.ac.uk/pride/PXD1/run1/sample.raw"]
+        with patch.object(
+            ProteomeXchangeProvider, "_normalize_px_xml_url", return_value="http://x"
+        ), patch.object(
+            ProteomeXchangeProvider,
+            "_parse_px_xml_for_raw_file_urls",
+            return_value=urls,
+        ):
+            records = ProteomeXchangeProvider().list_files("PXD1")
+        assert records[0]["relativePath"] == "sample.raw"
 
     def test_validate_download_rejects_empty_and_bad_checksum(self):
         with tempfile.TemporaryDirectory() as tmp_dir:

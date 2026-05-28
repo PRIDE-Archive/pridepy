@@ -23,6 +23,7 @@ The class accepts either:
 """
 import logging
 import os
+import posixpath
 import re
 import xml.etree.ElementTree as ET
 from typing import ClassVar, Dict, List
@@ -99,17 +100,50 @@ class ProteomeXchangeProvider(Provider):
                     urls.append(value)
         return urls
 
+    @staticmethod
+    def _relative_paths_for_urls(urls: List[str]) -> List[str]:
+        """Compute a dataset-relative destination path for each URL.
+
+        The PX XML's raw-file URIs point at arbitrary directories on the
+        hosting repository, so flattening to the URL basename would let
+        same-named files in different directories overwrite each other.
+        Strip the common parent directory shared by all URIs and keep the
+        remainder, so e.g. ``.../run1/x.raw`` and ``.../run2/x.raw`` become
+        ``run1/x.raw`` and ``run2/x.raw``. A single file (or one with no
+        shared prefix) falls back to its basename.
+        """
+        paths = [urlparse(url).path for url in urls]
+        if not paths:
+            return []
+        dirs = [posixpath.dirname(p) for p in paths]
+        try:
+            common = dirs[0] if len(paths) == 1 else posixpath.commonpath(dirs)
+        except ValueError:
+            common = ""
+        rels: List[str] = []
+        for path in paths:
+            if common and (path == common or path.startswith(common + "/")):
+                rel = path[len(common):].lstrip("/")
+            else:
+                rel = posixpath.basename(path)
+            rels.append(rel or posixpath.basename(path))
+        return rels
+
     def list_files(self, accession: str) -> List[Dict]:
         """Return the dataset's raw-file URIs as minimal file records.
 
         The PX XML doesn't expose checksums or rich category labels, so
-        each record carries just enough to drive the downloader.
+        each record carries just enough to drive the downloader. A
+        ``relativePath`` is derived per file (see
+        :meth:`_relative_paths_for_urls`) so the transport layer preserves
+        directory structure instead of colliding on duplicate basenames.
         """
         px_xml_url = self._normalize_px_xml_url(accession)
         logging.info(f"Fetching PX XML: {px_xml_url}")
         urls = self._parse_px_xml_for_raw_file_urls(px_xml_url)
+        relative_paths = self._relative_paths_for_urls(urls)
         records: List[Dict] = []
-        for url in urls:
+        for url, relative_path in zip(urls, relative_paths):
             parsed = urlparse(url)
             records.append(
                 {
@@ -119,6 +153,7 @@ class ProteomeXchangeProvider(Provider):
                     "publicFileLocations": [
                         {"name": "FTP Protocol", "value": url}
                     ],
+                    "relativePath": relative_path,
                     "source": "ProteomeXchange",
                 }
             )
