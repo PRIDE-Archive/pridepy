@@ -624,7 +624,7 @@ class PrideProvider(Provider):
                 s3_path = download_url.replace(ftp_base_url, "")
                 new_file_path = PrideProvider.get_output_file_name(download_url, file, output_folder)
 
-                if skip_if_downloaded_already == True and os.path.exists(new_file_path):
+                if skip_if_downloaded_already and os.path.exists(new_file_path):
                     logging.info("Skipping download as file already exists")
                     continue
 

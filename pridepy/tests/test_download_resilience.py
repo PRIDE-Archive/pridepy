@@ -11,7 +11,6 @@ from pridepy.download import util as provider_util
 from pridepy.download.massive import MassiveProvider
 from pridepy.download.pride import PrideProvider
 from pridepy.download.proteomexchange import ProteomeXchangeProvider
-from pridepy.download import registry
 
 
 class TestDownloadResilience(TestCase):

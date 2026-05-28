@@ -258,10 +258,12 @@ def download_file_by_name(
     :param protocol: Protocol to use for download: ftp, aspera, globus, s3. Default is ftp.
     :param file_name: fileName to be downloaded
     :param output_folder: output folder to download or copy files
-    :param skip_if_downloaded_already: Boolean value to skip the download if the file has already been downloaded. Default is False.
+    :param skip_if_downloaded_already: Boolean value to skip the download if the
+        file has already been downloaded. Default is False.
     :param username: PRIDE login username for private files
     :param password: PRIDE login password for private files
-    :param aspera_maximum_bandwidth: Aspera maximum bandwidth (e.g 50M, 100M, 200M), depending on the user's network bandwidth, default is 100M
+    :param aspera_maximum_bandwidth: Aspera maximum bandwidth (e.g 50M, 100M,
+        200M), depending on the user's network bandwidth, default is 100M
     :param checksum_check: Download checksum file for project.
     """
 

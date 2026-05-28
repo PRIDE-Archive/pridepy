@@ -68,9 +68,25 @@ class Provider(ABC):
     # Shared listing filters.
     # ------------------------------------------------------------------
 
+    def _list_files_checked(self, accession: str) -> List[Dict]:
+        """Call :meth:`list_files` and fail clearly if it yields no listing.
+
+        The PRIDE API helper returns ``None`` on a network error (e.g. a read
+        timeout), so guard here to raise an actionable error rather than a
+        cryptic ``TypeError: 'NoneType' object is not iterable`` downstream.
+        """
+        records = self.list_files(accession)
+        if records is None:
+            raise RuntimeError(
+                f"Could not list files for {accession}: the repository API "
+                f"returned no data (it may be unreachable, or the accession "
+                f"may be invalid)."
+            )
+        return records
+
     def get_raw_files(self, accession: str) -> List[Dict]:
         """Return records whose ``fileCategory.value`` is ``"RAW"``."""
-        records = self.list_files(accession)
+        records = self._list_files_checked(accession)
         return [r for r in records if r["fileCategory"]["value"] == "RAW"]
 
     def get_category_files(
@@ -80,12 +96,12 @@ class Provider(ABC):
         if isinstance(categories, str):
             categories = [categories]
         category_set = {c.upper() for c in categories}
-        records = self.list_files(accession)
+        records = self._list_files_checked(accession)
         return [r for r in records if r["fileCategory"]["value"] in category_set]
 
     def find_file(self, accession: str, file_name: str) -> List[Dict]:
         """Return records whose ``fileName`` equals ``file_name``."""
-        records = self.list_files(accession)
+        records = self._list_files_checked(accession)
         return [r for r in records if r["fileName"] == file_name]
 
     # ------------------------------------------------------------------
@@ -183,7 +199,7 @@ class Provider(ABC):
         if not file_names:
             raise ValueError("file_names must contain at least one filename")
 
-        all_files = self.list_files(accession)
+        all_files = self._list_files_checked(accession)
         requested = set(file_names)
         matched = [f for f in all_files if f.get("fileName") in requested]
         missing = sorted(requested - {f.get("fileName") for f in matched})

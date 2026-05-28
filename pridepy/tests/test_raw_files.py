@@ -1,8 +1,30 @@
+import unittest
 from unittest import TestCase
+
+import requests
 
 from pridepy.download.client import Client as Files
 
+_PRIDE_API_ROOT = "https://www.ebi.ac.uk/pride/ws/archive/v3/"
 
+
+def _pride_api_reachable() -> bool:
+    """Return True if the live PRIDE API answers; False on a network error.
+
+    These are integration tests that hit the real API. Skipping (rather than
+    failing) when the API is unreachable keeps CI deterministic instead of
+    flaking on a transient read timeout.
+    """
+    try:
+        requests.get(_PRIDE_API_ROOT, timeout=15)
+        return True
+    except requests.RequestException:
+        return False
+
+
+@unittest.skipUnless(
+    _pride_api_reachable(), "PRIDE API not reachable (live integration test)"
+)
 class TestRawFiles(TestCase):
     """
     A test class to test files related methods.
