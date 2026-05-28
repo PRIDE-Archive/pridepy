@@ -87,6 +87,7 @@ class TestJPOSTFiles(TestCase):
             skip_if_downloaded_already=False,
             use_tls=False,
             parallel_files=1,
+            relative_paths=["raw/folder/sample.raw"],
         )
 
     def test_proxi_listing_maps_cv_name_to_category(self):

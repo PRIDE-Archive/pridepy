@@ -11,7 +11,7 @@ import socket
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from ftplib import FTP
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
 import requests
@@ -20,9 +20,37 @@ from tqdm import tqdm
 from pridepy.util.api_handling import Util
 
 
-def _local_path_for_url(download_url: str, output_folder: str) -> str:
-    filename = os.path.basename(urlparse(download_url).path)
-    return os.path.join(output_folder, filename)
+def _safe_join(output_folder: str, relative_path: str) -> str:
+    """Join ``output_folder`` with a dataset-relative path.
+
+    Preserves sub-directory structure (so identically-named files in
+    different collections don't collide). Guards against absolute paths or
+    ``..`` traversal that would escape ``output_folder`` by falling back to
+    the basename — provider relative paths are already dataset-relative, so
+    this is purely defensive.
+    """
+    relative_path = (relative_path or "").lstrip("/")
+    if not relative_path:
+        return output_folder
+    local_path = os.path.normpath(os.path.join(output_folder, relative_path))
+    out_abs = os.path.abspath(output_folder)
+    local_abs = os.path.abspath(local_path)
+    if local_abs != out_abs and not local_abs.startswith(out_abs + os.sep):
+        return os.path.join(output_folder, os.path.basename(relative_path))
+    return local_path
+
+
+def _dest_path(
+    output_folder: str, url_path: str, relative_path: Optional[str]
+) -> str:
+    """Resolve the local destination for a download.
+
+    Uses the dataset-relative path when available (preserving layout),
+    otherwise falls back to the URL basename.
+    """
+    if relative_path:
+        return _safe_join(output_folder, relative_path)
+    return os.path.join(output_folder, os.path.basename(url_path))
 
 
 def _open_ftp_connection(host: str, use_tls: bool, timeout: int = 30) -> FTP:
@@ -210,21 +238,26 @@ def _download_one_ftp_path(
 
 def _download_ftp_paths_serial(
     host: str,
-    paths: List[str],
-    output_folder: str,
+    items: List[Tuple[str, str]],
     skip_if_downloaded_already: bool,
     use_tls: bool,
     max_connection_retries: int,
     max_download_retries: int,
 ) -> None:
-    """Download all paths from one host over a single (reused) connection."""
+    """Download all paths from one host over a single (reused) connection.
+
+    ``items`` is a list of ``(ftp_path, local_path)`` pairs; ``local_path``
+    is the precomputed destination (already including any sub-directories).
+    """
     connection_attempt = 0
     while connection_attempt < max_connection_retries:
         try:
             ftp = _open_ftp_connection(host, use_tls=use_tls)
             logging.info(f"Connected to FTP host: {host} (tls={use_tls})")
-            for ftp_path in paths:
-                local_path = os.path.join(output_folder, os.path.basename(ftp_path))
+            for ftp_path, local_path in items:
+                parent = os.path.dirname(local_path)
+                if parent:
+                    os.makedirs(parent, exist_ok=True)
                 try:
                     _download_one_ftp_path(
                         ftp=ftp,
@@ -262,8 +295,7 @@ def _download_ftp_paths_serial(
 
 def _download_ftp_paths_parallel(
     host: str,
-    paths: List[str],
-    output_folder: str,
+    items: List[Tuple[str, str]],
     skip_if_downloaded_already: bool,
     use_tls: bool,
     max_connection_retries: int,
@@ -273,12 +305,17 @@ def _download_ftp_paths_parallel(
     """
     Download paths concurrently using ``parallel_files`` workers; each
     worker opens its own FTP connection so transfers don't serialize.
+
+    ``items`` is a list of ``(ftp_path, local_path)`` pairs.
     """
-    def worker(ftp_path: str, position: int) -> None:
-        local_path = os.path.join(output_folder, os.path.basename(ftp_path))
+    def worker(item: Tuple[str, str], position: int) -> None:
+        ftp_path, local_path = item
         if skip_if_downloaded_already and os.path.exists(local_path):
             logging.info(f"Skipping download as file already exists: {local_path}")
             return
+        parent = os.path.dirname(local_path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
         connection_attempt = 0
         while connection_attempt < max_connection_retries:
             try:
@@ -312,7 +349,7 @@ def _download_ftp_paths_parallel(
 
     with ThreadPoolExecutor(max_workers=parallel_files) as executor:
         futures = [
-            executor.submit(worker, path, idx) for idx, path in enumerate(paths)
+            executor.submit(worker, item, idx) for idx, item in enumerate(items)
         ]
         for future in as_completed(futures):
             try:
@@ -329,6 +366,7 @@ def download_ftp_urls(
     max_download_retries: int = 3,
     use_tls: bool = False,
     parallel_files: int = 1,
+    relative_paths: Optional[List[str]] = None,
 ) -> None:
     """
     Download a list of FTP URLs with retries, REST-based resume, and
@@ -340,22 +378,33 @@ def download_ftp_urls(
         connection is transparently retried over TLS.
     :param parallel_files: When >1, downloads run concurrently with that
         many worker connections per host (capped at the number of files).
+    :param relative_paths: Optional per-URL dataset-relative destination
+        paths (parallel to ``ftp_urls``). When given, files are written to
+        ``output_folder/<relative_path>`` so identically-named files in
+        different collections don't collide. When omitted, the URL basename
+        is used (legacy flat layout).
     """
     if not os.path.isdir(output_folder):
         os.makedirs(output_folder, exist_ok=True)
 
-    host_to_paths: Dict[str, List[str]] = {}
-    for url in ftp_urls:
+    host_to_items: Dict[str, List[Tuple[str, str]]] = {}
+    for idx, url in enumerate(ftp_urls):
         parsed = urlparse(url)
-        host_to_paths.setdefault(parsed.hostname, []).append(parsed.path.lstrip("/"))
+        remote_path = parsed.path.lstrip("/")
+        relpath = (
+            relative_paths[idx]
+            if relative_paths and idx < len(relative_paths)
+            else None
+        )
+        local_path = _dest_path(output_folder, remote_path, relpath)
+        host_to_items.setdefault(parsed.hostname, []).append((remote_path, local_path))
 
-    for host, paths in host_to_paths.items():
-        workers = max(1, min(parallel_files, len(paths)))
+    for host, items in host_to_items.items():
+        workers = max(1, min(parallel_files, len(items)))
         if workers > 1:
             _download_ftp_paths_parallel(
                 host=host,
-                paths=paths,
-                output_folder=output_folder,
+                items=items,
                 skip_if_downloaded_already=skip_if_downloaded_already,
                 use_tls=use_tls,
                 max_connection_retries=max_connection_retries,
@@ -365,8 +414,7 @@ def download_ftp_urls(
         else:
             _download_ftp_paths_serial(
                 host=host,
-                paths=paths,
-                output_folder=output_folder,
+                items=items,
                 skip_if_downloaded_already=skip_if_downloaded_already,
                 use_tls=use_tls,
                 max_connection_retries=max_connection_retries,
@@ -378,6 +426,10 @@ def _parallel_download(url, file_path, position=0):
     """Download a file via a single-connection HTTP stream with optional resume.
     If a partial file exists and the server supports Range requests, resumes
     from where it left off; otherwise restarts from scratch."""
+    parent = os.path.dirname(file_path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+
     session = Util.create_session_with_retries()
     try:
         head = session.head(url, timeout=(30, 30))
@@ -413,6 +465,18 @@ def _parallel_download(url, file_path, position=0):
                         f.write(chunk)
                         pbar.update(len(chunk))
 
+    # Post-transfer integrity check mirroring the FTP path: the written size
+    # must match the server-reported Content-Length. A server that closes the
+    # data channel mid-stream without raising leaves a truncated file; raising
+    # here lets the caller's retry loop re-download (Range-resuming when able).
+    if total_size:
+        actual_size = os.path.getsize(file_path)
+        if actual_size != total_size:
+            raise RuntimeError(
+                f"Incomplete download for {file_path}: got {actual_size} bytes, "
+                f"expected {total_size}"
+            )
+
 
 def _http_download_one(
     url: str,
@@ -420,14 +484,19 @@ def _http_download_one(
     skip_if_downloaded_already: bool,
     max_retries: int = 3,
     position: int = 0,
+    relative_path: Optional[str] = None,
 ) -> None:
     """
     Download a single HTTP(S) URL with HEAD-then-Range resume and retry.
     Used as the worker target for both the serial loop and the parallel
     ThreadPoolExecutor path. Reuses :meth:`_parallel_download` so the same
     resume / restart-on-non-206 behaviour is shared with globus downloads.
+
+    ``relative_path`` (when given) is the dataset-relative destination, so
+    files keep their collection layout instead of being flattened to the
+    URL basename.
     """
-    local_path = _local_path_for_url(url, output_folder)
+    local_path = _dest_path(output_folder, urlparse(url).path, relative_path)
     if skip_if_downloaded_already and os.path.exists(local_path):
         logging.info(f"Skipping download as file already exists: {local_path}")
         return
@@ -453,6 +522,7 @@ def download_http_urls(
     skip_if_downloaded_already: bool,
     parallel_files: int = 1,
     max_retries: int = 3,
+    relative_paths: Optional[List[str]] = None,
 ) -> None:
     """
     Download a list of HTTP(S) URLs with HEAD-then-Range resume, per-file
@@ -462,12 +532,20 @@ def download_http_urls(
     :class:`ThreadPoolExecutor`. Each worker manages its own file (a new
     ``requests`` session is opened inside ``_parallel_download``) so the
     only shared resource is the output directory.
+
+    :param relative_paths: Optional per-URL dataset-relative destination
+        paths (parallel to ``http_urls``); see :func:`download_ftp_urls`.
     """
     if not os.path.isdir(output_folder):
         os.makedirs(output_folder, exist_ok=True)
 
     if not http_urls:
         return
+
+    def _rel(idx: int) -> Optional[str]:
+        if relative_paths and idx < len(relative_paths):
+            return relative_paths[idx]
+        return None
 
     workers = max(1, min(parallel_files, len(http_urls)))
     if workers > 1:
@@ -483,6 +561,7 @@ def download_http_urls(
                     skip_if_downloaded_already,
                     max_retries,
                     idx,
+                    _rel(idx),
                 )
                 for idx, url in enumerate(http_urls)
             ]
@@ -492,13 +571,14 @@ def download_http_urls(
                 except Exception as e:
                     logging.error(f"Parallel HTTP download error: {e}")
     else:
-        for url in http_urls:
+        for idx, url in enumerate(http_urls):
             try:
                 _http_download_one(
                     url,
                     output_folder,
                     skip_if_downloaded_already,
                     max_retries,
+                    relative_path=_rel(idx),
                 )
             except Exception as e:
                 logging.error(f"HTTP download failed for {url}: {e}")

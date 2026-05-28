@@ -334,10 +334,11 @@ How each repository is enumerated:
 - **iProX** fetches the dataset's ProteomeXchange XML from `http://download.iprox.org/<accession>/PX_<accession>.xml`, then downloads each referenced file from the same host over anonymous HTTP (with `Range` support for resume). iProX also exposes Aspera (`faspe://`) with username/password for very large bulk transfers; `pridepy` uses the public HTTP endpoint so no iProX credentials are required.
 
 `download-all-public-raw-files` retrieves the files stored under the dataset's
-`raw/` collection. These direct downloads support resume (REST for FTP,
-byte-Range for HTTP/HTTPS), per-file retries, and parallel workers (`-w` up to
-3). FTP transfers are additionally checked against the server-reported size
-after each download.
+`raw/` collection, saving them under `output_folder` with the dataset's
+sub-directory layout preserved (so identically-named files in different
+collections don't overwrite each other). These direct downloads support resume
+(REST for FTP, byte-Range for HTTP), per-file retries, parallel workers (`-w`
+up to 3), and post-transfer size verification against the server-reported size.
 
 You can also request a specific collection from these repositories through the
 same category interface:

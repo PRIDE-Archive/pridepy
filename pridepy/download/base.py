@@ -232,11 +232,20 @@ class Provider(ABC):
                 f"Ignoring requested protocol '{protocol}' for {accession}."
             )
 
-        all_urls = [self.get_download_url(record) for record in records]
-        ftp_urls = [u for u in all_urls if u.lower().startswith("ftp://")]
-        http_urls = [
-            u for u in all_urls if u.lower().startswith(("http://", "https://"))
-        ]
+        ftp_urls: List[str] = []
+        ftp_relpaths: List[Optional[str]] = []
+        http_urls: List[str] = []
+        http_relpaths: List[Optional[str]] = []
+        for record in records:
+            url = self.get_download_url(record)
+            relpath = record.get("relativePath")
+            lowered = url.lower()
+            if lowered.startswith("ftp://"):
+                ftp_urls.append(url)
+                ftp_relpaths.append(relpath)
+            elif lowered.startswith(("http://", "https://")):
+                http_urls.append(url)
+                http_relpaths.append(relpath)
         if not ftp_urls and not http_urls:
             logging.info(
                 f"No files matched for direct-download dataset {accession}"
@@ -250,6 +259,7 @@ class Provider(ABC):
                 skip_if_downloaded_already=skip_if_downloaded_already,
                 use_tls=self.use_tls,
                 parallel_files=parallel_files,
+                relative_paths=ftp_relpaths,
             )
         if http_urls:
             transport.download_http_urls(
@@ -257,4 +267,5 @@ class Provider(ABC):
                 output_folder=output_folder,
                 skip_if_downloaded_already=skip_if_downloaded_already,
                 parallel_files=parallel_files,
+                relative_paths=http_relpaths,
             )

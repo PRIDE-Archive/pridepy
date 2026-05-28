@@ -103,6 +103,7 @@ class TestMassIVEFiles(TestCase):
             skip_if_downloaded_already=False,
             use_tls=True,
             parallel_files=1,
+            relative_paths=["raw/folder/sample.raw"],
         )
 
     def test_repo_uses_tls_true_for_massive_false_for_jpost(self):

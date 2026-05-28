@@ -131,6 +131,100 @@ class TestDownloadResilience(TestCase):
             with open(output_file, "rb") as handle:
                 assert handle.read() == b"abc"
 
+    def test_parallel_download_raises_on_truncated_stream(self):
+        """A stream shorter than Content-Length must raise so the caller retries."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            output_file = os.path.join(tmp_dir, "file.raw")
+            session = Mock()
+            head = Mock()
+            head.headers = {"content-length": "5", "accept-ranges": "none"}
+            head.raise_for_status.return_value = None
+            session.head.return_value = head
+
+            stream_response = Mock()
+            stream_response.raise_for_status.return_value = None
+            stream_response.iter_content.return_value = [b"ab"]  # only 2 of 5 bytes
+            stream_response.__enter__ = Mock(return_value=stream_response)
+            stream_response.__exit__ = Mock(return_value=None)
+            session.get.return_value = stream_response
+
+            with patch(
+                "pridepy.download.transport.Util.create_session_with_retries",
+                return_value=session,
+            ):
+                with self.assertRaisesRegex(RuntimeError, "Incomplete download"):
+                    transport._parallel_download(
+                        "https://example.org/file.raw",
+                        output_file,
+                    )
+
+    def test_safe_join_preserves_subdirs_and_blocks_escape(self):
+        out = os.path.join("/tmp", "out")
+        # Nested dataset-relative path is preserved under output_folder.
+        assert transport._safe_join(out, "raw/sub/run.raw") == os.path.join(
+            out, "raw", "sub", "run.raw"
+        )
+        # Traversal that escapes output_folder falls back to the basename.
+        assert transport._safe_join(out, "../../etc/passwd") == os.path.join(
+            out, "passwd"
+        )
+
+    def test_download_files_threads_relative_paths_avoiding_collisions(self):
+        """Same-basename files in different collections must not flatten/collide:
+        base.Provider.download_files threads each record's relativePath through
+        to the transport layer."""
+        provider = MassiveProvider()
+        records = [
+            MassiveProvider._build_file_record(
+                "MSV000012345",
+                "ftp://massive-ftp.ucsd.edu/v01/MSV000012345/raw/a/run.raw",
+            ),
+            MassiveProvider._build_file_record(
+                "MSV000012345",
+                "ftp://massive-ftp.ucsd.edu/v01/MSV000012345/raw/b/run.raw",
+            ),
+        ]
+        with patch.object(transport, "download_ftp_urls") as ftp_mock:
+            provider.download_files(
+                accession="MSV000012345",
+                records=records,
+                output_folder="/tmp/out",
+                skip_if_downloaded_already=False,
+                protocol="ftp",
+                parallel_files=1,
+            )
+        kwargs = ftp_mock.call_args.kwargs
+        assert kwargs["relative_paths"] == ["raw/a/run.raw", "raw/b/run.raw"]
+
+    def test_download_files_threads_relative_paths_for_http(self):
+        """The HTTP partition also forwards relativePath to download_http_urls."""
+
+        class _HttpProvider(MassiveProvider):
+            pass
+
+        provider = _HttpProvider()
+        records = [
+            {
+                "accession": "MSV000012345",
+                "fileName": "run.raw",
+                "fileCategory": {"value": "RAW"},
+                "publicFileLocations": [
+                    {"name": "FTP Protocol", "value": "http://example.org/d1/run.raw"}
+                ],
+                "relativePath": "raw/d1/run.raw",
+            },
+        ]
+        with patch.object(transport, "download_http_urls") as http_mock:
+            provider.download_files(
+                accession="MSV000012345",
+                records=records,
+                output_folder="/tmp/out",
+                skip_if_downloaded_already=False,
+                protocol="ftp",
+                parallel_files=1,
+            )
+        assert http_mock.call_args.kwargs["relative_paths"] == ["raw/d1/run.raw"]
+
     def test_validate_download_rejects_empty_and_bad_checksum(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             file_path = os.path.join(tmp_dir, "test.raw")
