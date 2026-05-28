@@ -2,7 +2,7 @@
 import asyncio
 import logging
 import click
-from pridepy.files.files import Files
+from pridepy.download.client import Client as Files
 from pridepy.project.project import Project
 
 PROTOCOL_CHOICES = click.Choice(["ftp", "aspera", "globus", "s3"], case_sensitive=False)
