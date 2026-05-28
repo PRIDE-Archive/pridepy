@@ -112,7 +112,7 @@ class PrideProvider(Provider):
         :param accession: PRIDE accession
         :return: path fragment (eg: 2018/10/PXD008644)
         """
-        records = self.list_files(accession)
+        records = self._list_files_checked(accession)
         raw_files = [r for r in records if r["fileCategory"]["value"] == "RAW"]
         first_file = raw_files[0]["publicFileLocations"][0]["value"]
         path_fragment = re.search(r"\d{4}/\d{2}/PXD\d*", first_file).group()
