@@ -3,8 +3,8 @@ from unittest import TestCase
 from unittest.mock import patch
 
 from pridepy.files.files import Files
-from pridepy.providers import transport
-from pridepy.providers.massive import MassiveProvider
+from pridepy.download import transport
+from pridepy.download.massive import MassiveProvider
 
 
 class TestMassIVEFiles(TestCase):
@@ -140,7 +140,7 @@ class TestMassIVEFiles(TestCase):
 
     def test_base_direct_download_provider_partitions_urls_by_scheme(self):
         """Records mixing ftp:// and http(s):// route to the right transport."""
-        from pridepy.providers.massive import MassiveProvider
+        from pridepy.download.massive import MassiveProvider
 
         provider = MassiveProvider()
         records = [

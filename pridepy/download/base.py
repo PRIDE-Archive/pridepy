@@ -3,8 +3,8 @@ import logging
 from abc import ABC, abstractmethod
 from typing import ClassVar, Dict, List, Optional
 
-from pridepy.providers import transport
-from pridepy.providers import util as _provider_util
+from pridepy.download import transport
+from pridepy.download import util as _provider_util
 
 
 class Provider(ABC):

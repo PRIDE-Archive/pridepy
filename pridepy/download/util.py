@@ -135,7 +135,7 @@ def _get_download_url(file_record: Dict, protocol: str) -> str:
     """
     # Lazy import to avoid module-load cycle with PrideProvider (which lives
     # in the providers package and imports back into util via _resolve_local_path).
-    from pridepy.providers.pride import PrideProvider
+    from pridepy.download.pride import PrideProvider
 
     locations = file_record.get("publicFileLocations", [])
     if not locations:
@@ -175,7 +175,7 @@ def _resolve_local_path(file_record: Dict, output_folder: str) -> str:
     Compute the canonical local path for a file regardless of transfer protocol.
     """
     # Lazy import to avoid module-load cycle with PrideProvider.
-    from pridepy.providers.pride import PrideProvider
+    from pridepy.download.pride import PrideProvider
 
     try:
         canonical_url = _get_download_url(file_record, "ftp")

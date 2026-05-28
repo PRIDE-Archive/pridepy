@@ -15,9 +15,9 @@ from urllib.parse import urlparse
 
 from tqdm import tqdm
 
-from pridepy.providers import transport
-from pridepy.providers import util as _provider_util
-from pridepy.providers.pride import PrideProvider
+from pridepy.download import transport
+from pridepy.download import util as _provider_util
+from pridepy.download.pride import PrideProvider
 from pridepy.util.api_handling import Util
 
 
@@ -130,7 +130,7 @@ def _dispatch_url_scheme(parsed, target: str, protocol: str = "ftp", position: i
     """Route a parsed URL to its protocol-specific downloader.
 
     ``protocol='globus'`` swaps the http/https single-connection streamer
-    for :func:`pridepy.providers.transport._parallel_download` (single-connection
+    for :func:`pridepy.download.transport._parallel_download` (single-connection
     with progress bar). ftp:// URLs are unaffected.
     """
     scheme = (parsed.scheme or "").lower()

@@ -4,13 +4,13 @@ import tempfile
 from unittest import TestCase
 from unittest.mock import Mock, patch
 
-from pridepy.commands import by_url
+from pridepy.download import by_url
 from pridepy.files.files import Files
-from pridepy.providers import transport
-from pridepy.providers import util as provider_util
-from pridepy.providers.massive import MassiveProvider
-from pridepy.providers.pride import PrideProvider
-from pridepy.providers import registry
+from pridepy.download import transport
+from pridepy.download import util as provider_util
+from pridepy.download.massive import MassiveProvider
+from pridepy.download.pride import PrideProvider
+from pridepy.download import registry
 
 
 class TestDownloadResilience(TestCase):
@@ -67,7 +67,7 @@ class TestDownloadResilience(TestCase):
             session.get.return_value = stream_response
 
             with patch(
-                "pridepy.providers.transport.Util.create_session_with_retries",
+                "pridepy.download.transport.Util.create_session_with_retries",
                 return_value=session,
             ):
                 transport._parallel_download(
@@ -92,7 +92,7 @@ class TestDownloadResilience(TestCase):
             session.get.return_value = fallback_response
 
             with patch(
-                "pridepy.providers.transport.Util.create_session_with_retries",
+                "pridepy.download.transport.Util.create_session_with_retries",
                 return_value=session,
             ):
                 transport._parallel_download(
@@ -120,7 +120,7 @@ class TestDownloadResilience(TestCase):
             session.get.return_value = fallback_response
 
             with patch(
-                "pridepy.providers.transport.Util.create_session_with_retries",
+                "pridepy.download.transport.Util.create_session_with_retries",
                 return_value=session,
             ):
                 transport._parallel_download(

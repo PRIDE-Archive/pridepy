@@ -18,8 +18,8 @@ from urllib.parse import urlparse
 
 import requests
 
-from pridepy.providers import registry
-from pridepy.providers.base import BaseDirectDownloadProvider
+from pridepy.download import registry
+from pridepy.download.base import BaseDirectDownloadProvider
 
 
 @registry.register
@@ -71,7 +71,7 @@ class JpostProvider(BaseDirectDownloadProvider):
         when the category isn't known.
         """
         # Import the MassIVE collection->category map for the fallback heuristic.
-        from pridepy.providers.massive import MassiveProvider
+        from pridepy.download.massive import MassiveProvider
         parsed = urlparse(ftp_url)
         root_prefix = f"/{accession.upper()}/"
         relative_path = parsed.path
@@ -103,7 +103,7 @@ class JpostProvider(BaseDirectDownloadProvider):
                 f"JPOST PROXI listing failed for {normalized} "
                 f"({proxi_error}); falling back to FTP tree walk."
             )
-            from pridepy.providers import transport
+            from pridepy.download import transport
             remote_root = self._get_public_root(normalized)
             remote_files = transport._list_ftp_repo_files(
                 host=self.ARCHIVE_FTP,

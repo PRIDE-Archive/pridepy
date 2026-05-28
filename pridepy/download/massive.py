@@ -9,8 +9,8 @@ import re
 from typing import ClassVar, Dict, List
 from urllib.parse import urlparse
 
-from pridepy.providers import registry
-from pridepy.providers.base import BaseDirectDownloadProvider
+from pridepy.download import registry
+from pridepy.download.base import BaseDirectDownloadProvider
 
 
 MASSIVE_CATEGORY_MAP = {
@@ -79,7 +79,7 @@ class MassiveProvider(BaseDirectDownloadProvider):
         }
 
     def list_files(self, accession: str) -> List[Dict]:
-        from pridepy.providers import transport
+        from pridepy.download import transport
         normalized = accession.upper()
         remote_root = self._get_public_root(normalized)
         remote_files = transport._list_ftp_repo_files(

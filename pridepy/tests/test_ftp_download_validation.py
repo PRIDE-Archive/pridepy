@@ -12,7 +12,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from pridepy.providers import transport
+from pridepy.download import transport
 
 
 def _make_fake_ftp(expected_size, write_bytes_per_call):

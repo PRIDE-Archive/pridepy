@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """Public Files facade — thin compatibility surface over the modular
-provider architecture in :mod:`pridepy.providers`.
+provider architecture in :mod:`pridepy.download`.
 
 The provider classes own all transport/listing logic; this module exposes
 a small set of high-level operations (CLI entry points + a handful of
@@ -14,18 +14,18 @@ import requests  # noqa: F401 — kept as a patch target for tests
 
 from pridepy.util.api_handling import Util
 
-from pridepy.providers import registry, transport
-from pridepy.providers import util as _provider_util
-from pridepy.providers.iprox import IproxProvider
-from pridepy.providers.jpost import JpostProvider
-from pridepy.providers.massive import MASSIVE_CATEGORY_MAP, MassiveProvider
-from pridepy.providers.pride import PrideProvider
-from pridepy.providers.proteomexchange import ProteomeXchangeProvider
-from pridepy.commands import by_list, by_url
+from pridepy.download import registry, transport
+from pridepy.download import util as _provider_util
+from pridepy.download.iprox import IproxProvider
+from pridepy.download.jpost import JpostProvider
+from pridepy.download.massive import MASSIVE_CATEGORY_MAP, MassiveProvider
+from pridepy.download.pride import PrideProvider
+from pridepy.download.proteomexchange import ProteomeXchangeProvider
+from pridepy.download import by_list, by_url
 
 # Re-export Progress so external `from pridepy.files.files import Progress`
 # still works.
-from pridepy.providers.util import Progress  # noqa: F401
+from pridepy.download.util import Progress  # noqa: F401
 
 
 class Files:
@@ -69,17 +69,17 @@ class Files:
 
     @staticmethod
     def compute_md5(file_path: str, chunk_size: int = 4 * 1024 * 1024) -> str:
-        """Shim — see :func:`pridepy.providers.util.compute_md5`."""
+        """Shim — see :func:`pridepy.download.util.compute_md5`."""
         return _provider_util.compute_md5(file_path, chunk_size)
 
     @staticmethod
     def validate_download(file_path: str, expected_checksum: Optional[str] = None) -> Tuple[bool, str]:
-        """Shim — see :func:`pridepy.providers.util.validate_download`."""
+        """Shim — see :func:`pridepy.download.util.validate_download`."""
         return _provider_util.validate_download(file_path, expected_checksum)
 
     @staticmethod
     def read_checksum_file(checksum_file_path: str) -> Dict[str, str]:
-        """Shim — see :func:`pridepy.providers.util.read_checksum_file`."""
+        """Shim — see :func:`pridepy.download.util.read_checksum_file`."""
         return _provider_util.read_checksum_file(checksum_file_path)
 
     @staticmethod
@@ -92,7 +92,7 @@ class Files:
         use_tls: bool = False,
         parallel_files: int = 1,
     ) -> None:
-        """Shim — see :func:`pridepy.providers.transport.download_ftp_urls`."""
+        """Shim — see :func:`pridepy.download.transport.download_ftp_urls`."""
         return transport.download_ftp_urls(
             ftp_urls=ftp_urls,
             output_folder=output_folder,
@@ -111,7 +111,7 @@ class Files:
         parallel_files: int = 1,
         max_retries: int = 3,
     ) -> None:
-        """Shim — see :func:`pridepy.providers.transport.download_http_urls`."""
+        """Shim — see :func:`pridepy.download.transport.download_http_urls`."""
         return transport.download_http_urls(
             http_urls=http_urls,
             output_folder=output_folder,
@@ -339,7 +339,7 @@ class Files:
         checksum_check: bool = False,
         parallel_files: int = 1,
     ) -> None:
-        """Delegate to :func:`pridepy.commands.by_list.download_files_by_list`."""
+        """Delegate to :func:`pridepy.download.by_list.download_files_by_list`."""
         return by_list.download_files_by_list(
             accession=accession,
             file_names=file_names,
@@ -360,7 +360,7 @@ class Files:
         parallel_files: int = 1,
         checksum_check: bool = False,
     ) -> None:
-        """Delegate to :func:`pridepy.commands.by_url.download_files_by_url`."""
+        """Delegate to :func:`pridepy.download.by_url.download_files_by_url`."""
         return by_url.download_files_by_url(
             urls=urls,
             output_folder=output_folder,

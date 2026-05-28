@@ -14,7 +14,7 @@ import pytest
 
 from pridepy.files.files import Files
 from pridepy.pridepy import _read_filename_arguments
-from pridepy.providers.pride import PrideProvider
+from pridepy.download.pride import PrideProvider
 
 
 class TestDownloadFilesByList(TestCase):

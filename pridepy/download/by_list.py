@@ -2,7 +2,7 @@
 import logging
 from typing import List, Optional
 
-from pridepy.providers import registry
+from pridepy.download import registry
 
 
 def download_files_by_list(

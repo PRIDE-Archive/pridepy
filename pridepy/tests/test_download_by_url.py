@@ -12,7 +12,7 @@ from unittest.mock import patch
 import click
 import pytest
 
-from pridepy.commands import by_url
+from pridepy.download import by_url
 from pridepy.files.files import Files
 from pridepy.pridepy import _read_url_arguments
 

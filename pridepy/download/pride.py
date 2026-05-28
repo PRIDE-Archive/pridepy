@@ -35,10 +35,10 @@ from botocore.config import Config
 from tqdm import tqdm
 
 from pridepy.authentication.authentication import Authentication
-from pridepy.providers import registry, transport
-from pridepy.providers import util as _provider_util
-from pridepy.providers.base import Provider
-from pridepy.providers.util import Progress
+from pridepy.download import registry, transport
+from pridepy.download import util as _provider_util
+from pridepy.download.base import Provider
+from pridepy.download.util import Progress
 from pridepy.util.api_handling import Util
 
 

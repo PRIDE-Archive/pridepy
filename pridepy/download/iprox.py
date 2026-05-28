@@ -20,9 +20,9 @@ from urllib.parse import urlparse
 
 import requests
 
-from pridepy.providers import registry
-from pridepy.providers.base import BaseDirectDownloadProvider
-from pridepy.providers.jpost import JpostProvider
+from pridepy.download import registry
+from pridepy.download.base import BaseDirectDownloadProvider
+from pridepy.download.jpost import JpostProvider
 
 
 @registry.register
@@ -68,7 +68,7 @@ class IproxProvider(BaseDirectDownloadProvider):
         ``category_from_px`` is the ``cvParam`` ``name`` from the dataset's
         ProteomeXchange XML (e.g. ``"Associated raw file URI"``).
         """
-        from pridepy.providers.massive import MassiveProvider
+        from pridepy.download.massive import MassiveProvider
         parsed = urlparse(https_url)
         root_prefix = f"/{accession.upper()}/"
         relative_path = parsed.path

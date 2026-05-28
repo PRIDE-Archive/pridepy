@@ -4,8 +4,8 @@ from unittest import TestCase
 from unittest.mock import MagicMock, patch
 
 from pridepy.files.files import Files
-from pridepy.providers import transport
-from pridepy.providers.jpost import JpostProvider
+from pridepy.download import transport
+from pridepy.download.jpost import JpostProvider
 
 
 class TestJPOSTFiles(TestCase):
@@ -117,7 +117,7 @@ class TestJPOSTFiles(TestCase):
         fake_response = MagicMock()
         fake_response.content = json.dumps(proxi_response).encode("utf-8")
         fake_response.raise_for_status = MagicMock()
-        with patch("pridepy.providers.jpost.requests.get", return_value=fake_response) as req_mock:
+        with patch("pridepy.download.jpost.requests.get", return_value=fake_response) as req_mock:
             records = JpostProvider()._list_via_proxi("JPST002311")
 
         req_mock.assert_called_once()

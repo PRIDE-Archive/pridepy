@@ -7,7 +7,7 @@ are unambiguous. PRIDE is tried last and acts as the catch-all for
 """
 from typing import List, Type
 
-from pridepy.providers.base import Provider
+from pridepy.download.base import Provider
 
 _PROVIDERS: List[Type[Provider]] = []  # populated by individual provider modules
 

@@ -6,10 +6,10 @@ the XML's ``Associated raw file URI`` cvParams point at the actual hosting
 repository (PRIDE / MassIVE / JPOST / iProX / etc.).
 
 Unlike the other providers in this package, ``ProteomeXchangeProvider`` is
-NOT auto-registered with :mod:`pridepy.providers.registry`. PXD/PRD
+NOT auto-registered with :mod:`pridepy.download.registry`. PXD/PRD
 accessions would otherwise be ambiguous between PRIDE's V3 API listing and
 ProteomeXchange's XML listing; the registry continues to route PXD/PRD via
-:class:`pridepy.providers.pride.PrideProvider`. ``ProteomeXchangeProvider``
+:class:`pridepy.download.pride.PrideProvider`. ``ProteomeXchangeProvider``
 is the explicit gateway invoked by the ``download-px-raw-files`` CLI
 command and by ``Files.download_px_raw_files`` — callers who specifically
 want the cross-repository XML view.
@@ -28,8 +28,8 @@ import xml.etree.ElementTree as ET
 from typing import ClassVar, Dict, List, Optional
 from urllib.parse import urlparse
 
-from pridepy.providers import transport
-from pridepy.providers.base import Provider
+from pridepy.download import transport
+from pridepy.download.base import Provider
 from pridepy.util.api_handling import Util
 
 
@@ -40,7 +40,7 @@ class ProteomeXchangeProvider(Provider):
     def matches(accession: str) -> bool:
         """Return True for PXD/PRD accessions or ProteomeCentral URLs.
 
-        Not used by :mod:`pridepy.providers.registry` (this provider is
+        Not used by :mod:`pridepy.download.registry` (this provider is
         deliberately not auto-registered). Provided for parity with the
         ``Provider`` interface and so direct callers can introspect whether
         a given input looks like something ProteomeXchange knows how to

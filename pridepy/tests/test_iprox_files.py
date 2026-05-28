@@ -14,9 +14,9 @@ from unittest import TestCase
 from unittest.mock import MagicMock, patch
 
 from pridepy.files.files import Files
-from pridepy.providers import transport
-from pridepy.providers.iprox import IproxProvider
-from pridepy.providers.pride import PrideProvider
+from pridepy.download import transport
+from pridepy.download.iprox import IproxProvider
+from pridepy.download.pride import PrideProvider
 
 
 IPROX_XML_FIXTURE = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -81,7 +81,7 @@ class TestIProXFiles(TestCase):
         fake_response.content = IPROX_XML_FIXTURE
         fake_response.raise_for_status = MagicMock()
         with patch(
-            "pridepy.providers.iprox.requests.get", return_value=fake_response
+            "pridepy.download.iprox.requests.get", return_value=fake_response
         ) as req_mock:
             records = IproxProvider().list_files("IPX0017413000")
 
@@ -110,7 +110,7 @@ class TestIProXFiles(TestCase):
         fake_response.content = IPROX_XML_FIXTURE
         fake_response.raise_for_status = MagicMock()
         with patch(
-            "pridepy.providers.iprox.requests.get", return_value=fake_response
+            "pridepy.download.iprox.requests.get", return_value=fake_response
         ), patch.object(PrideProvider, "stream_all_files_by_project") as pride_mock:
             raw_files = files.get_all_raw_file_list("IPX0017413000")
 
@@ -123,7 +123,7 @@ class TestIProXFiles(TestCase):
         fake_response.content = IPROX_XML_FIXTURE
         fake_response.raise_for_status = MagicMock()
         with tempfile.TemporaryDirectory() as tmp_dir, patch(
-            "pridepy.providers.iprox.requests.get", return_value=fake_response
+            "pridepy.download.iprox.requests.get", return_value=fake_response
         ), patch.object(transport, "download_http_urls") as http_mock, patch.object(
             transport, "download_ftp_urls"
         ) as ftp_mock:
