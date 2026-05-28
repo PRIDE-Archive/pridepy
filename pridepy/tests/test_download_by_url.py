@@ -13,7 +13,7 @@ import click
 import pytest
 
 from pridepy.download import by_url
-from pridepy.files.files import Files
+from pridepy.download.client import Client as Files
 from pridepy.pridepy import _read_url_arguments
 
 

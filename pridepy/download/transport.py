@@ -1,8 +1,8 @@
 """Shared FTP / FTPS / HTTPS download transport.
 
-Stateless helpers used by the per-repository providers (and re-exported on
-:class:`pridepy.files.files.Files` for backward compatibility with tests that
-patch ``Files.download_ftp_urls`` etc.).
+Stateless helpers used by the per-repository adapters (and re-exported on
+:class:`pridepy.download.client.Client` for downstream callers that use
+``Client.download_ftp_urls`` etc.).
 """
 import ftplib
 import logging

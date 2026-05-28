@@ -13,7 +13,7 @@ import tempfile
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
 
-from pridepy.files.files import Files
+from pridepy.download.client import Client as Files
 from pridepy.download import transport
 from pridepy.download.iprox import IproxProvider
 from pridepy.download.pride import PrideProvider

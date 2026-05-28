@@ -5,7 +5,7 @@ from unittest import TestCase
 from unittest.mock import Mock, patch
 
 from pridepy.download import by_url
-from pridepy.files.files import Files
+from pridepy.download.client import Client as Files
 from pridepy.download import transport
 from pridepy.download import util as provider_util
 from pridepy.download.massive import MassiveProvider

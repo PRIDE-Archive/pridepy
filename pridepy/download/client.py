@@ -20,8 +20,7 @@ from pridepy.download.pride import PrideProvider
 from pridepy.download.proteomexchange import ProteomeXchangeProvider
 from pridepy.download import by_url
 
-# Re-export Progress so external `from pridepy.download.client import Progress`
-# (and the legacy `from pridepy.files.files import Progress`) still works.
+# Re-export Progress so `from pridepy.download.client import Progress` works.
 from pridepy.download.util import Progress  # noqa: F401
 
 
