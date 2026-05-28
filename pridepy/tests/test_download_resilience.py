@@ -62,6 +62,7 @@ class TestDownloadResilience(TestCase):
 
             stream_response = Mock()
             stream_response.raise_for_status.return_value = None
+            stream_response.headers = {}
             stream_response.iter_content.return_value = [b"abc"]
             stream_response.__enter__ = Mock(return_value=stream_response)
             stream_response.__exit__ = Mock(return_value=None)
@@ -87,6 +88,7 @@ class TestDownloadResilience(TestCase):
 
             fallback_response = Mock()
             fallback_response.raise_for_status.return_value = None
+            fallback_response.headers = {}
             fallback_response.iter_content.return_value = [b"abc"]
             fallback_response.__enter__ = Mock(return_value=fallback_response)
             fallback_response.__exit__ = Mock(return_value=None)
@@ -115,6 +117,7 @@ class TestDownloadResilience(TestCase):
 
             fallback_response = Mock()
             fallback_response.raise_for_status.return_value = None
+            fallback_response.headers = {}
             fallback_response.iter_content.return_value = [b"abc"]
             fallback_response.__enter__ = Mock(return_value=fallback_response)
             fallback_response.__exit__ = Mock(return_value=None)

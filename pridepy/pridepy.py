@@ -640,7 +640,7 @@ def download_files_by_list(
     "--parallel-files",
     default=1,
     type=click.IntRange(1, 3),
-    help="Number of files to download simultaneously (1-3). Primarily used by globus protocol. Default is 1.",
+    help="Number of files to download simultaneously (1-3), for any URL scheme. Default is 1.",
 )
 def download_files_by_url(
     url_list_path,
