@@ -737,15 +737,20 @@ class PrideProvider(Provider):
         accession,
         records: List[Dict],
         output_folder: str,
-        skip_if_downloaded_already,
+        skip_if_downloaded_already: bool = False,
         protocol: str = "ftp",
-        aspera_maximum_bandwidth: str = "100M",
-        checksum_check: bool = False,
         parallel_files: int = 1,
+        checksum_check: bool = False,
+        aspera_maximum_bandwidth: str = "100M",
         username: Optional[str] = None,
         password: Optional[str] = None,
     ):
-        """Implement Provider.download_files — maps to the legacy static batch downloader."""
+        """Override Provider.download_files with the multi-protocol orchestrator.
+
+        Reuses the legacy batch downloader: Phase 1 batches the requested
+        protocol over a single connection, Phase 2 validates every file, and
+        Phase 3 falls back per-file across the remaining protocols.
+        """
         PrideProvider._download_files_batch(
             file_list_json=records,
             accession=accession,
@@ -756,6 +761,73 @@ class PrideProvider(Provider):
             checksum_check=checksum_check,
             parallel_files=parallel_files,
         )
+
+    def download_by_name(
+        self,
+        accession,
+        file_name,
+        output_folder,
+        skip_if_downloaded_already,
+        protocol,
+        username=None,
+        password=None,
+        aspera_maximum_bandwidth="100M",
+        checksum_check=False,
+    ):
+        """Download a single file by name, honouring PRIDE's public/private split.
+
+        PRIDE exposes private datasets via the V2 private API (username +
+        password); public datasets route through the standard listing +
+        multi-protocol download path inherited from :class:`Provider`.
+        """
+        public_project = False
+        project_status = Util.get_api_call(
+            self.API_BASE_URL + "/status/{}".format(accession)
+        )
+
+        if project_status.status_code == 200:
+            if project_status.text == "PRIVATE":
+                public_project = False
+            elif project_status.text == "PUBLIC":
+                public_project = True
+            else:
+                raise Exception(
+                    "Dataset {} is not present in PRIDE Archive".format(accession)
+                )
+
+        if public_project:
+            logging.info("Downloading file from public dataset {}".format(accession))
+            super().download_by_name(
+                accession=accession,
+                file_name=file_name,
+                output_folder=output_folder,
+                skip_if_downloaded_already=skip_if_downloaded_already,
+                protocol=protocol,
+                username=username,
+                password=password,
+                aspera_maximum_bandwidth=aspera_maximum_bandwidth,
+                checksum_check=checksum_check,
+            )
+        elif not public_project and (username is not None and password is not None):
+            logging.info("Downloading file from private dataset {}".format(accession))
+            self.download_private_file_name(
+                accession=accession,
+                file_name=file_name,
+                output_folder=output_folder,
+                username=username,
+                password=password,
+            )
+        else:
+            logging.error(
+                "For a private dataset {} you must provide a username and password".format(
+                    accession
+                )
+            )
+            raise Exception(
+                "For a private dataset {} you must provide a username and password".format(
+                    accession
+                )
+            )
 
     @staticmethod
     def _download_files_batch(
