@@ -1,14 +1,14 @@
 """iProX direct-download provider.
 
 iProX publishes the ProteomeXchange XML for each dataset at a
-deterministic path on its anonymous HTTPS download server::
+deterministic path on its anonymous HTTP download server::
 
     http://download.iprox.org/<accession>/PX_<accession>.xml
 
 We fetch the XML, walk every ``<DatasetFile>``'s ``cvParam`` entries, and
 turn each ``Associated raw file URI`` (and sibling URIs for search-engine
 output, result files, etc.) into a pridepy file record. File downloads
-themselves go through plain HTTPS on the same host, which supports
+themselves go through plain HTTP on the same host, which supports
 ``Range`` requests for resume.
 """
 import logging

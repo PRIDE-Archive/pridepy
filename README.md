@@ -8,7 +8,7 @@
 
 You can:
 - download public and private PRIDE files
-- download public MassIVE (`MSV...`), JPOST (`JPST...`), and iProX (`IPX...`) datasets directly. MassIVE goes through FTPS at `massive-ftp.ucsd.edu`; JPOST uses the JSON PROXI endpoint at `repository.jpostdb.org` for listings and `ftp.jpostdb.org` for transfers; iProX fetches the dataset's ProteomeXchange XML from `download.iprox.org` and downloads files over anonymous HTTPS
+- download public MassIVE (`MSV...`), JPOST (`JPST...`), and iProX (`IPX...`) datasets directly. MassIVE goes through FTPS at `massive-ftp.ucsd.edu`; JPOST uses the JSON PROXI endpoint at `repository.jpostdb.org` for listings and `ftp.jpostdb.org` for transfers; iProX fetches the dataset's ProteomeXchange XML from `download.iprox.org` and downloads files over anonymous HTTP
 - download by category (`RAW`, `SEARCH`, `RESULT`, etc.)
 - stream project and file metadata
 - search projects by keyword and filters
@@ -96,7 +96,7 @@ These options are shared by `download-all-public-raw-files`,
 | `-a, --accession` | Dataset accession (e.g. `PXD008644`) | required |
 | `-o, --output-folder` | Destination directory | required |
 | `-p, --protocol` | Transfer protocol: `ftp`, `aspera`, `globus`, `s3` (FTP-first with fallback) | `ftp` |
-| `-w, --parallel-files` | Download 1–3 files concurrently (primarily for `globus`) | `1` |
+| `-w, --parallel-files` | Download 1–3 files concurrently — primarily for `globus`; not available on `download-file-by-name` | `1` |
 | `--skip-if-downloaded-already` | Resume: skip files already present locally | off |
 | `--checksum-check` | Download PRIDE checksums and validate each file | off |
 | `--aspera-maximum-bandwidth` | Aspera cap, e.g. `50M`, `100M`, `200M` (Aspera only) | `100M` |
@@ -321,7 +321,7 @@ pridepy download-all-public-raw-files \
   -a JPST002311 \
   -o ./downloads/JPST002311
 
-# iProX (ProteomeXchange XML + anonymous HTTPS at download.iprox.org)
+# iProX (ProteomeXchange XML + anonymous HTTP at download.iprox.org)
 pridepy download-all-public-raw-files \
   -a IPX0017413000 \
   -o ./downloads/IPX0017413000
@@ -331,13 +331,13 @@ How each repository is enumerated:
 
 - **MassIVE** walks the FTPS tree at `massive-ftp.ucsd.edu` (the server requires TLS).
 - **JPOST** lists files through the JSON PROXI endpoint at `https://repository.jpostdb.org/proxi/datasets/<JPSTxxxxxx>` and downloads from `ftp.jpostdb.org` over plain FTP. The PROXI listing avoids the source-IP connection limit JPOST enforces on FTP.
-- **iProX** fetches the dataset's ProteomeXchange XML from `http://download.iprox.org/<accession>/PX_<accession>.xml`, then downloads each referenced file from the same host over anonymous HTTPS. iProX also exposes Aspera (`faspe://`) with username/password for very large bulk transfers; `pridepy` uses the public HTTPS endpoint so no iProX credentials are required.
+- **iProX** fetches the dataset's ProteomeXchange XML from `http://download.iprox.org/<accession>/PX_<accession>.xml`, then downloads each referenced file from the same host over anonymous HTTP (with `Range` support for resume). iProX also exposes Aspera (`faspe://`) with username/password for very large bulk transfers; `pridepy` uses the public HTTP endpoint so no iProX credentials are required.
 
-Raw downloads follow each repository's own collection layout, so
-`download-all-public-raw-files` retrieves the files under the dataset's `raw/`
-collection. These direct downloads support resume (REST for FTP, byte-Range for
-HTTPS), per-file retries, parallel workers (`-w` up to 3), and post-transfer
-size verification against the server-reported size.
+`download-all-public-raw-files` retrieves the files stored under the dataset's
+`raw/` collection. These direct downloads support resume (REST for FTP,
+byte-Range for HTTP/HTTPS), per-file retries, and parallel workers (`-w` up to
+3). FTP transfers are additionally checked against the server-reported size
+after each download.
 
 You can also request a specific collection from these repositories through the
 same category interface:

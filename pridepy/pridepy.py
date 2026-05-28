@@ -416,10 +416,10 @@ def stream_files_metadata(accession, output_file):
     "-sf",
     "--sort-fields",
     required=False,
-    default=["submission_date"],
+    default=["submissionDate"],
     multiple=True,
     help="Field(s) for sorting the results on. Default for this "
-    "request is submission_date. More fields can be separated by "
+    "request is submissionDate. More fields can be separated by "
     "comma and passed. Example: submissionDate,accession",
     type=click.Choice(
         "accession,submissionDate,diseases,organismsPart,organisms,instruments,softwares,"
