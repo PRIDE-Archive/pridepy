@@ -8,7 +8,7 @@
 
 You can:
 - download public and private PRIDE files
-- download public MassIVE (`MSV...`), JPOST (`JPST...`), and iProX (`IPX...`) datasets directly. MassIVE goes through FTPS at `massive-ftp.ucsd.edu`; JPOST uses the JSON PROXI endpoint at `repository.jpostdb.org` for listings and `ftp.jpostdb.org` for transfers; iProX fetches the dataset's ProteomeXchange XML from `download.iprox.org` and downloads files over anonymous HTTP
+- download public MassIVE (`MSV...`), JPOST (`JPST...`), and iProX (`IPX...`) datasets directly. MassIVE goes through FTPS at `massive-ftp.ucsd.edu`, with an automatic HTTPS fallback (via the GNPS2 file index and the `massive.ucsd.edu` ProteoSAFe endpoint) for networks that block FTP/FTPS; JPOST uses the JSON PROXI endpoint at `repository.jpostdb.org` for listings and `ftp.jpostdb.org` for transfers; iProX fetches the dataset's ProteomeXchange XML from `download.iprox.org` and downloads files over anonymous HTTP
 - download by category (`RAW`, `SEARCH`, `RESULT`, etc.)
 - stream project and file metadata
 - search projects by keyword and filters
@@ -329,7 +329,7 @@ pridepy download-all-public-raw-files \
 
 How each repository is enumerated:
 
-- **MassIVE** walks the FTPS tree at `massive-ftp.ucsd.edu` (the server requires TLS).
+- **MassIVE** walks the FTPS tree at `massive-ftp.ucsd.edu` (the server requires TLS). If FTP/FTPS is blocked by the network, `pridepy` automatically falls back to HTTPS: it lists the dataset from the GNPS2 file index (`datasetcache.gnps2.org`) and downloads each file from the ProteoSAFe endpoint at `massive.ucsd.edu` (byte-identical to the FTPS copy).
 - **JPOST** lists files through the JSON PROXI endpoint at `https://repository.jpostdb.org/proxi/datasets/<JPSTxxxxxx>` and downloads from `ftp.jpostdb.org` over plain FTP. The PROXI listing avoids the source-IP connection limit JPOST enforces on FTP.
 - **iProX** fetches the dataset's ProteomeXchange XML from `http://download.iprox.org/<accession>/PX_<accession>.xml`, then downloads each referenced file from the same host over anonymous HTTP (with `Range` support for resume). iProX also exposes Aspera (`faspe://`) with username/password for very large bulk transfers; `pridepy` uses the public HTTP endpoint so no iProX credentials are required.
 

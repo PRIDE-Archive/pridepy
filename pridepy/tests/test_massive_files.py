@@ -177,3 +177,70 @@ class TestMassIVEFiles(TestCase):
         ]
         http_mock.assert_called_once()
         assert http_mock.call_args.kwargs["http_urls"] == ["http://example.org/b.raw"]
+
+    def test_get_https_url_builds_proteosafe_endpoint(self):
+        url = MassiveProvider._get_https_url(
+            "MSV000012345", "raw/Raw spec/C 3.raw"
+        )
+        # Path slashes/dots preserved, spaces percent-encoded.
+        assert url == (
+            "https://massive.ucsd.edu/ProteoSAFe/DownloadResultFile?forceDownload=true"
+            "&file=f.MSV000012345/raw/Raw%20spec/C%203.raw"
+        )
+
+    def test_build_https_file_record_sets_relpath_category_and_https_location(self):
+        record = MassiveProvider._build_https_file_record(
+            "MSV000012345", "raw/sub/run.raw"
+        )
+        assert record["relativePath"] == "raw/sub/run.raw"
+        assert record["fileName"] == "run.raw"
+        assert record["collection"] == "raw"
+        assert record["fileCategory"]["value"] == "RAW"
+        location = record["publicFileLocations"][0]
+        assert location["value"].startswith(
+            "https://massive.ucsd.edu/ProteoSAFe/DownloadResultFile?"
+        )
+        assert location["value"].endswith("file=f.MSV000012345/raw/sub/run.raw")
+
+    def test_list_files_falls_back_to_https_when_ftps_blocked(self):
+        """When the FTPS tree walk raises (e.g. FTPS blocked), list_files must
+        fall back to the HTTPS file index and emit HTTPS-download records."""
+        csv_text = (
+            "usi,filepath\n"
+            "mzspec:MSV000012345:raw/a/run.raw,raw/a/run.raw\n"
+            "mzspec:MSV000012345:raw/b/run.raw,raw/b/run.raw\n"
+            "mzspec:MSV000012345:ccms_result/x.mzid,ccms_result/x.mzid\n"
+        )
+
+        class _FakeCSVResponse:
+            def raise_for_status(self):
+                return None
+
+            def iter_lines(self):
+                for line in csv_text.splitlines():
+                    yield line.encode("utf-8")
+
+        with patch.object(
+            transport, "_list_ftp_repo_files", side_effect=RuntimeError("FTPS blocked")
+        ), patch(
+            "pridepy.download.massive.requests.get", return_value=_FakeCSVResponse()
+        ):
+            records = MassiveProvider().list_files("MSV000012345")
+
+        assert {r["relativePath"] for r in records} == {
+            "raw/a/run.raw",
+            "raw/b/run.raw",
+            "ccms_result/x.mzid",
+        }
+        # Same-basename files in different collections are kept distinct.
+        run_records = [r for r in records if r["fileName"] == "run.raw"]
+        assert len(run_records) == 2
+        for record in records:
+            assert record["publicFileLocations"][0]["value"].startswith("https://")
+        # Downstream RAW filtering still works on the HTTPS records.
+        raw_names = {
+            rec["fileName"]
+            for rec in records
+            if rec["fileCategory"]["value"] == "RAW"
+        }
+        assert raw_names == {"run.raw"}
