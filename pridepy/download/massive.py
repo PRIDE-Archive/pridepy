@@ -1,7 +1,11 @@
 """MassIVE direct-download provider.
 
 Primary path: list files by walking the FTPS tree at massive-ftp.ucsd.edu
-(TLS is required by the server) and download them over FTPS.
+(TLS is required by the server) and download them over FTPS. MassIVE spreads
+datasets across versioned root directories (``/v01`` … ``/vNN``) plus auxiliary
+roots (``x01`` / ``z01``) that may hold only a partial, peak-only copy; the
+version is not derivable from the accession, so the correct root is discovered
+at listing time and the versioned roots are preferred over the auxiliary ones.
 
 HTTPS fallback: some networks block FTP/FTPS entirely. When the FTPS
 listing fails, fall back to the HTTPS file index at datasetcache.gnps2.org
@@ -59,17 +63,18 @@ class MassiveProvider(Provider):
             return False
         return bool(re.fullmatch(r"R?MSV\d{9}", accession.upper()))
 
-    @staticmethod
-    def _get_public_root(accession: str) -> str:
-        return f"/v01/{accession.upper()}"
-
     @classmethod
     def _get_public_ftp_url(cls, accession: str, remote_path: str) -> str:
-        root_path = cls._get_public_root(accession).rstrip("/")
-        relative_path = remote_path
-        if remote_path.startswith(root_path):
-            relative_path = remote_path[len(root_path):].lstrip("/")
-        return f"{cls.ARCHIVE_FTP_URL_PREFIX}{accession.upper()}/{relative_path}"
+        """Build the FTPS URL for an absolute server path inside the dataset.
+
+        ``remote_path`` is the absolute path returned by the tree walk
+        (e.g. ``/v04/MSV000088302/ccms_peak/run.mzML``). MassIVE distributes
+        datasets across versioned roots, so the version is preserved as-is
+        rather than assumed to be ``v01``.
+        """
+        if not remote_path.startswith("/"):
+            remote_path = "/" + remote_path
+        return f"ftp://{cls.ARCHIVE_FTP}{remote_path}"
 
     @staticmethod
     def _map_collection_to_category(collection: str) -> str:
@@ -79,10 +84,14 @@ class MassiveProvider(Provider):
     def _build_file_record(cls, accession: str, ftp_url: str) -> Dict:
         """Build a pridepy file record from an FTP URL inside the dataset."""
         parsed = urlparse(ftp_url)
-        root_prefix = f"/v01/{accession.upper()}/"
+        # The version root differs per dataset (/v01../vNN), so derive the
+        # dataset-relative path from the accession marker rather than a fixed
+        # ``/v01/<accession>/`` prefix.
+        marker = f"/{accession.upper()}/"
         relative_path = parsed.path
-        if relative_path.startswith(root_prefix):
-            relative_path = relative_path[len(root_prefix):]
+        marker_index = relative_path.find(marker)
+        if marker_index != -1:
+            relative_path = relative_path[marker_index + len(marker):]
         relative_path = relative_path.lstrip("/")
         collection = relative_path.split("/", 1)[0] if relative_path else ""
         return {
@@ -159,13 +168,18 @@ class MassiveProvider(Provider):
     def list_files(self, accession: str) -> List[Dict]:
         from pridepy.download import transport
         normalized = accession.upper()
-        remote_root = self._get_public_root(normalized)
         try:
-            remote_files = transport._list_ftp_repo_files(
+            # The version root (/v01../vNN) is not derivable from the
+            # accession, so discover which root holds the dataset instead of
+            # assuming /v01.
+            remote_files = transport._resolve_and_walk_ftp_dataset(
                 host=self.ARCHIVE_FTP,
-                remote_root=remote_root,
+                accession=normalized,
                 error_label=f"MassIVE dataset {normalized}",
                 use_tls=True,
+                # /vNN roots hold the complete dataset; x01/z01 hold only
+                # partial (peak-only) copies, so prefer the versioned roots.
+                prefer_prefix="v",
             )
         except Exception as ftps_error:
             logging.warning(

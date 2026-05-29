@@ -1,3 +1,4 @@
+import ftplib
 import tempfile
 from unittest import TestCase
 from unittest.mock import patch
@@ -188,6 +189,91 @@ class TestMassIVEFiles(TestCase):
             "&file=f.MSV000012345/raw/Raw%20spec/C%203.raw"
         )
 
+    def test_build_massive_file_record_handles_non_v01_version_root(self):
+        """Datasets live under v01..vNN; records must preserve the real root."""
+        record = MassiveProvider._build_file_record(
+            "MSV000088302",
+            "ftp://massive-ftp.ucsd.edu/v04/MSV000088302/ccms_peak/run.mzML",
+        )
+
+        assert record["relativePath"] == "ccms_peak/run.mzML"
+        assert record["collection"] == "ccms_peak"
+        assert record["fileName"] == "run.mzML"
+        assert record["fileCategory"]["value"] == "PEAK"
+        assert (
+            record["publicFileLocations"][0]["value"]
+            == "ftp://massive-ftp.ucsd.edu/v04/MSV000088302/ccms_peak/run.mzML"
+        )
+
+    def test_get_public_ftp_url_preserves_version_root(self):
+        url = MassiveProvider._get_public_ftp_url(
+            "MSV000088302", "/v04/MSV000088302/ccms_peak/run.mzML"
+        )
+        assert url == "ftp://massive-ftp.ucsd.edu/v04/MSV000088302/ccms_peak/run.mzML"
+
+    def test_list_files_discovers_version_root_when_not_v01(self):
+        """list_files probes top-level roots and walks the one holding the
+        dataset, so a dataset under /v04 is listed with v04 download URLs."""
+        def fake_nlst(command, callback):
+            assert command == "NLST /"
+            for name in ["v01", "v02", "v03", "v04", "v05"]:
+                callback(name)
+
+        def fake_cwd(path):
+            # Only the real root accepts the CWD; others 550.
+            if path != "/v04/MSV000088302":
+                raise ftplib.error_perm("550 CD issue: file does not exist")
+
+        with patch.object(transport, "_open_ftp_connection") as open_conn, patch.object(
+            transport,
+            "_walk_ftp_tree",
+            return_value=["/v04/MSV000088302/ccms_peak/run.mzML"],
+        ) as walk_mock:
+            fake_ftp = open_conn.return_value
+            fake_ftp.retrlines.side_effect = fake_nlst
+            fake_ftp.cwd.side_effect = fake_cwd
+
+            records = MassiveProvider().list_files("MSV000088302")
+
+        walk_mock.assert_called_once_with(fake_ftp, "/v04/MSV000088302")
+        assert len(records) == 1
+        assert records[0]["relativePath"] == "ccms_peak/run.mzML"
+        assert (
+            records[0]["publicFileLocations"][0]["value"]
+            == "ftp://massive-ftp.ucsd.edu/v04/MSV000088302/ccms_peak/run.mzML"
+        )
+
+    def test_list_files_prefers_versioned_root_over_auxiliary_root(self):
+        """x01/z01 can hold a partial (peak-only) copy while the full dataset
+        lives under a vNN root, so the versioned root must win even when both
+        exist."""
+        def fake_nlst(command, callback):
+            for name in ["x01", "z01", "v04"]:
+                callback(name)
+
+        existing = {"/z01/MSV000088302", "/v04/MSV000088302"}
+
+        def fake_cwd(path):
+            if path not in existing:
+                raise ftplib.error_perm("550 CD issue: file does not exist")
+
+        with patch.object(transport, "_open_ftp_connection") as open_conn, patch.object(
+            transport,
+            "_walk_ftp_tree",
+            return_value=["/v04/MSV000088302/raw/run.raw"],
+        ) as walk_mock:
+            fake_ftp = open_conn.return_value
+            fake_ftp.retrlines.side_effect = fake_nlst
+            fake_ftp.cwd.side_effect = fake_cwd
+
+            records = MassiveProvider().list_files("MSV000088302")
+
+        walk_mock.assert_called_once_with(fake_ftp, "/v04/MSV000088302")
+        assert (
+            records[0]["publicFileLocations"][0]["value"]
+            == "ftp://massive-ftp.ucsd.edu/v04/MSV000088302/raw/run.raw"
+        )
+
     def test_build_https_file_record_sets_relpath_category_and_https_location(self):
         record = MassiveProvider._build_https_file_record(
             "MSV000012345", "raw/sub/run.raw"
@@ -221,7 +307,9 @@ class TestMassIVEFiles(TestCase):
                     yield line.encode("utf-8")
 
         with patch.object(
-            transport, "_list_ftp_repo_files", side_effect=RuntimeError("FTPS blocked")
+            transport,
+            "_resolve_and_walk_ftp_dataset",
+            side_effect=RuntimeError("FTPS blocked"),
         ), patch(
             "pridepy.download.massive.requests.get", return_value=_FakeCSVResponse()
         ):

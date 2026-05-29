@@ -159,6 +159,74 @@ def _list_ftp_repo_files(
                     pass
 
 
+def _resolve_and_walk_ftp_dataset(
+    host: str,
+    accession: str,
+    error_label: str,
+    use_tls: bool = False,
+    prefer_prefix: str = "",
+) -> List[str]:
+    """
+    Find which top-level directory on ``host`` holds ``accession`` and walk it.
+
+    Some repositories (e.g. MassIVE) distribute datasets across several
+    versioned root directories (``/v01`` … ``/vNN``, plus auxiliary roots like
+    ``x01`` / ``z01`` that may hold only a partial, derived copy) and the
+    version is not derivable from the accession. Probe each top-level directory
+    for ``<root>/<accession>`` and walk the first match, reusing a single
+    connection for both discovery and listing.
+
+    ``prefer_prefix`` lets the caller try the canonical roots first: roots
+    whose name starts with the prefix (e.g. ``"v"`` for MassIVE versioned
+    storage) are probed before any others, so a complete copy is chosen over
+    an auxiliary partial one when a dataset exists under both.
+
+    :raises RuntimeError: on connection failure or when the accession is not
+        found under any top-level directory.
+    """
+    ftp: Optional[FTP] = None
+    try:
+        ftp = _open_ftp_connection(host, use_tls=use_tls)
+        logging.info(f"Connected to FTP host: {host} (tls={use_tls})")
+        roots: List[str] = []
+        ftp.retrlines("NLST /", roots.append)
+        # Servers may return bare names or absolute paths; keep the leaf name.
+        candidates = []
+        for entry in roots:
+            name = entry.strip().strip("/").split("/")[-1]
+            if name and name not in {".", ".."}:
+                candidates.append(name)
+        if prefer_prefix:
+            prefix = prefer_prefix.lower()
+            candidates.sort(
+                key=lambda n: (not n.lower().startswith(prefix), n)
+            )
+        for name in candidates:
+            dataset_root = f"/{name}/{accession}"
+            try:
+                ftp.cwd(dataset_root)
+            except ftplib.error_perm:
+                continue
+            logging.info(f"Found {accession} under {dataset_root} on {host}")
+            return _walk_ftp_tree(ftp, dataset_root)
+        raise RuntimeError(
+            f"{accession} not found under any top-level directory on {host}"
+        )
+    except Exception as error:
+        raise RuntimeError(
+            f"Unable to list public files for {error_label}: {error}"
+        ) from error
+    finally:
+        if ftp is not None:
+            try:
+                ftp.quit()
+            except Exception:
+                try:
+                    ftp.close()
+                except Exception:
+                    pass
+
+
 def _download_one_ftp_path(
     ftp: FTP,
     ftp_path: str,
