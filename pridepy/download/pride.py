@@ -13,19 +13,16 @@ shared ``transport`` / ``util`` helpers — they do NOT call back into the
 ``Client`` facade. Tests patch the canonical locations
 (``PrideProvider.X``, ``transport.X``, ``util.X``) directly.
 """
-import ftplib
 import importlib.resources
 import logging
 import os
 import platform
 import re
-import socket
 import subprocess
 import time
 import urllib
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from ftplib import FTP
 from typing import ClassVar, Dict, List, Optional
 from urllib.parse import urlparse
 
@@ -326,126 +323,6 @@ class PrideProvider(Provider):
     # ------------------------------------------------------------------
     # Per-protocol batch helpers
     # ------------------------------------------------------------------
-
-    @staticmethod
-    def download_files_from_ftp(
-        file_list_json,
-        output_folder,
-        skip_if_downloaded_already,
-        max_connection_retries=3,
-        max_download_retries=3,
-    ):
-        """
-        Download files using a single FTP connection with a retry mechanism and a progress bar for each file.
-        :param file_list_json: file list in JSON format
-        :param output_folder: folder to download the files
-        :param skip_if_downloaded_already: Boolean value to skip the download if the file has already been downloaded.
-        :param max_connection_retries: Number of attempts to reconnect to the FTP server if the connection is lost.
-        :param max_download_retries: Number of attempts to retry the download of a file in case of failure.
-        """
-        if not os.path.isdir(output_folder):
-            os.makedirs(output_folder)
-
-        def connect_ftp():
-            """Helper function to establish FTP connection."""
-            ftp = FTP(PrideProvider.ARCHIVE_FTP, timeout=30)
-            ftp.login()  # Anonymous login
-            ftp.set_pasv(True)  # Enable passive mode
-            logging.info(f"Connected to FTP host: {PrideProvider.ARCHIVE_FTP}")
-            return ftp
-
-        connection_attempt = 0
-        while connection_attempt < max_connection_retries:
-            try:
-                ftp = connect_ftp()
-                for file in file_list_json:
-                    try:
-                        # Get FTP download URL
-                        if file["publicFileLocations"][0]["name"] == "FTP Protocol":
-                            download_url = file["publicFileLocations"][0]["value"]
-                        else:
-                            download_url = file["publicFileLocations"][1]["value"]
-
-                        logging.debug("ftp_filepath:" + download_url)
-
-                        # Get output file path
-                        new_file_path = PrideProvider.get_output_file_name(
-                            download_url, file, output_folder
-                        )
-
-                        if skip_if_downloaded_already and os.path.exists(new_file_path):
-                            logging.info("Skipping download as file already exists")
-                            continue
-
-                        # Extract file path from the download URL
-                        parsed_url = urlparse(download_url)
-                        ftp_file_path = urllib.parse.unquote(parsed_url.path.lstrip("/"))
-
-                        logging.info(f"Starting FTP download: {ftp_file_path}")
-
-                        # Retry download in case of failure
-                        download_attempt = 0
-                        while download_attempt < max_download_retries:
-                            try:
-                                # Get file size for progress tracking
-                                total_size = ftp.size(ftp_file_path)
-                                logging.info(f"File size: {total_size} bytes")
-
-                                # Initialize progress bar
-                                with open(new_file_path, "wb") as f:
-                                    with tqdm(
-                                        total=total_size,
-                                        unit="B",
-                                        unit_scale=True,
-                                        desc=new_file_path,
-                                    ) as pbar:
-
-                                        def callback(data):
-                                            f.write(data)
-                                            pbar.update(len(data))
-
-                                        # Retrieve the file with progress callback
-                                        ftp.retrbinary(f"RETR {ftp_file_path}", callback)
-
-                                logging.info(f"Successfully downloaded {new_file_path}")
-                                break  # Exit download retry loop if successful
-                            except (
-                                socket.timeout,
-                                ftplib.error_temp,
-                                ftplib.error_perm,
-                            ) as e:
-                                download_attempt += 1
-                                logging.error(
-                                    f"Download failed for {new_file_path} (attempt {download_attempt}): {str(e)}"
-                                )
-                                if download_attempt >= max_download_retries:
-                                    logging.error(
-                                        f"Giving up on {new_file_path} after {max_download_retries} attempts."
-                                    )
-                                    break  # Give up on this file after max retries
-                    except (KeyError, IndexError) as e:
-                        logging.error(f"Failed to process file due to missing data: {str(e)}")
-                    except Exception as e:
-                        logging.error(f"Unexpected error while processing file: {str(e)}")
-                ftp.quit()  # Close FTP connection after all files are downloaded
-                logging.info(f"Disconnected from FTP host: {PrideProvider.ARCHIVE_FTP}")
-                break  # Exit connection retry loop if everything was successful
-            except (
-                socket.timeout,
-                ftplib.error_temp,
-                ftplib.error_perm,
-                socket.error,
-            ) as e:
-                connection_attempt += 1
-                logging.error(f"FTP connection failed (attempt {connection_attempt}): {str(e)}")
-                if connection_attempt < max_connection_retries:
-                    logging.info("Retrying connection...")
-                    time.sleep(5)  # Optional delay before retrying
-                else:
-                    logging.error(
-                        f"Giving up after {max_connection_retries} failed connection attempts."
-                    )
-                    break
 
     @staticmethod
     def download_files_from_aspera(
@@ -759,10 +636,21 @@ class PrideProvider(Provider):
         if not file_list:
             return
         if protocol == "ftp":
-            PrideProvider.download_files_from_ftp(
-                file_list,
-                output_folder,
+            # Route through the shared transport, which downloads each file on
+            # its own connection with REST-based resume, post-transfer size
+            # checks, and per-file reconnect — so one slow/timed-out large file
+            # no longer poisons the connection and cascade-fails the rest of the
+            # batch (issue #107). Files land flat by basename (PRIDE archive is
+            # flat within a dataset), matching ``_resolve_local_path``.
+            ftp_urls = [
+                PrideProvider._get_download_url(record, "ftp") for record in file_list
+            ]
+            transport.download_ftp_urls(
+                ftp_urls=ftp_urls,
+                output_folder=output_folder,
                 skip_if_downloaded_already=skip_if_downloaded_already,
+                use_tls=False,
+                parallel_files=parallel_files,
             )
             return
         if protocol == "aspera":
@@ -864,15 +752,14 @@ class PrideProvider(Provider):
     ):
         """Override Provider.download_files with the multi-protocol orchestrator.
 
-        Reuses the legacy batch downloader: Phase 1 batches the requested
-        protocol over a single connection; Phase 2 validates every file and,
-        for any that fail, falls back per-file across the remaining protocols.
+        Phase 1 batches the requested protocol (FTP routes through the shared
+        transport with per-file reconnect + REST resume); Phase 2 validates
+        every file and falls back per-file across the remaining protocols.
 
-        ``flatten`` is accepted for interface parity but is currently a no-op
-        for PRIDE: the legacy batch path already writes every file directly
-        into ``output_folder`` by basename. Structure-preserving downloads for
-        PRIDE arrive when this path is routed through the shared transport
-        layer (see issue #107).
+        ``flatten`` is accepted for interface parity but is a no-op for PRIDE:
+        a dataset's files live flat in its archive directory (no sub-tree to
+        preserve), so they always land directly in ``output_folder`` by
+        basename, which is what ``_resolve_local_path`` expects for Phase 2.
         """
         PrideProvider._download_files_batch(
             file_list_json=records,

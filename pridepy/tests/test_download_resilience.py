@@ -400,6 +400,52 @@ class TestDownloadResilience(TestCase):
         assert PrideProvider._protocol_sequence("ftp") == ["ftp", "aspera", "s3", "globus"]
         assert PrideProvider._protocol_sequence("aspera") == ["aspera", "s3", "ftp", "globus"]
 
+    def test_pride_ftp_batch_routes_through_shared_transport(self):
+        """PRIDE FTP batch downloads must use transport.download_ftp_urls
+        (per-file reconnect + REST resume + size checks) instead of the legacy
+        single-connection loop that cascades on one timeout (issue #107)."""
+        records = [
+            {
+                "fileName": "a.raw",
+                "accession": "PXD000001",
+                "publicFileLocations": [
+                    {
+                        "name": "FTP Protocol",
+                        "value": "ftp://ftp.pride.ebi.ac.uk/pride/data/archive/2024/05/PXD000001/a.raw",
+                    }
+                ],
+            },
+            {
+                "fileName": "b.raw",
+                "accession": "PXD000001",
+                "publicFileLocations": [
+                    {
+                        "name": "FTP Protocol",
+                        "value": "ftp://ftp.pride.ebi.ac.uk/pride/data/archive/2024/05/PXD000001/b.raw",
+                    }
+                ],
+            },
+        ]
+        with patch.object(transport, "download_ftp_urls") as ftp_mock:
+            PrideProvider._batch_download_by_protocol(
+                records,
+                "/tmp/out",
+                "ftp",
+                skip_if_downloaded_already=False,
+                aspera_maximum_bandwidth="100M",
+                parallel_files=2,
+            )
+
+        ftp_mock.assert_called_once()
+        kwargs = ftp_mock.call_args.kwargs
+        assert kwargs["ftp_urls"] == [
+            "ftp://ftp.pride.ebi.ac.uk/pride/data/archive/2024/05/PXD000001/a.raw",
+            "ftp://ftp.pride.ebi.ac.uk/pride/data/archive/2024/05/PXD000001/b.raw",
+        ]
+        assert kwargs["use_tls"] is False
+        assert kwargs["parallel_files"] == 2
+        assert kwargs["skip_if_downloaded_already"] is False
+
     def test_download_with_fallback_switches_protocol_after_invalid_file(self):
         file_record = {
             "fileName": "sample.raw",
