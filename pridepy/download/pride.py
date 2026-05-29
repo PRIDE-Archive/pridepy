@@ -122,7 +122,7 @@ class PrideProvider(Provider):
                 f"no RAW file with a public location was found."
             )
         first_file = raw_files[0]["publicFileLocations"][0]["value"]
-        match = re.search(r"\d{4}/\d{2}/PXD\d*", first_file)
+        match = re.search(r"\d{4}/\d{2}/(?:PXD|PRD)\d*", first_file)
         if match is None:
             raise ValueError(
                 f"Cannot determine submitted path prefix for {accession}: "
@@ -358,6 +358,7 @@ class PrideProvider(Provider):
             "aspera/key/asperaweb_id_dsa.openssh"
         )
         key_path = os.path.abspath(key_full_path)
+        failed: List[str] = []
         for file in file_list_json:
             if file["publicFileLocations"][0]["name"] == "Aspera Protocol":
                 download_url = file["publicFileLocations"][0]["value"]
@@ -392,6 +393,11 @@ class PrideProvider(Provider):
                 logging.info(f"Successfully downloaded {new_file_path} via Aspera")
             except subprocess.CalledProcessError as e:
                 logging.error(f"Aspera download failed for {new_file_path}: {str(e)}")
+                failed.append(file.get("fileName", new_file_path))
+        if failed:
+            raise RuntimeError(
+                f"Aspera download failed for {len(failed)} file(s): {failed}"
+            )
 
     @staticmethod
     def download_files_from_globus(
@@ -446,6 +452,7 @@ class PrideProvider(Provider):
 
         # --- Phase 1: download (skip check already done, pass False) ---------
         parallel_files = min(parallel_files, 3, len(files_to_download))
+        failed: List[str] = []
         if parallel_files < 2:
             for file in files_to_download:
                 try:
@@ -458,6 +465,7 @@ class PrideProvider(Provider):
                     logging.info(f"Successfully downloaded {new_file_path}")
                 except Exception as e:
                     logging.error(f"Download from Globus failed: {str(e)}")
+                    failed.append(file.get("fileName", "<unknown>"))
         else:
             logging.info(f"Downloading {len(files_to_download)} file(s) with {parallel_files} parallel workers")
             with ThreadPoolExecutor(max_workers=parallel_files) as executor:
@@ -474,6 +482,11 @@ class PrideProvider(Provider):
                         future.result()
                     except Exception as e:
                         logging.error(f"Download from Globus failed: {str(e)}")
+                        failed.append(futures[future].get("fileName", "<unknown>"))
+        if failed:
+            raise RuntimeError(
+                f"Globus download failed for {len(failed)} file(s): {failed}"
+            )
 
     @staticmethod
     def download_files_from_s3(
@@ -503,6 +516,7 @@ class PrideProvider(Provider):
         )
         bucket = s3_resource.Bucket(PrideProvider.S3_BUCKET)
 
+        failed: List[str] = []
         for file in file_list_json:
             try:
                 # Determine S3 or FTP path
@@ -548,7 +562,12 @@ class PrideProvider(Provider):
                             else:
                                 raise
             except Exception as e:
-                logging.error(f"Failed to download {file['fileName']}: {e}")
+                logging.error(f"Failed to download {file.get('fileName')}: {e}")
+                failed.append(file.get("fileName", "<unknown>"))
+        if failed:
+            raise RuntimeError(
+                f"S3 download failed for {len(failed)} file(s): {failed}"
+            )
 
     # ------------------------------------------------------------------
     # Private dataset download
