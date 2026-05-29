@@ -9,9 +9,39 @@ re-exports for backward compatibility with existing test patches.
 import hashlib
 import logging
 import os
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from tqdm import tqdm
+
+
+def flatten_relative_paths(relative_paths: List[str]) -> List[str]:
+    """Map dataset-relative paths to flat, de-duplicated basenames.
+
+    Used when downloading into a single output folder without recreating the
+    dataset's subdirectory tree. Files keep their basename; when two or more
+    source paths collapse to the same basename, the first one (by sorted source
+    path) keeps the bare name and later ones get a numeric suffix inserted
+    before the final extension (``run.raw`` -> ``run_1.raw``).
+
+    Suffixing is decided by the *sorted* source paths so the mapping is
+    deterministic across runs (independent of disk state or input order),
+    keeping skip-if-downloaded and resume stable. The returned list is
+    positionally aligned with ``relative_paths`` so callers can zip it back to
+    their records.
+    """
+    assigned: Dict[str, str] = {}
+    seen_basenames: Dict[str, int] = {}
+    # Decide names in sorted-source order so the result is deterministic.
+    for source in sorted(relative_paths):
+        basename = os.path.basename((source or "").lstrip("/"))
+        count = seen_basenames.get(basename, 0)
+        if count == 0:
+            assigned[source] = basename
+        else:
+            stem, ext = os.path.splitext(basename)
+            assigned[source] = f"{stem}_{count}{ext}"
+        seen_basenames[basename] = count + 1
+    return [assigned[source] for source in relative_paths]
 
 
 class Progress:

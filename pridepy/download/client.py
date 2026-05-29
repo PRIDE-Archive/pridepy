@@ -186,6 +186,7 @@ class Client:
         aspera_maximum_bandwidth: str,
         checksum_check: bool = False,
         parallel_files: int = 1,
+        flatten: bool = True,
     ):
         """Download all RAW files for any registered provider."""
         return registry.resolve(accession).download_all_raw(
@@ -196,6 +197,7 @@ class Client:
             aspera_maximum_bandwidth=aspera_maximum_bandwidth,
             checksum_check=checksum_check,
             parallel_files=parallel_files,
+            flatten=flatten,
         )
 
     def download_all_category_files(
@@ -209,6 +211,7 @@ class Client:
         categories: List[str] = None,
         category: str = None,
         parallel_files: int = 1,
+        flatten: bool = True,
     ):
         """Download all files of the given categories from a project."""
         if categories is None:
@@ -222,6 +225,7 @@ class Client:
             aspera_maximum_bandwidth=aspera_maximum_bandwidth,
             checksum_check=checksum_check,
             parallel_files=parallel_files,
+            flatten=flatten,
         )
 
     def download_file_by_name(
@@ -264,6 +268,7 @@ class Client:
         aspera_maximum_bandwidth: str = "100M",
         checksum_check: bool = False,
         parallel_files: int = 1,
+        flatten: bool = True,
     ) -> None:
         """Download a subset of project files identified by a filename list."""
         return registry.resolve(accession).download_by_filenames(
@@ -275,6 +280,7 @@ class Client:
             aspera_maximum_bandwidth=aspera_maximum_bandwidth,
             checksum_check=checksum_check,
             parallel_files=parallel_files,
+            flatten=flatten,
         )
 
     @staticmethod
@@ -301,8 +307,9 @@ class Client:
         px_id_or_url: str,
         output_folder: str,
         skip_if_downloaded_already: bool = True,
+        flatten: bool = True,
     ) -> None:
         """Delegate to :meth:`ProteomeXchangeProvider.download_from_accession_or_url`."""
         return ProteomeXchangeProvider().download_from_accession_or_url(
-            px_id_or_url, output_folder, skip_if_downloaded_already
+            px_id_or_url, output_folder, skip_if_downloaded_already, flatten=flatten
         )

@@ -169,6 +169,7 @@ class ProteomeXchangeProvider(Provider):
         px_id_or_url: str,
         output_folder: str,
         skip_if_downloaded_already: bool = True,
+        flatten: bool = True,
     ) -> None:
         """End-to-end: resolve XML, list files, partition by scheme, download.
 
@@ -187,4 +188,5 @@ class ProteomeXchangeProvider(Provider):
             output_folder=output_folder,
             skip_if_downloaded_already=skip_if_downloaded_already,
             protocol="ftp",
+            flatten=flatten,
         )

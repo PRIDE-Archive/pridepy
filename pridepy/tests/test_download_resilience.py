@@ -173,10 +173,10 @@ class TestDownloadResilience(TestCase):
             out, "passwd"
         )
 
-    def test_download_files_threads_relative_paths_avoiding_collisions(self):
-        """Same-basename files in different collections must not flatten/collide:
-        base.Provider.download_files threads each record's relativePath through
-        to the transport layer."""
+    def test_download_files_preserves_relative_paths_when_flatten_false(self):
+        """With flatten=False, base.Provider.download_files threads each
+        record's relativePath through to the transport layer so same-basename
+        files in different collections keep their subdirectory layout."""
         provider = MassiveProvider()
         records = [
             MassiveProvider._build_file_record(
@@ -196,12 +196,14 @@ class TestDownloadResilience(TestCase):
                 skip_if_downloaded_already=False,
                 protocol="ftp",
                 parallel_files=1,
+                flatten=False,
             )
         kwargs = ftp_mock.call_args.kwargs
         assert kwargs["relative_paths"] == ["raw/a/run.raw", "raw/b/run.raw"]
 
     def test_download_files_threads_relative_paths_for_http(self):
-        """The HTTP partition also forwards relativePath to download_http_urls."""
+        """With flatten=False, the HTTP partition also forwards relativePath to
+        download_http_urls."""
 
         class _HttpProvider(MassiveProvider):
             pass
@@ -226,6 +228,7 @@ class TestDownloadResilience(TestCase):
                 skip_if_downloaded_already=False,
                 protocol="ftp",
                 parallel_files=1,
+                flatten=False,
             )
         assert http_mock.call_args.kwargs["relative_paths"] == ["raw/d1/run.raw"]
 

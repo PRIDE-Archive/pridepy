@@ -58,6 +58,13 @@ def main():
     type=click.IntRange(1, 3),
     help="Number of files to download simultaneously (1-3). Primarily used by globus protocol. Default is 1.",
 )
+@click.option(
+    "--preserve-structure",
+    is_flag=True,
+    default=False,
+    help="Recreate the dataset's subdirectory layout under the output folder. "
+    "By default files are downloaded flat into the output folder.",
+)
 def download_all_public_raw_files(
     accession,
     protocol,
@@ -66,6 +73,7 @@ def download_all_public_raw_files(
     aspera_maximum_bandwidth: str = "50M",
     checksum_check: bool = False,
     parallel_files: int = 1,
+    preserve_structure: bool = False,
 ):
     """
     Command to download all public raw files from a specified PRIDE or MassIVE dataset.
@@ -95,6 +103,7 @@ def download_all_public_raw_files(
         aspera_maximum_bandwidth=aspera_maximum_bandwidth,
         checksum_check=checksum_check,
         parallel_files=parallel_files,
+        flatten=not preserve_structure,
     )
 
 
@@ -149,6 +158,13 @@ def download_all_public_raw_files(
     type=click.IntRange(1, 3),
     help="Number of files to download simultaneously (1-3). Primarily used by globus protocol. Default is 1.",
 )
+@click.option(
+    "--preserve-structure",
+    is_flag=True,
+    default=False,
+    help="Recreate the dataset's subdirectory layout under the output folder. "
+    "By default files are downloaded flat into the output folder.",
+)
 def download_all_public_category_files(
     accession: str,
     protocol: str,
@@ -158,6 +174,7 @@ def download_all_public_category_files(
     checksum_check: bool = False,
     category: str = "RAW",
     parallel_files: int = 1,
+    preserve_structure: bool = False,
 ):
     """
     Command to download all public files of a specified category from a given PRIDE or MassIVE dataset.
@@ -198,6 +215,7 @@ def download_all_public_category_files(
         checksum_check=checksum_check,
         categories=categories,
         parallel_files=parallel_files,
+        flatten=not preserve_structure,
     )
 
 
@@ -311,11 +329,28 @@ def download_file_by_name(
     default=False,
     help="Skip the download if the file has already been downloaded.",
 )
-def download_px_raw_files(accession: str, output_folder: str, skip_if_downloaded_already: bool):
+@click.option(
+    "--preserve-structure",
+    is_flag=True,
+    default=False,
+    help="Recreate the dataset's subdirectory layout under the output folder. "
+    "By default files are downloaded flat into the output folder.",
+)
+def download_px_raw_files(
+    accession: str,
+    output_folder: str,
+    skip_if_downloaded_already: bool,
+    preserve_structure: bool = False,
+):
     """CLI wrapper to download raw files via ProteomeXchange XML."""
     files = Files()
     logging.info(f"PX accession/URL: {accession}")
-    files.download_px_raw_files(accession, output_folder, skip_if_downloaded_already)
+    files.download_px_raw_files(
+        accession,
+        output_folder,
+        skip_if_downloaded_already,
+        flatten=not preserve_structure,
+    )
 
 
 @main.command("list-private-files", help="List private files by project accession")
@@ -563,6 +598,13 @@ def _read_url_arguments(url_list_path, urls_csv=None):
     type=click.IntRange(1, 3),
     help="Number of files to download simultaneously (1-3). Primarily used by globus protocol. Default is 1.",
 )
+@click.option(
+    "--preserve-structure",
+    is_flag=True,
+    default=False,
+    help="Recreate the dataset's subdirectory layout under the output folder. "
+    "By default files are downloaded flat into the output folder.",
+)
 def download_files_by_list(
     accession,
     protocol,
@@ -573,6 +615,7 @@ def download_files_by_list(
     aspera_maximum_bandwidth,
     checksum_check,
     parallel_files,
+    preserve_structure: bool = False,
 ):
     """Download a named subset of files from a PRIDE project."""
     file_names = _read_filename_arguments(file_list_path, files_csv)
@@ -588,6 +631,7 @@ def download_files_by_list(
         aspera_maximum_bandwidth=aspera_maximum_bandwidth,
         checksum_check=checksum_check,
         parallel_files=parallel_files,
+        flatten=not preserve_structure,
     )
 
 

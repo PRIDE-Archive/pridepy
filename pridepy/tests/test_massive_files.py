@@ -104,7 +104,7 @@ class TestMassIVEFiles(TestCase):
             skip_if_downloaded_already=False,
             use_tls=True,
             parallel_files=1,
-            relative_paths=["raw/folder/sample.raw"],
+            relative_paths=["sample.raw"],
         )
 
     def test_repo_uses_tls_true_for_massive_false_for_jpost(self):
@@ -178,6 +178,116 @@ class TestMassIVEFiles(TestCase):
         ]
         http_mock.assert_called_once()
         assert http_mock.call_args.kwargs["http_urls"] == ["http://example.org/b.raw"]
+
+    def test_download_files_flattens_into_output_folder_by_default(self):
+        """By default, files land directly in the output folder (no tree), and
+        colliding basenames are de-duplicated."""
+        provider = MassiveProvider()
+        records = [
+            MassiveProvider._build_file_record(
+                "MSV000012345",
+                "ftp://massive-ftp.ucsd.edu/v01/MSV000012345/raw/a/run.raw",
+            ),
+            MassiveProvider._build_file_record(
+                "MSV000012345",
+                "ftp://massive-ftp.ucsd.edu/v01/MSV000012345/raw/b/run.raw",
+            ),
+        ]
+        with patch.object(transport, "download_ftp_urls") as ftp_mock:
+            provider.download_files(
+                accession="MSV000012345",
+                records=records,
+                output_folder="/tmp/test",
+                skip_if_downloaded_already=False,
+                protocol="ftp",
+                parallel_files=1,
+            )
+
+        assert ftp_mock.call_args.kwargs["relative_paths"] == ["run.raw", "run_1.raw"]
+
+    def test_download_files_preserves_structure_when_flatten_false(self):
+        provider = MassiveProvider()
+        records = [
+            MassiveProvider._build_file_record(
+                "MSV000012345",
+                "ftp://massive-ftp.ucsd.edu/v01/MSV000012345/raw/a/run.raw",
+            ),
+            MassiveProvider._build_file_record(
+                "MSV000012345",
+                "ftp://massive-ftp.ucsd.edu/v01/MSV000012345/raw/b/run.raw",
+            ),
+        ]
+        with patch.object(transport, "download_ftp_urls") as ftp_mock:
+            provider.download_files(
+                accession="MSV000012345",
+                records=records,
+                output_folder="/tmp/test",
+                skip_if_downloaded_already=False,
+                protocol="ftp",
+                parallel_files=1,
+                flatten=False,
+            )
+
+        assert ftp_mock.call_args.kwargs["relative_paths"] == [
+            "raw/a/run.raw",
+            "raw/b/run.raw",
+        ]
+
+    def test_client_download_all_raw_files_flattens_by_default(self):
+        files = Files()
+        records = [
+            MassiveProvider._build_file_record(
+                "MSV000012345",
+                "ftp://massive-ftp.ucsd.edu/v01/MSV000012345/raw/a/run.raw",
+            ),
+            MassiveProvider._build_file_record(
+                "MSV000012345",
+                "ftp://massive-ftp.ucsd.edu/v01/MSV000012345/raw/b/run.raw",
+            ),
+        ]
+        with patch.object(MassiveProvider, "list_files", return_value=records), patch.object(
+            transport, "download_ftp_urls"
+        ) as ftp_mock:
+            files.download_all_raw_files(
+                accession="MSV000012345",
+                output_folder="/tmp/test",
+                skip_if_downloaded_already=False,
+                protocol="ftp",
+                aspera_maximum_bandwidth="100M",
+                checksum_check=False,
+                parallel_files=1,
+            )
+        assert ftp_mock.call_args.kwargs["relative_paths"] == ["run.raw", "run_1.raw"]
+
+    def test_client_download_all_raw_files_preserve_structure(self):
+        files = Files()
+        records = [
+            MassiveProvider._build_file_record(
+                "MSV000012345",
+                "ftp://massive-ftp.ucsd.edu/v01/MSV000012345/raw/a/run.raw",
+            ),
+            MassiveProvider._build_file_record(
+                "MSV000012345",
+                "ftp://massive-ftp.ucsd.edu/v01/MSV000012345/raw/b/run.raw",
+            ),
+        ]
+        with patch.object(MassiveProvider, "list_files", return_value=records), patch.object(
+            transport, "download_ftp_urls"
+        ) as ftp_mock:
+            files.download_all_raw_files(
+                accession="MSV000012345",
+                output_folder="/tmp/test",
+                skip_if_downloaded_already=False,
+                protocol="ftp",
+                aspera_maximum_bandwidth="100M",
+                checksum_check=False,
+                parallel_files=1,
+                flatten=False,
+            )
+        assert ftp_mock.call_args.kwargs["relative_paths"] == [
+            "raw/a/run.raw",
+            "raw/b/run.raw",
+        ]
 
     def test_get_https_url_builds_proteosafe_endpoint(self):
         url = MassiveProvider._get_https_url(

@@ -860,12 +860,19 @@ class PrideProvider(Provider):
         aspera_maximum_bandwidth: str = "100M",
         username: Optional[str] = None,
         password: Optional[str] = None,
+        flatten: bool = True,
     ):
         """Override Provider.download_files with the multi-protocol orchestrator.
 
         Reuses the legacy batch downloader: Phase 1 batches the requested
         protocol over a single connection; Phase 2 validates every file and,
         for any that fail, falls back per-file across the remaining protocols.
+
+        ``flatten`` is accepted for interface parity but is currently a no-op
+        for PRIDE: the legacy batch path already writes every file directly
+        into ``output_folder`` by basename. Structure-preserving downloads for
+        PRIDE arrive when this path is routed through the shared transport
+        layer (see issue #107).
         """
         PrideProvider._download_files_batch(
             file_list_json=records,

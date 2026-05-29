@@ -13,8 +13,10 @@ by scheme.
 import logging
 from abc import ABC, abstractmethod
 from typing import ClassVar, Dict, List, Optional
+from urllib.parse import urlparse
 
 from pridepy.download import transport
+from pridepy.download.util import flatten_relative_paths
 
 
 class Provider(ABC):
@@ -117,6 +119,7 @@ class Provider(ABC):
         aspera_maximum_bandwidth: str = "100M",
         checksum_check: bool = False,
         parallel_files: int = 1,
+        flatten: bool = True,
     ) -> None:
         """Download all RAW files for the dataset."""
         self.download_files(
@@ -128,6 +131,7 @@ class Provider(ABC):
             parallel_files=parallel_files,
             checksum_check=checksum_check,
             aspera_maximum_bandwidth=aspera_maximum_bandwidth,
+            flatten=flatten,
         )
 
     def download_category(
@@ -140,6 +144,7 @@ class Provider(ABC):
         aspera_maximum_bandwidth: str = "100M",
         checksum_check: bool = False,
         parallel_files: int = 1,
+        flatten: bool = True,
     ) -> None:
         """Download all files of the given categories for the dataset."""
         self.download_files(
@@ -151,6 +156,7 @@ class Provider(ABC):
             parallel_files=parallel_files,
             checksum_check=checksum_check,
             aspera_maximum_bandwidth=aspera_maximum_bandwidth,
+            flatten=flatten,
         )
 
     def download_by_name(
@@ -191,6 +197,7 @@ class Provider(ABC):
         aspera_maximum_bandwidth: str = "100M",
         checksum_check: bool = False,
         parallel_files: int = 1,
+        flatten: bool = True,
     ) -> None:
         """Download a subset of project files identified by a filename list.
 
@@ -219,6 +226,7 @@ class Provider(ABC):
             parallel_files=parallel_files,
             checksum_check=checksum_check,
             aspera_maximum_bandwidth=aspera_maximum_bandwidth,
+            flatten=flatten,
         )
 
     # ------------------------------------------------------------------
@@ -237,12 +245,19 @@ class Provider(ABC):
         aspera_maximum_bandwidth: str = "100M",
         username: Optional[str] = None,
         password: Optional[str] = None,
+        flatten: bool = True,
     ) -> None:
         """Partition record URLs by scheme and route to the matching transport.
 
         ``ftp://`` URLs are handed to :func:`transport.download_ftp_urls`
         (with this provider's :attr:`use_tls`); ``http(s)://`` URLs go to
         :func:`transport.download_http_urls`.
+
+        When ``flatten`` is True (the default) every file is written directly
+        into ``output_folder`` by its basename, de-duplicating colliding
+        basenames across the whole set (they share one folder). When False the
+        dataset's subdirectory layout is preserved via each record's
+        ``relativePath``.
         """
         if protocol not in ("ftp", "https", "http"):
             logging.warning(
@@ -250,25 +265,41 @@ class Provider(ABC):
                 f"Ignoring requested protocol '{protocol}' for {accession}."
             )
 
-        ftp_urls: List[str] = []
-        ftp_relpaths: List[Optional[str]] = []
-        http_urls: List[str] = []
-        http_relpaths: List[Optional[str]] = []
+        # Collect transfer entries in one pass, keeping order stable.
+        entries = []  # list of (scheme, url, relpath)
         for record in records:
             url = self.get_download_url(record)
             relpath = record.get("relativePath")
             lowered = url.lower()
             if lowered.startswith("ftp://"):
-                ftp_urls.append(url)
-                ftp_relpaths.append(relpath)
+                entries.append(("ftp", url, relpath))
             elif lowered.startswith(("http://", "https://")):
-                http_urls.append(url)
-                http_relpaths.append(relpath)
-        if not ftp_urls and not http_urls:
+                entries.append(("http", url, relpath))
+        if not entries:
             logging.info(
                 f"No files matched for direct-download dataset {accession}"
             )
             return
+
+        if flatten:
+            # All files share one output folder, so dedup basenames globally;
+            # fall back to the URL path when a record carries no relativePath.
+            sources = [rel if rel else urlparse(url).path for _, url, rel in entries]
+            dest_paths: List[Optional[str]] = flatten_relative_paths(sources)
+        else:
+            dest_paths = [rel for _, _, rel in entries]
+
+        ftp_urls: List[str] = []
+        ftp_relpaths: List[Optional[str]] = []
+        http_urls: List[str] = []
+        http_relpaths: List[Optional[str]] = []
+        for (scheme, url, _), dest in zip(entries, dest_paths):
+            if scheme == "ftp":
+                ftp_urls.append(url)
+                ftp_relpaths.append(dest)
+            else:
+                http_urls.append(url)
+                http_relpaths.append(dest)
 
         if ftp_urls:
             transport.download_ftp_urls(
