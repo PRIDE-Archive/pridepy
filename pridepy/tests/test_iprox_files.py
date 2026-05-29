@@ -1,11 +1,11 @@
 """iProX direct-download support.
 
 iProX publishes the ProteomeXchange XML for each dataset at a deterministic
-path on its anonymous HTTPS download server::
+path on its anonymous HTTP download server::
 
     http://download.iprox.org/<accession>/PX_<accession>.xml
 
-The referenced files are served from the same host over HTTPS with byte-range
+The referenced files are served from the same host over HTTP with byte-range
 support, so resume and parallel downloads use the same plumbing as PRIDE
 HTTP(S) transfers.
 """
@@ -73,7 +73,7 @@ class TestIProXFiles(TestCase):
         assert record["fileCategory"]["value"] == "RAW"
         assert record["source"] == "iProX"
         # _download_direct_download_records dispatches by URL scheme, so the
-        # publicFileLocations URL must still be the HTTPS download URL.
+        # publicFileLocations URL must still be the HTTP download URL.
         assert record["publicFileLocations"][0]["value"].startswith("http://")
 
     def test_list_iprox_public_files_parses_px_xml(self):
@@ -92,7 +92,7 @@ class TestIProXFiles(TestCase):
             "http://download.iprox.org/IPX0017413000/PX_IPX0017413000.xml"
         )
 
-        # 3 valid HTTPS records; the ftp:// "Other URI" cvParam was filtered out.
+        # 3 valid HTTP records; the ftp:// "Other URI" cvParam was filtered out.
         assert len(records) == 3
         cats = {r["fileName"]: r["fileCategory"]["value"] for r in records}
         assert cats == {
@@ -139,7 +139,7 @@ class TestIProXFiles(TestCase):
                 checksum_check=False,
             )
 
-        # iProX is HTTPS, not FTP — FTP path must not be called.
+        # iProX is HTTP, not FTP — FTP path must not be called.
         ftp_mock.assert_not_called()
         http_mock.assert_called_once()
         kwargs = http_mock.call_args.kwargs

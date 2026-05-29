@@ -354,6 +354,13 @@ pridepy download-all-public-category-files \
 
 ## Python API Examples
 
+> **Breaking change (0.0.16):** the legacy `pridepy.files.files.Files` class has been
+> removed. Replace `from pridepy.files.files import Files` with
+> `from pridepy.download.client import Client`; `Client` exposes the same public
+> methods (`get_all_raw_file_list`, `download_all_raw_files`,
+> `get_submitted_file_path_prefix`, `download_file_by_name`,
+> `download_all_category_files`, `download_px_raw_files`, …).
+
 <details>
 <summary><strong>Get raw files for a project</strong></summary>
 
