@@ -12,7 +12,8 @@ from unittest.mock import patch
 import click
 import pytest
 
-from pridepy.files.files import Files
+from pridepy.download import by_url
+from pridepy.download.client import Client as Files
 from pridepy.pridepy import _read_url_arguments
 
 
@@ -38,7 +39,7 @@ class TestDownloadFilesByUrl(TestCase):
                 _touch_valid(target_path)
 
             with patch.object(
-                Files, "_http_download_url", side_effect=fake_http
+                by_url, "_http_download_url", side_effect=fake_http
             ) as mock_http:
                 Files.download_files_by_url(
                     urls=["https://example.org/sample.raw"],
@@ -56,7 +57,7 @@ class TestDownloadFilesByUrl(TestCase):
                 _touch_valid(target_path)
 
             with patch.object(
-                Files, "_ftp_download_url", side_effect=fake_ftp
+                by_url, "_ftp_download_url", side_effect=fake_ftp
             ) as mock_ftp:
                 Files.download_files_by_url(
                     urls=["ftp://ftp.pride.ebi.ac.uk/path/sample.raw"],
@@ -86,7 +87,7 @@ class TestDownloadFilesByUrl(TestCase):
         with tempfile.TemporaryDirectory() as tmp_dir:
             target = os.path.join(tmp_dir, "existing.raw")
             _touch_valid(target)
-            with patch.object(Files, "_http_download_url") as mock_http:
+            with patch.object(by_url, "_http_download_url") as mock_http:
                 Files.download_files_by_url(
                     urls=["https://example.org/existing.raw"],
                     output_folder=tmp_dir,

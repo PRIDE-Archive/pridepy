@@ -7,4 +7,5 @@ boto3
 botocore
 tqdm
 urllib3
-httpx
+httpx>=0.27.0
+defusedxml

@@ -3,7 +3,7 @@ import unittest
 import pytest
 
 from pridepy.authentication import authentication
-from pridepy.files.files import Files
+from pridepy.download.client import Client as Files
 from pridepy.project.project import Project
 
 

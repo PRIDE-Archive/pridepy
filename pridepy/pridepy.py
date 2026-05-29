@@ -2,7 +2,7 @@
 import asyncio
 import logging
 import click
-from pridepy.files.files import Files
+from pridepy.download.client import Client as Files
 from pridepy.project.project import Project
 
 PROTOCOL_CHOICES = click.Choice(["ftp", "aspera", "globus", "s3"], case_sensitive=False)
@@ -58,6 +58,13 @@ def main():
     type=click.IntRange(1, 3),
     help="Number of files to download simultaneously (1-3). Primarily used by globus protocol. Default is 1.",
 )
+@click.option(
+    "--preserve-structure",
+    is_flag=True,
+    default=False,
+    help="Recreate the dataset's subdirectory layout under the output folder. "
+    "By default files are downloaded flat into the output folder.",
+)
 def download_all_public_raw_files(
     accession,
     protocol,
@@ -66,6 +73,7 @@ def download_all_public_raw_files(
     aspera_maximum_bandwidth: str = "50M",
     checksum_check: bool = False,
     parallel_files: int = 1,
+    preserve_structure: bool = False,
 ):
     """
     Command to download all public raw files from a specified PRIDE or MassIVE dataset.
@@ -95,6 +103,7 @@ def download_all_public_raw_files(
         aspera_maximum_bandwidth=aspera_maximum_bandwidth,
         checksum_check=checksum_check,
         parallel_files=parallel_files,
+        flatten=not preserve_structure,
     )
 
 
@@ -149,6 +158,13 @@ def download_all_public_raw_files(
     type=click.IntRange(1, 3),
     help="Number of files to download simultaneously (1-3). Primarily used by globus protocol. Default is 1.",
 )
+@click.option(
+    "--preserve-structure",
+    is_flag=True,
+    default=False,
+    help="Recreate the dataset's subdirectory layout under the output folder. "
+    "By default files are downloaded flat into the output folder.",
+)
 def download_all_public_category_files(
     accession: str,
     protocol: str,
@@ -158,6 +174,7 @@ def download_all_public_category_files(
     checksum_check: bool = False,
     category: str = "RAW",
     parallel_files: int = 1,
+    preserve_structure: bool = False,
 ):
     """
     Command to download all public files of a specified category from a given PRIDE or MassIVE dataset.
@@ -198,6 +215,7 @@ def download_all_public_category_files(
         checksum_check=checksum_check,
         categories=categories,
         parallel_files=parallel_files,
+        flatten=not preserve_structure,
     )
 
 
@@ -258,10 +276,12 @@ def download_file_by_name(
     :param protocol: Protocol to use for download: ftp, aspera, globus, s3. Default is ftp.
     :param file_name: fileName to be downloaded
     :param output_folder: output folder to download or copy files
-    :param skip_if_downloaded_already: Boolean value to skip the download if the file has already been downloaded. Default is False.
+    :param skip_if_downloaded_already: Boolean value to skip the download if the
+        file has already been downloaded. Default is False.
     :param username: PRIDE login username for private files
     :param password: PRIDE login password for private files
-    :param aspera_maximum_bandwidth: Aspera maximum bandwidth (e.g 50M, 100M, 200M), depending on the user's network bandwidth, default is 100M
+    :param aspera_maximum_bandwidth: Aspera maximum bandwidth (e.g 50M, 100M,
+        200M), depending on the user's network bandwidth, default is 100M
     :param checksum_check: Download checksum file for project.
     """
 
@@ -309,11 +329,28 @@ def download_file_by_name(
     default=False,
     help="Skip the download if the file has already been downloaded.",
 )
-def download_px_raw_files(accession: str, output_folder: str, skip_if_downloaded_already: bool):
+@click.option(
+    "--preserve-structure",
+    is_flag=True,
+    default=False,
+    help="Recreate the dataset's subdirectory layout under the output folder. "
+    "By default files are downloaded flat into the output folder.",
+)
+def download_px_raw_files(
+    accession: str,
+    output_folder: str,
+    skip_if_downloaded_already: bool,
+    preserve_structure: bool = False,
+):
     """CLI wrapper to download raw files via ProteomeXchange XML."""
     files = Files()
     logging.info(f"PX accession/URL: {accession}")
-    files.download_px_raw_files(accession, output_folder, skip_if_downloaded_already)
+    files.download_px_raw_files(
+        accession,
+        output_folder,
+        skip_if_downloaded_already,
+        flatten=not preserve_structure,
+    )
 
 
 @main.command("list-private-files", help="List private files by project accession")
@@ -416,10 +453,10 @@ def stream_files_metadata(accession, output_file):
     "-sf",
     "--sort-fields",
     required=False,
-    default=["submission_date"],
+    default=["submissionDate"],
     multiple=True,
     help="Field(s) for sorting the results on. Default for this "
-    "request is submission_date. More fields can be separated by "
+    "request is submissionDate. More fields can be separated by "
     "comma and passed. Example: submissionDate,accession",
     type=click.Choice(
         "accession,submissionDate,diseases,organismsPart,organisms,instruments,softwares,"
@@ -561,6 +598,13 @@ def _read_url_arguments(url_list_path, urls_csv=None):
     type=click.IntRange(1, 3),
     help="Number of files to download simultaneously (1-3). Primarily used by globus protocol. Default is 1.",
 )
+@click.option(
+    "--preserve-structure",
+    is_flag=True,
+    default=False,
+    help="Recreate the dataset's subdirectory layout under the output folder. "
+    "By default files are downloaded flat into the output folder.",
+)
 def download_files_by_list(
     accession,
     protocol,
@@ -571,6 +615,7 @@ def download_files_by_list(
     aspera_maximum_bandwidth,
     checksum_check,
     parallel_files,
+    preserve_structure: bool = False,
 ):
     """Download a named subset of files from a PRIDE project."""
     file_names = _read_filename_arguments(file_list_path, files_csv)
@@ -586,6 +631,7 @@ def download_files_by_list(
         aspera_maximum_bandwidth=aspera_maximum_bandwidth,
         checksum_check=checksum_check,
         parallel_files=parallel_files,
+        flatten=not preserve_structure,
     )
 
 
@@ -640,7 +686,7 @@ def download_files_by_list(
     "--parallel-files",
     default=1,
     type=click.IntRange(1, 3),
-    help="Number of files to download simultaneously (1-3). Primarily used by globus protocol. Default is 1.",
+    help="Number of files to download simultaneously (1-3), for any URL scheme. Default is 1.",
 )
 def download_files_by_url(
     url_list_path,
