@@ -45,7 +45,36 @@ pip install --upgrade pridepy
 pridepy --help
 ```
 
-### Option 3: Install from source (development)
+### Option 3: Install the latest code directly from GitHub
+
+To get features that have not been released to PyPI yet, install straight from a
+branch. `master` holds the latest stable code; `dev` holds the newest (and
+potentially unstable) development work.
+
+With `uv`:
+
+```bash
+# Latest stable (master)
+uv tool install "git+https://github.com/PRIDE-Archive/pridepy@master"
+
+# Bleeding edge (dev)
+uv tool install "git+https://github.com/PRIDE-Archive/pridepy@dev"
+```
+
+Or with `pip`:
+
+```bash
+# Latest stable (master)
+pip install --upgrade "git+https://github.com/PRIDE-Archive/pridepy@master"
+
+# Bleeding edge (dev)
+pip install --upgrade "git+https://github.com/PRIDE-Archive/pridepy@dev"
+```
+
+You can pin to any branch, tag, or commit by changing the part after `@` (e.g.
+`@v0.0.16` or `@<commit-sha>`).
+
+### Option 4: Install from source (development)
 
 ```bash
 git clone https://github.com/PRIDE-Archive/pridepy
@@ -100,6 +129,12 @@ These options are shared by `download-all-public-raw-files`,
 | `--skip-if-downloaded-already` | Resume: skip files already present locally | off |
 | `--checksum-check` | Download PRIDE checksums and validate each file | off |
 | `--aspera-maximum-bandwidth` | Aspera cap, e.g. `50M`, `100M`, `200M` (Aspera only) | `100M` |
+| `--preserve-structure` | Recreate the dataset's subdirectory layout (e.g. `raw/…/`) under the output folder instead of downloading flat | off |
+
+By default, files are downloaded **flat** into the output folder (no
+`raw/…/` subdirectories). When two files would collapse to the same name,
+later ones get a numeric suffix (`run.raw`, `run_1.raw`). Pass
+`--preserve-structure` to keep the dataset's original directory layout.
 
 </details>
 
