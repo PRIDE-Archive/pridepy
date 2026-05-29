@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 
 
-set -e +o pipefail
+set -e -o pipefail
+
+fatal() {
+    echo "$*" >&2
+    exit 1
+}
 
 # Set up paths first
-bin_name="codacy-cli-v2"
 
 # Determine OS-specific paths
 os_name=$(uname)
