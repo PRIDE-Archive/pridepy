@@ -8,3 +8,4 @@ botocore
 tqdm
 urllib3
 httpx
+defusedxml

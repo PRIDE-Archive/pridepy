@@ -110,10 +110,25 @@ class PrideProvider(Provider):
         :return: path fragment (eg: 2018/10/PXD008644)
         """
         records = self._list_files_checked(accession)
-        raw_files = [r for r in records if r["fileCategory"]["value"] == "RAW"]
+        raw_files = [
+            r
+            for r in records
+            if (r.get("fileCategory") or {}).get("value") == "RAW"
+            and r.get("publicFileLocations")
+        ]
+        if not raw_files:
+            raise ValueError(
+                f"Cannot determine submitted path prefix for {accession}: "
+                f"no RAW file with a public location was found."
+            )
         first_file = raw_files[0]["publicFileLocations"][0]["value"]
-        path_fragment = re.search(r"\d{4}/\d{2}/PXD\d*", first_file).group()
-        return path_fragment
+        match = re.search(r"\d{4}/\d{2}/PXD\d*", first_file)
+        if match is None:
+            raise ValueError(
+                f"Cannot determine submitted path prefix for {accession}: "
+                f"unexpected file path layout ({first_file!r})."
+            )
+        return match.group()
 
     # ------------------------------------------------------------------
     # Static utilities
@@ -289,7 +304,7 @@ class PrideProvider(Provider):
         headers = {"accept": "text/plain"}
         request = urllib.request.Request(url, headers=headers, method="GET")
         logging.info(f"Fetching checksum file from {url}")
-        with urllib.request.urlopen(request) as response:
+        with urllib.request.urlopen(request, timeout=60) as response:
             data = response.read().decode("utf-8")
             # Save the data to a .tsv file
             output_path = os.path.join(output_folder, f"{accession}-checksum.tsv")
@@ -554,7 +569,11 @@ class PrideProvider(Provider):
         logging.info("Valid token after login: {}".format(validate_token))
 
         url = self.API_PRIVATE_URL + "/projects/{}/files?search={}".format(accession, file_name)
-        content = requests.get(url, headers={"Authorization": "Bearer {}".format(auth_token)})
+        content = requests.get(
+            url,
+            headers={"Authorization": "Bearer {}".format(auth_token)},
+            timeout=(10, 60),
+        )
         if content.ok and content.status_code == 200:
             json_file = content.json()
             if (

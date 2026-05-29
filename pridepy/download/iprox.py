@@ -14,7 +14,7 @@ themselves go through plain HTTP on the same host, which supports
 import logging
 import os
 import re
-import xml.etree.ElementTree as ET
+import defusedxml.ElementTree as ET
 from typing import ClassVar, Dict, List, Optional
 from urllib.parse import urlparse
 

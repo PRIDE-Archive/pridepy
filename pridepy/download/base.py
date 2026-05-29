@@ -86,10 +86,15 @@ class Provider(ABC):
             )
         return records
 
+    @staticmethod
+    def _category_value(record: Dict) -> Optional[str]:
+        """Safely read ``fileCategory.value`` from a (possibly partial) record."""
+        return (record.get("fileCategory") or {}).get("value")
+
     def get_raw_files(self, accession: str) -> List[Dict]:
         """Return records whose ``fileCategory.value`` is ``"RAW"``."""
         records = self._list_files_checked(accession)
-        return [r for r in records if r["fileCategory"]["value"] == "RAW"]
+        return [r for r in records if self._category_value(r) == "RAW"]
 
     def get_category_files(
         self, accession: str, categories: "str | List[str]"
@@ -99,12 +104,12 @@ class Provider(ABC):
             categories = [categories]
         category_set = {c.upper() for c in categories}
         records = self._list_files_checked(accession)
-        return [r for r in records if r["fileCategory"]["value"] in category_set]
+        return [r for r in records if self._category_value(r) in category_set]
 
     def find_file(self, accession: str, file_name: str) -> List[Dict]:
         """Return records whose ``fileName`` equals ``file_name``."""
         records = self._list_files_checked(accession)
-        return [r for r in records if r["fileName"] == file_name]
+        return [r for r in records if r.get("fileName") == file_name]
 
     # ------------------------------------------------------------------
     # Shared download workflow (Template Method).
@@ -268,7 +273,7 @@ class Provider(ABC):
         # Collect transfer entries in one pass, keeping order stable.
         entries = []  # list of (scheme, url, relpath)
         for record in records:
-            url = self.get_download_url(record)
+            url = self.get_download_url(record, protocol)
             relpath = record.get("relativePath")
             lowered = url.lower()
             if lowered.startswith("ftp://"):

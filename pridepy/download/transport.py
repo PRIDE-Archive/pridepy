@@ -484,6 +484,10 @@ def download_ftp_urls(
             if relative_paths and idx < len(relative_paths)
             else None
         )
+        if not parsed.hostname:
+            raise ValueError(
+                f"Cannot download FTP URL with no host: {url!r}"
+            )
         local_path = _dest_path(output_folder, remote_path, relpath)
         host_to_items.setdefault(parsed.hostname, []).append((remote_path, local_path))
 

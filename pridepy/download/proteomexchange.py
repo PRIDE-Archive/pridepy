@@ -25,7 +25,7 @@ import logging
 import os
 import posixpath
 import re
-import xml.etree.ElementTree as ET
+import defusedxml.ElementTree as ET
 from typing import ClassVar, Dict, List
 from urllib.parse import urlparse
 

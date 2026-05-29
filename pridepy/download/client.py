@@ -173,7 +173,7 @@ class Client:
         try:
             return registry.resolve(accession).find_file(accession, file_name)
         except Exception as e:
-            raise Exception("File not found " + str(e))
+            raise Exception("File not found " + str(e)) from e
 
     # Download entry points.
 
