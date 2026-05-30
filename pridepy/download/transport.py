@@ -83,22 +83,59 @@ def _open_ftp_connection(host: str, use_tls: bool, timeout: int = 30) -> FTP:
     return ftp
 
 
-def _walk_ftp_tree(ftp: FTP, remote_dir: str) -> List[str]:
+# Emit a progress line every this many directories while walking a remote
+# tree. Large deposits (e.g. a MassIVE timsTOF dataset with thousands of .d
+# directories, each needing its own TLS data connection to list) can take
+# many minutes to enumerate; without progress the caller looks hung.
+_WALK_PROGRESS_EVERY_DIRS = 100
+
+
+def _walk_ftp_tree(
+    ftp: FTP, remote_dir: str, _progress: Optional[dict] = None
+) -> List[str]:
     """
     Recursively list files under a remote FTP directory.
+
+    Emits an INFO progress heartbeat every ``_WALK_PROGRESS_EVERY_DIRS``
+    directories, plus a final summary, so enumerating a large deposit does
+    not look like a hang. ``_progress`` is internal recursion state; callers
+    invoke this with ``(ftp, remote_dir)`` only.
     """
     import posixpath
+
+    top_level = _progress is None
+    if top_level:
+        _progress = {"dirs": 0, "files": 0}
+
+    def _note_dir_listed() -> None:
+        _progress["dirs"] += 1
+        if _progress["dirs"] % _WALK_PROGRESS_EVERY_DIRS == 0:
+            logging.info(
+                "Listing remote tree: %d directories scanned, "
+                "%d files found so far...",
+                _progress["dirs"],
+                _progress["files"],
+            )
+
     file_paths: List[str] = []
     try:
         entries = list(ftp.mlsd(remote_dir))
+        _note_dir_listed()
         for name, facts in entries:
             if name in {".", ".."}:
                 continue
             child_path = posixpath.join(remote_dir.rstrip("/"), name)
             if facts.get("type") == "dir":
-                file_paths.extend(_walk_ftp_tree(ftp, child_path))
+                file_paths.extend(_walk_ftp_tree(ftp, child_path, _progress))
             elif facts.get("type") == "file":
                 file_paths.append(child_path)
+                _progress["files"] += 1
+        if top_level:
+            logging.info(
+                "Listing remote tree complete: %d directories, %d files.",
+                _progress["dirs"],
+                _progress["files"],
+            )
         return file_paths
     except (AttributeError, ftplib.error_perm):
         pass
@@ -108,6 +145,7 @@ def _walk_ftp_tree(ftp: FTP, remote_dir: str) -> List[str]:
     try:
         ftp.cwd(remote_dir)
         ftp.retrlines("LIST", listing.append)
+        _note_dir_listed()
         for entry in listing:
             parts = entry.split(maxsplit=8)
             if len(parts) < 9:
@@ -117,11 +155,18 @@ def _walk_ftp_tree(ftp: FTP, remote_dir: str) -> List[str]:
                 continue
             child_path = posixpath.join(remote_dir.rstrip("/"), name)
             if entry.startswith("d"):
-                file_paths.extend(_walk_ftp_tree(ftp, child_path))
+                file_paths.extend(_walk_ftp_tree(ftp, child_path, _progress))
             else:
                 file_paths.append(child_path)
+                _progress["files"] += 1
     finally:
         ftp.cwd(current_dir)
+    if top_level:
+        logging.info(
+            "Listing remote tree complete: %d directories, %d files.",
+            _progress["dirs"],
+            _progress["files"],
+        )
     return file_paths
 
 
