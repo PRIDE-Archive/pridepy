@@ -87,7 +87,13 @@ def _ftp_download_url(parsed, target: str) -> None:
             )
 
 
-def _dispatch_url_scheme(parsed, target: str, protocol: str = "ftp", position: int = 0) -> None:
+def _dispatch_url_scheme(
+    parsed,
+    target: str,
+    protocol: str = "ftp",
+    position: int = 0,
+    download_threads: int = 1,
+) -> None:
     """Route a parsed URL to its protocol-specific downloader.
 
     ``protocol='globus'`` swaps the http/https single-connection streamer
@@ -96,7 +102,11 @@ def _dispatch_url_scheme(parsed, target: str, protocol: str = "ftp", position: i
     """
     scheme = (parsed.scheme or "").lower()
     if scheme in ("http", "https"):
-        if protocol == "globus":
+        if download_threads and download_threads > 1:
+            transport._multipart_download(
+                parsed.geturl(), target, threads=download_threads, position=position
+            )
+        elif protocol == "globus":
             transport._parallel_download(parsed.geturl(), target, position=position)
         else:
             _http_download_url(parsed.geturl(), target)
@@ -112,6 +122,7 @@ def _download_single_url(
     skip_if_exists: bool = False,
     protocol: str = "ftp",
     position: int = 0,
+    download_threads: int = 1,
 ) -> str:
     """Download one URL, dispatched by scheme; return the local file path."""
     parsed = urlparse(url)
@@ -128,7 +139,13 @@ def _download_single_url(
         return target
 
     try:
-        _dispatch_url_scheme(parsed, target, protocol, position=position)
+        _dispatch_url_scheme(
+            parsed,
+            target,
+            protocol,
+            position=position,
+            download_threads=download_threads,
+        )
     except Exception:
         # Don't leave a truncated/partial file behind — a non-empty partial
         # would otherwise be wrongly skipped on the next run.
@@ -149,6 +166,7 @@ def download_files_by_url(
     protocol: str = "ftp",
     parallel_files: int = 1,
     checksum_check: bool = False,
+    download_threads: int = 1,
 ) -> None:
     """Download files from a list of raw URLs, dispatched by URL scheme.
 
@@ -173,39 +191,34 @@ def download_files_by_url(
 
     os.makedirs(output_folder, exist_ok=True)
 
-    parallel_files = min(parallel_files, 3, len(urls))
+    workers = min(parallel_files, 3, len(urls))
     failures: List[Tuple[str, str]] = []
 
-    if parallel_files < 2:
-        for url in urls:
+    if workers > 1:
+        logging.info(
+            "Downloading %d URL(s) with %d parallel workers",
+            len(urls), workers,
+        )
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = {
+            executor.submit(
+                _download_single_url,
+                url,
+                output_folder,
+                skip_if_downloaded_already,
+                protocol,
+                position=idx,
+                download_threads=download_threads,
+            ): url
+            for idx, url in enumerate(urls)
+        }
+        for future in as_completed(futures):
+            url = futures[future]
             try:
-                _download_single_url(
-                    url, output_folder, skip_if_downloaded_already, protocol,
-                )
+                future.result()
             except Exception as exc:  # pylint: disable=broad-except
                 logging.error("Failed to download %s: %s", url, exc)
                 failures.append((url, str(exc)))
-    else:
-        logging.info(
-            "Downloading %d URL(s) with %d parallel workers",
-            len(urls), parallel_files,
-        )
-        with ThreadPoolExecutor(max_workers=parallel_files) as executor:
-            futures = {
-                executor.submit(
-                    _download_single_url,
-                    url, output_folder, skip_if_downloaded_already, protocol,
-                    position=idx,
-                ): url
-                for idx, url in enumerate(urls)
-            }
-            for future in as_completed(futures):
-                url = futures[future]
-                try:
-                    future.result()
-                except Exception as exc:  # pylint: disable=broad-except
-                    logging.error("Failed to download %s: %s", url, exc)
-                    failures.append((url, str(exc)))
 
     if failures:
         summary = ", ".join(f"{u} ({e})" for u, e in failures)

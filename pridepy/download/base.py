@@ -125,6 +125,7 @@ class Provider(ABC):
         checksum_check: bool = False,
         parallel_files: int = 1,
         flatten: bool = True,
+        download_threads: int = 1,
     ) -> None:
         """Download all RAW files for the dataset."""
         self.download_files(
@@ -137,6 +138,7 @@ class Provider(ABC):
             checksum_check=checksum_check,
             aspera_maximum_bandwidth=aspera_maximum_bandwidth,
             flatten=flatten,
+            download_threads=download_threads,
         )
 
     def download_category(
@@ -150,6 +152,7 @@ class Provider(ABC):
         checksum_check: bool = False,
         parallel_files: int = 1,
         flatten: bool = True,
+        download_threads: int = 1,
     ) -> None:
         """Download all files of the given categories for the dataset."""
         self.download_files(
@@ -162,6 +165,7 @@ class Provider(ABC):
             checksum_check=checksum_check,
             aspera_maximum_bandwidth=aspera_maximum_bandwidth,
             flatten=flatten,
+            download_threads=download_threads,
         )
 
     def download_by_name(
@@ -203,6 +207,7 @@ class Provider(ABC):
         checksum_check: bool = False,
         parallel_files: int = 1,
         flatten: bool = True,
+        download_threads: int = 1,
     ) -> None:
         """Download a subset of project files identified by a filename list.
 
@@ -232,6 +237,7 @@ class Provider(ABC):
             checksum_check=checksum_check,
             aspera_maximum_bandwidth=aspera_maximum_bandwidth,
             flatten=flatten,
+            download_threads=download_threads,
         )
 
     # ------------------------------------------------------------------
@@ -251,6 +257,7 @@ class Provider(ABC):
         username: Optional[str] = None,
         password: Optional[str] = None,
         flatten: bool = True,
+        download_threads: int = 1,
     ) -> None:
         """Partition record URLs by scheme and route to the matching transport.
 
@@ -322,4 +329,5 @@ class Provider(ABC):
                 skip_if_downloaded_already=skip_if_downloaded_already,
                 parallel_files=parallel_files,
                 relative_paths=http_relpaths,
+                download_threads=download_threads,
             )
