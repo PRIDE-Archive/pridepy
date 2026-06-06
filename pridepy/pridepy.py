@@ -2,7 +2,7 @@
 import asyncio
 import logging
 import click
-from pridepy.files.files import Files
+from pridepy.download.client import Client as Files
 from pridepy.project.project import Project
 
 PROTOCOL_CHOICES = click.Choice(["ftp", "aspera", "globus", "s3"], case_sensitive=False)
@@ -16,9 +16,9 @@ def main():
 
 @main.command(
     "download-all-public-raw-files",
-    help="Download all public raw files from a given PRIDE public project",
+    help="Download all public raw files from a PRIDE or MassIVE public dataset",
 )
-@click.option("-a", "--accession", required=True, help="PRIDE project accession")
+@click.option("-a", "--accession", required=True, help="PRIDE or MassIVE accession")
 @click.option(
     "-p",
     "--protocol",
@@ -45,22 +45,25 @@ def main():
     default="100M",
 )
 @click.option(
-    "--checksum-check/--no-checksum-check",
-    "checksum_check",
-    default=True,
-    help="Validate downloads against PRIDE MD5 checksums. Enabled by default "
-         "for whole-project raw downloads since the PRIDE API guarantees "
-         "checksums for all raw files. Use --no-checksum-check to skip.",
+    "--checksum-check",
+    required=False,
+    help="Download checksum file for project and validate downloads",
+    is_flag=True,
+    default=False,
 )
 @click.option(
-    "-t",
-    "--threads",
-    "download_threads",
+    "-w",
+    "--parallel-files",
     default=1,
-    type=click.IntRange(1, 32),
-    help="Number of parallel HTTP Range threads per file for globus (1-32). "
-         "Default is 1 (single connection). Falls back to single connection if "
-         "the server does not support Range requests or the file is below 10 MB.",
+    type=click.IntRange(1, 3),
+    help="Number of files to download simultaneously (1-3). Primarily used by globus protocol. Default is 1.",
+)
+@click.option(
+    "--preserve-structure",
+    is_flag=True,
+    default=False,
+    help="Recreate the dataset's subdirectory layout under the output folder. "
+    "By default files are downloaded flat into the output folder.",
 )
 def download_all_public_raw_files(
     accession,
@@ -68,20 +71,21 @@ def download_all_public_raw_files(
     output_folder,
     skip_if_downloaded_already,
     aspera_maximum_bandwidth: str = "50M",
-    checksum_check: bool = True,
-    download_threads: int = 1,
+    checksum_check: bool = False,
+    parallel_files: int = 1,
+    preserve_structure: bool = False,
 ):
     """
-    Command to download all public raw files from a specified PRIDE project.
+    Command to download all public raw files from a specified PRIDE or MassIVE dataset.
 
     Parameters:
-        accession (str): PRIDE project accession.
+        accession (str): PRIDE or MassIVE accession.
         protocol (str): Protocol for downloading files (ftp, aspera, globus, s3). Default is ftp.
         output_folder (str): Directory to save downloaded raw files.
         skip_if_downloaded_already (bool): Skip download if files already exist. Default is False.
         aspera_maximum_bandwidth (str): Maximum bandwidth for Aspera protocol. Default is 100M.
-        checksum_check (bool): Validate downloads against PRIDE MD5 checksums. Default is True.
-        download_threads (int): Parallel HTTP Range threads per file for globus. Default is 1.
+        checksum_check (bool): Flag to download checksum file for the project. Default is False.
+        parallel_files (int): Number of files to download simultaneously. Default is 1.
     """
 
     raw_files = Files()
@@ -98,15 +102,16 @@ def download_all_public_raw_files(
         protocol,
         aspera_maximum_bandwidth=aspera_maximum_bandwidth,
         checksum_check=checksum_check,
-        download_threads=download_threads,
+        parallel_files=parallel_files,
+        flatten=not preserve_structure,
     )
 
 
 @main.command(
     "download-all-public-category-files",
-    help="Download all public files of specific category from a given PRIDE public project",
+    help="Download all public files of specific category from a PRIDE or MassIVE public dataset",
 )
-@click.option("-a", "--accession", required=True, help="PRIDE project accession")
+@click.option("-a", "--accession", required=True, help="PRIDE or MassIVE accession")
 @click.option(
     "-p",
     "--protocol",
@@ -147,14 +152,18 @@ def download_all_public_raw_files(
     "Valid values: RAW, PEAK, SEARCH, RESULT, SPECTRUM_LIBRARY, OTHER, FASTA",
 )
 @click.option(
-    "-t",
-    "--threads",
-    "download_threads",
+    "-w",
+    "--parallel-files",
     default=1,
-    type=click.IntRange(1, 32),
-    help="Number of parallel HTTP Range threads per file for globus (1-32). "
-         "Default is 1 (single connection). Falls back to single connection if "
-         "the server does not support Range requests or the file is below 10 MB.",
+    type=click.IntRange(1, 3),
+    help="Number of files to download simultaneously (1-3). Primarily used by globus protocol. Default is 1.",
+)
+@click.option(
+    "--preserve-structure",
+    is_flag=True,
+    default=False,
+    help="Recreate the dataset's subdirectory layout under the output folder. "
+    "By default files are downloaded flat into the output folder.",
 )
 def download_all_public_category_files(
     accession: str,
@@ -164,20 +173,21 @@ def download_all_public_category_files(
     aspera_maximum_bandwidth: str = "50M",
     checksum_check: bool = False,
     category: str = "RAW",
-    download_threads: int = 1,
+    parallel_files: int = 1,
+    preserve_structure: bool = False,
 ):
     """
-    Command to download all public files of a specified category from a given PRIDE public project.
+    Command to download all public files of a specified category from a given PRIDE or MassIVE dataset.
 
     Parameters:
-        accession (str): The PRIDE project accession identifier.
+        accession (str): The PRIDE or MassIVE dataset accession identifier.
         protocol (str): The protocol to use for downloading files (ftp, aspera, globus, s3).
         output_folder (str): The directory where the files will be downloaded.
         skip_if_downloaded_already (bool): If True, skips downloading files that already exist. Default is False.
         aspera_maximum_bandwidth (str): Maximum bandwidth for Aspera transfers.
         checksum_check (bool): If True, downloads the checksum file for the project.
         category (str): Comma-separated categories of files to download (e.g. RAW or RAW,SEARCH).
-        download_threads (int): Parallel HTTP Range threads per file for globus. Default is 1.
+        parallel_files (int): Number of files to download simultaneously. Default is 1.
     """
 
     valid_categories = {"RAW", "PEAK", "SEARCH", "RESULT", "SPECTRUM_LIBRARY", "OTHER", "FASTA"}
@@ -204,15 +214,16 @@ def download_all_public_category_files(
         aspera_maximum_bandwidth=aspera_maximum_bandwidth,
         checksum_check=checksum_check,
         categories=categories,
-        download_threads=download_threads,
+        parallel_files=parallel_files,
+        flatten=not preserve_structure,
     )
 
 
 @main.command(
     "download-file-by-name",
-    help="Download a single file from a given PRIDE project (public or private)",
+    help="Download a single file from a PRIDE dataset or a public MassIVE dataset",
 )
-@click.option("-a", "--accession", required=True, help="PRIDE project accession")
+@click.option("-a", "--accession", required=True, help="PRIDE or MassIVE accession")
 @click.option(
     "-p",
     "--protocol",
@@ -261,14 +272,16 @@ def download_file_by_name(
 ):
     """
     This script download single file from servers or copy from the file system
-    :param accession: PRIDE project accession
+    :param accession: PRIDE or MassIVE accession
     :param protocol: Protocol to use for download: ftp, aspera, globus, s3. Default is ftp.
     :param file_name: fileName to be downloaded
     :param output_folder: output folder to download or copy files
-    :param skip_if_downloaded_already: Boolean value to skip the download if the file has already been downloaded. Default is False.
+    :param skip_if_downloaded_already: Boolean value to skip the download if the
+        file has already been downloaded. Default is False.
     :param username: PRIDE login username for private files
     :param password: PRIDE login password for private files
-    :param aspera_maximum_bandwidth: Aspera maximum bandwidth (e.g 50M, 100M, 200M), depending on the user's network bandwidth, default is 100M
+    :param aspera_maximum_bandwidth: Aspera maximum bandwidth (e.g 50M, 100M,
+        200M), depending on the user's network bandwidth, default is 100M
     :param checksum_check: Download checksum file for project.
     """
 
@@ -316,11 +329,28 @@ def download_file_by_name(
     default=False,
     help="Skip the download if the file has already been downloaded.",
 )
-def download_px_raw_files(accession: str, output_folder: str, skip_if_downloaded_already: bool):
+@click.option(
+    "--preserve-structure",
+    is_flag=True,
+    default=False,
+    help="Recreate the dataset's subdirectory layout under the output folder. "
+    "By default files are downloaded flat into the output folder.",
+)
+def download_px_raw_files(
+    accession: str,
+    output_folder: str,
+    skip_if_downloaded_already: bool,
+    preserve_structure: bool = False,
+):
     """CLI wrapper to download raw files via ProteomeXchange XML."""
     files = Files()
     logging.info(f"PX accession/URL: {accession}")
-    files.download_px_raw_files(accession, output_folder, skip_if_downloaded_already)
+    files.download_px_raw_files(
+        accession,
+        output_folder,
+        skip_if_downloaded_already,
+        flatten=not preserve_structure,
+    )
 
 
 @main.command("list-private-files", help="List private files by project accession")
@@ -423,10 +453,10 @@ def stream_files_metadata(accession, output_file):
     "-sf",
     "--sort-fields",
     required=False,
-    default=["submission_date"],
+    default=["submissionDate"],
     multiple=True,
     help="Field(s) for sorting the results on. Default for this "
-    "request is submission_date. More fields can be separated by "
+    "request is submissionDate. More fields can be separated by "
     "comma and passed. Example: submissionDate,accession",
     type=click.Choice(
         "accession,submissionDate,diseases,organismsPart,organisms,instruments,softwares,"
@@ -562,14 +592,18 @@ def _read_url_arguments(url_list_path, urls_csv=None):
     help="Download project checksums and validate downloaded files.",
 )
 @click.option(
-    "-t",
-    "--threads",
-    "download_threads",
+    "-w",
+    "--parallel-files",
     default=1,
-    type=click.IntRange(1, 32),
-    help="Number of parallel HTTP Range threads per file for globus (1-32). "
-         "Default is 1 (single connection). Falls back to single connection if "
-         "the server does not support Range requests or the file is below 10 MB.",
+    type=click.IntRange(1, 3),
+    help="Number of files to download simultaneously (1-3). Primarily used by globus protocol. Default is 1.",
+)
+@click.option(
+    "--preserve-structure",
+    is_flag=True,
+    default=False,
+    help="Recreate the dataset's subdirectory layout under the output folder. "
+    "By default files are downloaded flat into the output folder.",
 )
 def download_files_by_list(
     accession,
@@ -580,7 +614,8 @@ def download_files_by_list(
     skip_if_downloaded_already,
     aspera_maximum_bandwidth,
     checksum_check,
-    download_threads,
+    parallel_files,
+    preserve_structure: bool = False,
 ):
     """Download a named subset of files from a PRIDE project."""
     file_names = _read_filename_arguments(file_list_path, files_csv)
@@ -595,7 +630,8 @@ def download_files_by_list(
         protocol=protocol,
         aspera_maximum_bandwidth=aspera_maximum_bandwidth,
         checksum_check=checksum_check,
-        download_threads=download_threads,
+        parallel_files=parallel_files,
+        flatten=not preserve_structure,
     )
 
 
@@ -646,14 +682,11 @@ def download_files_by_list(
          "Accessions are inferred from PRIDE URL paths (only PRIDE URLs supported).",
 )
 @click.option(
-    "-t",
-    "--threads",
-    "download_threads",
+    "-w",
+    "--parallel-files",
     default=1,
-    type=click.IntRange(1, 32),
-    help="Number of parallel HTTP Range threads per file for globus (1-32). "
-         "Default is 1 (single connection). Falls back to single connection if "
-         "the server does not support Range requests or the file is below 10 MB.",
+    type=click.IntRange(1, 3),
+    help="Number of files to download simultaneously (1-3), for any URL scheme. Default is 1.",
 )
 def download_files_by_url(
     url_list_path,
@@ -662,7 +695,7 @@ def download_files_by_url(
     skip_if_downloaded_already,
     protocol,
     checksum_check,
-    download_threads,
+    parallel_files,
 ):
     """Download files from raw URLs (http/https/ftp), dispatched by scheme."""
     urls = _read_url_arguments(url_list_path, urls_csv)
@@ -672,8 +705,8 @@ def download_files_by_url(
         output_folder=output_folder,
         skip_if_downloaded_already=skip_if_downloaded_already,
         protocol=protocol,
+        parallel_files=parallel_files,
         checksum_check=checksum_check,
-        download_threads=download_threads,
     )
 
 

@@ -62,7 +62,7 @@ class Util:
                                         pbar.update(
                                             1
                                         )  # Update progress bar by 1 for each detection
-                    except PermissionError as e:
+                    except PermissionError:
                         print("[ERROR] No permissions to write to:", out_file)
                         sys.exit(1)
 
