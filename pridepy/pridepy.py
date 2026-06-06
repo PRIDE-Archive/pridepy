@@ -3,6 +3,7 @@ import asyncio
 import logging
 import click
 from pridepy.download.client import Client as Files
+from pridepy.pdc import download_pdc_files as run_pdc_download
 from pridepy.project.project import Project
 
 PROTOCOL_CHOICES = click.Choice(["ftp", "aspera", "globus", "s3"], case_sensitive=False)
@@ -52,11 +53,12 @@ def main():
     default=False,
 )
 @click.option(
-    "-w",
-    "--parallel-files",
+    "-t",
+    "--threads",
+    "download_threads",
     default=1,
-    type=click.IntRange(1, 3),
-    help="Number of files to download simultaneously (1-3). Primarily used by globus protocol. Default is 1.",
+    type=click.IntRange(1, 32),
+    help="Number of threads for each file download. Default is 1.",
 )
 @click.option(
     "--preserve-structure",
@@ -72,7 +74,7 @@ def download_all_public_raw_files(
     skip_if_downloaded_already,
     aspera_maximum_bandwidth: str = "50M",
     checksum_check: bool = False,
-    parallel_files: int = 1,
+    download_threads: int = 1,
     preserve_structure: bool = False,
 ):
     """
@@ -85,7 +87,7 @@ def download_all_public_raw_files(
         skip_if_downloaded_already (bool): Skip download if files already exist. Default is False.
         aspera_maximum_bandwidth (str): Maximum bandwidth for Aspera protocol. Default is 100M.
         checksum_check (bool): Flag to download checksum file for the project. Default is False.
-        parallel_files (int): Number of files to download simultaneously. Default is 1.
+        download_threads (int): Number of threads for each file download. Default is 1.
     """
 
     raw_files = Files()
@@ -102,7 +104,7 @@ def download_all_public_raw_files(
         protocol,
         aspera_maximum_bandwidth=aspera_maximum_bandwidth,
         checksum_check=checksum_check,
-        parallel_files=parallel_files,
+        download_threads=download_threads,
         flatten=not preserve_structure,
     )
 
@@ -152,11 +154,12 @@ def download_all_public_raw_files(
     "Valid values: RAW, PEAK, SEARCH, RESULT, SPECTRUM_LIBRARY, OTHER, FASTA",
 )
 @click.option(
-    "-w",
-    "--parallel-files",
+    "-t",
+    "--threads",
+    "download_threads",
     default=1,
-    type=click.IntRange(1, 3),
-    help="Number of files to download simultaneously (1-3). Primarily used by globus protocol. Default is 1.",
+    type=click.IntRange(1, 32),
+    help="Number of threads for each file download. Default is 1.",
 )
 @click.option(
     "--preserve-structure",
@@ -173,7 +176,7 @@ def download_all_public_category_files(
     aspera_maximum_bandwidth: str = "50M",
     checksum_check: bool = False,
     category: str = "RAW",
-    parallel_files: int = 1,
+    download_threads: int = 1,
     preserve_structure: bool = False,
 ):
     """
@@ -187,7 +190,7 @@ def download_all_public_category_files(
         aspera_maximum_bandwidth (str): Maximum bandwidth for Aspera transfers.
         checksum_check (bool): If True, downloads the checksum file for the project.
         category (str): Comma-separated categories of files to download (e.g. RAW or RAW,SEARCH).
-        parallel_files (int): Number of files to download simultaneously. Default is 1.
+        download_threads (int): Number of threads for each file download. Default is 1.
     """
 
     valid_categories = {"RAW", "PEAK", "SEARCH", "RESULT", "SPECTRUM_LIBRARY", "OTHER", "FASTA"}
@@ -214,7 +217,7 @@ def download_all_public_category_files(
         aspera_maximum_bandwidth=aspera_maximum_bandwidth,
         checksum_check=checksum_check,
         categories=categories,
-        parallel_files=parallel_files,
+        download_threads=download_threads,
         flatten=not preserve_structure,
     )
 
@@ -592,11 +595,12 @@ def _read_url_arguments(url_list_path, urls_csv=None):
     help="Download project checksums and validate downloaded files.",
 )
 @click.option(
-    "-w",
-    "--parallel-files",
+    "-t",
+    "--threads",
+    "download_threads",
     default=1,
-    type=click.IntRange(1, 3),
-    help="Number of files to download simultaneously (1-3). Primarily used by globus protocol. Default is 1.",
+    type=click.IntRange(1, 32),
+    help="Number of threads for each file download. Default is 1.",
 )
 @click.option(
     "--preserve-structure",
@@ -614,7 +618,7 @@ def download_files_by_list(
     skip_if_downloaded_already,
     aspera_maximum_bandwidth,
     checksum_check,
-    parallel_files,
+    download_threads,
     preserve_structure: bool = False,
 ):
     """Download a named subset of files from a PRIDE project."""
@@ -630,7 +634,7 @@ def download_files_by_list(
         protocol=protocol,
         aspera_maximum_bandwidth=aspera_maximum_bandwidth,
         checksum_check=checksum_check,
-        parallel_files=parallel_files,
+        download_threads=download_threads,
         flatten=not preserve_structure,
     )
 
@@ -682,11 +686,12 @@ def download_files_by_list(
          "Accessions are inferred from PRIDE URL paths (only PRIDE URLs supported).",
 )
 @click.option(
-    "-w",
-    "--parallel-files",
+    "-t",
+    "--threads",
+    "download_threads",
     default=1,
-    type=click.IntRange(1, 3),
-    help="Number of files to download simultaneously (1-3), for any URL scheme. Default is 1.",
+    type=click.IntRange(1, 32),
+    help="Number of threads for each file download. Default is 1.",
 )
 def download_files_by_url(
     url_list_path,
@@ -695,7 +700,7 @@ def download_files_by_url(
     skip_if_downloaded_already,
     protocol,
     checksum_check,
-    parallel_files,
+    download_threads,
 ):
     """Download files from raw URLs (http/https/ftp), dispatched by scheme."""
     urls = _read_url_arguments(url_list_path, urls_csv)
@@ -705,8 +710,91 @@ def download_files_by_url(
         output_folder=output_folder,
         skip_if_downloaded_already=skip_if_downloaded_already,
         protocol=protocol,
-        parallel_files=parallel_files,
+        download_threads=download_threads,
         checksum_check=checksum_check,
+    )
+
+
+@main.command(
+    "download-pdc-files",
+    help="Download files from PDC/CPTAC studies via PDC signed HTTPS URLs",
+)
+@click.option(
+    "-a",
+    "--accession",
+    required=True,
+    help="PDC study ID, comma-separated PDC study IDs, or a CSV with pdc_id/pdc_study_id and optional file-type/filetype.",
+)
+@click.option(
+    "--file-type",
+    required=False,
+    type=click.Choice(["mzid", "psm", "raw", "mzml"], case_sensitive=False),
+    help="PDC file type to download: mzid, psm, raw, or mzml. Overrides CSV file-type/filetype values.",
+)
+@click.option(
+    "-o",
+    "--output-folder",
+    required=True,
+    help="Output folder. Files are written as <output>/<PDC study ID>/<file name>.",
+)
+@click.option(
+    "--skip-if-downloaded-already",
+    is_flag=True,
+    default=False,
+    help="Skip files that already exist locally and match PDC size/checksum metadata.",
+)
+@click.option(
+    "--checksum-check/--no-checksum-check",
+    "checksum_check",
+    default=True,
+    help="Validate downloads against PDC md5sum values. Enabled by default.",
+)
+@click.option(
+    "-t",
+    "--threads",
+    "download_threads",
+    default=1,
+    type=click.IntRange(1, 32),
+    help="Number of parallel HTTP Range threads per file (1-32). Default is 1.",
+)
+@click.option(
+    "--retry",
+    is_flag=True,
+    default=False,
+    help="Retry failed files; HTTP 403 retries refresh the PDC signed URL first.",
+)
+def download_pdc_files(
+    accession,
+    file_type,
+    output_folder,
+    skip_if_downloaded_already,
+    checksum_check,
+    download_threads,
+    retry,
+):
+    """Download PDC/CPTAC files with PDC GraphQL metadata and signed HTTPS URLs."""
+    try:
+        stats = run_pdc_download(
+            accession=accession,
+            file_type=file_type,
+            output_folder=output_folder,
+            skip_if_downloaded_already=skip_if_downloaded_already,
+            checksum_check=checksum_check,
+            download_threads=download_threads,
+            retry=retry,
+        )
+    except ValueError as exc:
+        raise click.BadParameter(str(exc)) from exc
+    except RuntimeError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    logging.info(
+        "PDC download completed: studies=%d total=%d downloaded=%d skipped=%d failed=%d",
+        stats.studies,
+        stats.total_files,
+        stats.downloaded,
+        stats.skipped,
+        stats.failed,
     )
 
 

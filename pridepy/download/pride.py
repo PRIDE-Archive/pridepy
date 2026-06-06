@@ -317,8 +317,20 @@ class PrideProvider(Provider):
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _globus_download_one(file, output_folder, skip_if_downloaded_already, max_retries=6, position=0):
-        """Download a single file via globus; used as a worker target."""
+    def _globus_download_one(
+        file,
+        output_folder,
+        skip_if_downloaded_already,
+        max_retries=6,
+        position=0,
+        download_threads: int = 1,
+    ):
+        """Download a single file via globus; used as a worker target.
+
+        When ``download_threads`` > 1 the file is fetched via parallel HTTP
+        Range segments (:func:`transport._multipart_download`); otherwise a
+        single-connection stream is used.
+        """
         download_url = PrideProvider._get_download_url(file, "globus")
         new_file_path = PrideProvider.get_output_file_name(download_url, file, output_folder)
 
@@ -328,7 +340,12 @@ class PrideProvider(Provider):
 
         for attempt in range(1, max_retries + 1):
             try:
-                transport._parallel_download(download_url, new_file_path, position=position)
+                if download_threads and download_threads > 1:
+                    transport._multipart_download(
+                        download_url, new_file_path, threads=download_threads, position=position,
+                    )
+                else:
+                    transport._parallel_download(download_url, new_file_path, position=position)
                 return
             except Exception as e:
                 logging.warning(f"Attempt {attempt}/{max_retries} failed for {file.get('fileName', '?')}: {e}")
@@ -404,6 +421,7 @@ class PrideProvider(Provider):
         file_list_json: List[Dict], output_folder, skip_if_downloaded_already,
         parallel_files: int = 1,
         checksum_map: Optional[Dict[str, str]] = None,
+        download_threads: int = 1,
     ):
         """
         Download files using globus transfer url with progress bar for each file.
@@ -457,7 +475,7 @@ class PrideProvider(Provider):
             for file in files_to_download:
                 try:
                     PrideProvider._globus_download_one(
-                        file, output_folder, False
+                        file, output_folder, False, download_threads=download_threads,
                     )
                     new_file_path = PrideProvider.get_output_file_name(
                         PrideProvider._get_download_url(file, "globus"), file, output_folder
@@ -472,8 +490,11 @@ class PrideProvider(Provider):
                 futures = {
                     executor.submit(
                         PrideProvider._globus_download_one,
-                        file, output_folder, False,
+                        file,
+                        output_folder,
+                        False,
                         position=idx,
+                        download_threads=download_threads,
                     ): file
                     for idx, file in enumerate(files_to_download)
                 }
@@ -666,6 +687,7 @@ class PrideProvider(Provider):
         aspera_maximum_bandwidth: str,
         parallel_files: int = 1,
         checksum_map: Optional[Dict[str, str]] = None,
+        download_threads: int = 1,
     ) -> None:
         """
         Transfer a batch of files with one protocol, reusing a single
@@ -706,6 +728,7 @@ class PrideProvider(Provider):
                 skip_if_downloaded_already=skip_if_downloaded_already,
                 parallel_files=parallel_files,
                 checksum_map=checksum_map or {},
+                download_threads=download_threads,
             )
             return
         if protocol == "s3":
@@ -726,6 +749,7 @@ class PrideProvider(Provider):
         aspera_maximum_bandwidth: str,
         max_protocol_retries: int = 2,
         parallel_files: int = 1,
+        download_threads: int = 1,
     ) -> bool:
         """
         Download one file by trying each protocol in sequence, validating
@@ -749,6 +773,7 @@ class PrideProvider(Provider):
                         skip_if_downloaded_already=False,
                         aspera_maximum_bandwidth=aspera_maximum_bandwidth,
                         parallel_files=parallel_files,
+                        download_threads=download_threads,
                     )
                 except Exception as error:
                     logging.error(
@@ -787,6 +812,7 @@ class PrideProvider(Provider):
         username: Optional[str] = None,
         password: Optional[str] = None,
         flatten: bool = True,
+        download_threads: int = 1,
     ):
         """Override Provider.download_files with the multi-protocol orchestrator.
 
@@ -808,6 +834,7 @@ class PrideProvider(Provider):
             aspera_maximum_bandwidth=aspera_maximum_bandwidth,
             checksum_check=checksum_check,
             parallel_files=parallel_files,
+            download_threads=download_threads,
         )
 
     def download_by_name(
@@ -887,6 +914,7 @@ class PrideProvider(Provider):
         aspera_maximum_bandwidth: str = "100M",  # Aspera maximum bandwidth
         checksum_check=False,
         parallel_files: int = 1,
+        download_threads: int = 1,
     ):
         """
         Download files using the ftp, aspera, globus, or s3 transfer protocol.
@@ -933,6 +961,7 @@ class PrideProvider(Provider):
                 aspera_maximum_bandwidth=aspera_maximum_bandwidth,
                 parallel_files=parallel_files,
                 checksum_map=checksum_map,
+                download_threads=download_threads,
             )
         except Exception as exc:
             logging.warning(
@@ -968,6 +997,7 @@ class PrideProvider(Provider):
                 expected_checksum=expected_checksum,
                 aspera_maximum_bandwidth=aspera_maximum_bandwidth,
                 parallel_files=parallel_files,
+                download_threads=download_threads,
             )
             if not success:
                 failed_files.append(file_record.get("fileName", "<unknown>"))

@@ -106,6 +106,7 @@ class Client:
         skip_if_downloaded_already: bool,
         parallel_files: int = 1,
         max_retries: int = 3,
+        download_threads: int = 1,
     ) -> None:
         """Shim — see :func:`pridepy.download.transport.download_http_urls`."""
         return transport.download_http_urls(
@@ -114,6 +115,7 @@ class Client:
             skip_if_downloaded_already=skip_if_downloaded_already,
             parallel_files=parallel_files,
             max_retries=max_retries,
+            download_threads=download_threads,
         )
 
     # Accession-matcher convenience helpers (useful public API).
@@ -187,6 +189,7 @@ class Client:
         checksum_check: bool = False,
         parallel_files: int = 1,
         flatten: bool = True,
+        download_threads: int = 1,
     ):
         """Download all RAW files for any registered provider."""
         return registry.resolve(accession).download_all_raw(
@@ -198,6 +201,7 @@ class Client:
             checksum_check=checksum_check,
             parallel_files=parallel_files,
             flatten=flatten,
+            download_threads=download_threads,
         )
 
     def download_all_category_files(
@@ -212,6 +216,7 @@ class Client:
         category: str = None,
         parallel_files: int = 1,
         flatten: bool = True,
+        download_threads: int = 1,
     ):
         """Download all files of the given categories from a project."""
         if categories is None:
@@ -226,6 +231,7 @@ class Client:
             checksum_check=checksum_check,
             parallel_files=parallel_files,
             flatten=flatten,
+            download_threads=download_threads,
         )
 
     def download_file_by_name(
@@ -269,6 +275,7 @@ class Client:
         checksum_check: bool = False,
         parallel_files: int = 1,
         flatten: bool = True,
+        download_threads: int = 1,
     ) -> None:
         """Download a subset of project files identified by a filename list."""
         return registry.resolve(accession).download_by_filenames(
@@ -281,6 +288,7 @@ class Client:
             checksum_check=checksum_check,
             parallel_files=parallel_files,
             flatten=flatten,
+            download_threads=download_threads,
         )
 
     @staticmethod
@@ -291,6 +299,7 @@ class Client:
         protocol: str = "ftp",
         parallel_files: int = 1,
         checksum_check: bool = False,
+        download_threads: int = 1,
     ) -> None:
         """Delegate to :func:`pridepy.download.by_url.download_files_by_url`."""
         return by_url.download_files_by_url(
@@ -300,6 +309,7 @@ class Client:
             protocol=protocol,
             parallel_files=parallel_files,
             checksum_check=checksum_check,
+            download_threads=download_threads,
         )
 
     def download_px_raw_files(
