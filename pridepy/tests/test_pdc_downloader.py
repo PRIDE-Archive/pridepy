@@ -38,6 +38,15 @@ def _fetcher(files):
     return fetch_files
 
 
+def _all_files_fetcher(files):
+    def fetch_files(study_id, file_type):
+        assert study_id == "PDC000109"
+        assert file_type is None
+        return files
+
+    return fetch_files
+
+
 def _write_data(_url, target):
     with open(target, "wb") as handle:
         handle.write(b"abc")
@@ -258,3 +267,24 @@ class TestPDCDownloader(TestCase):
         assert stats.downloaded == 1
         assert seen_urls == ["https://example.org/old", "https://example.org/new"]
         refresh.assert_called_once_with("PDC000109", "sample.psm", "psm")
+
+    def test_no_file_type_downloads_all_files(self):
+        psm_file = _pdc_file(name="sample.psm")
+        raw_file = _pdc_file(name="sample.raw")
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            with patch(
+                "pridepy.pdc.downloader.transport._parallel_download",
+                side_effect=_write_data,
+            ):
+                stats = download_pdc_files(
+                    accession="PDC000109",
+                    file_type=None,
+                    output_folder=tmp_dir,
+                    checksum_check=True,
+                    fetch_files=_all_files_fetcher([psm_file, raw_file]),
+                )
+
+            assert stats.downloaded == 2
+            assert stats.total_files == 2
+            assert os.path.exists(os.path.join(tmp_dir, "PDC000109", "sample.psm"))
+            assert os.path.exists(os.path.join(tmp_dir, "PDC000109", "sample.raw"))

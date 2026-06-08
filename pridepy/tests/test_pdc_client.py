@@ -107,17 +107,25 @@ class TestPDCAccessions(TestCase):
             assert requests == [PDCDownloadRequest("PDC000109", "raw")]
             assert "overrides CSV file-type values" in "\n".join(logs.output)
 
-    def test_file_type_is_required_without_csv_file_type(self):
-        with pytest.raises(ValueError, match="--file-type is required"):
-            parse_download_requests("PDC000109")
+    def test_no_file_type_downloads_all_files_for_plain_accession(self):
+        assert parse_download_requests("PDC000109") == [PDCDownloadRequest("PDC000109", None)]
 
-    def test_csv_file_type_is_required_when_command_line_file_type_is_missing(self):
+    def test_csv_without_file_type_column_downloads_all_files(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             path = os.path.join(tmp_dir, "studies.csv")
             with open(path, "w", encoding="utf-8") as handle:
                 handle.write("pdc_id\nPDC000109\n")
-            with pytest.raises(ValueError, match="file-type/filetype"):
-                parse_download_requests(path)
+            assert parse_download_requests(path) == [PDCDownloadRequest("PDC000109", None)]
+
+    def test_csv_mixed_file_type_and_no_file_type_rows(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = os.path.join(tmp_dir, "studies.csv")
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write("pdc_id,file-type\nPDC000109,raw\nPDC000110,\n")
+            assert parse_download_requests(path) == [
+                PDCDownloadRequest("PDC000109", "raw"),
+                PDCDownloadRequest("PDC000110", None),
+            ]
 
     def test_csv_missing_column_raises(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -167,6 +175,18 @@ class TestPDCClient(TestCase):
         session = FakeSession(_payload([entry]))
 
         assert fetch_study_files("PDC000109", "psm", session=session) == []
+
+    def test_fetch_study_files_none_file_type_returns_all_files(self):
+        entries = [
+            _entry("sample.psm", file_format="tsv", data_category="Peptide Spectral Matches"),
+            _entry("sample.raw", file_format="vendor-specific", data_category="Raw Mass Spectra"),
+        ]
+        session = FakeSession(_payload(entries))
+
+        files = fetch_study_files("PDC000109", None, session=session)
+
+        assert len(files) == 2
+        assert {f.file_name for f in files} == {"sample.psm", "sample.raw"}
 
     def test_refresh_signed_url_returns_matching_file(self):
         files = [
