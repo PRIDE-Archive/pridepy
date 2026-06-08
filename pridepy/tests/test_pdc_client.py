@@ -60,6 +60,17 @@ class TestPDCAccessions(TestCase):
     def test_single_accession(self):
         assert parse_accessions("PDC000109") == ["PDC000109"]
 
+    def test_accession_not_confused_with_same_named_directory(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            old_cwd = os.getcwd()
+            os.chdir(tmp_dir)
+            try:
+                os.makedirs("PDC000714")
+                assert parse_accessions("PDC000714") == ["PDC000714"]
+                assert parse_download_requests("PDC000714") == [PDCDownloadRequest("PDC000714", None)]
+            finally:
+                os.chdir(old_cwd)
+
     def test_comma_accessions_are_deduped(self):
         assert parse_accessions("PDC000109,PDC000110,PDC000109") == [
             "PDC000109",
