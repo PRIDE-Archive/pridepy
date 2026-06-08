@@ -729,7 +729,7 @@ def download_files_by_url(
     "--file-type",
     required=False,
     type=click.Choice(["mzid", "psm", "raw", "mzml"], case_sensitive=False),
-    help="PDC file type to download: mzid, psm, raw, or mzml. Overrides CSV file-type/filetype values.",
+    help="PDC file type to download: mzid, psm, raw, or mzml. Omit to download all file types. Overrides CSV file-type/filetype values.",
 )
 @click.option(
     "-o",
