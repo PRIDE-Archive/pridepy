@@ -139,7 +139,7 @@ def parse_accessions(accession: str) -> List[str]:
         raise ValueError("--accession must not be empty")
 
     source_path = Path(accession).expanduser()
-    if source_path.exists():
+    if source_path.is_file():
         if source_path.suffix.lower() != ".csv":
             raise ValueError(f"Only CSV accession files are supported: {source_path}")
         return _read_accessions_from_csv(source_path)
@@ -168,7 +168,7 @@ def parse_download_requests(accession: str, file_type: Optional[str] = None) -> 
     command_file_type = normalize_file_type(file_type) if file_type else None
     source_path = Path(accession).expanduser()
 
-    if source_path.exists():
+    if source_path.is_file():
         if source_path.suffix.lower() != ".csv":
             raise ValueError(f"Only CSV accession files are supported: {source_path}")
 
