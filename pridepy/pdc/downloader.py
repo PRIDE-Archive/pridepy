@@ -13,8 +13,8 @@ from pridepy.pdc.client import PDCFile, fetch_study_files, parse_download_reques
 
 LOGGER = logging.getLogger(__name__)
 
-FetchFiles = Callable[[str, str], List[PDCFile]]
-RefreshUrl = Callable[[str, str, str], Optional[str]]
+FetchFiles = Callable[[str, Optional[str]], List[PDCFile]]
+RefreshUrl = Callable[[str, str, Optional[str]], Optional[str]]
 
 
 @dataclass
@@ -131,7 +131,7 @@ def _download_with_retries(
     target: Path,
     checksum_check: bool,
     download_threads: int,
-    file_type: str,
+    file_type: Optional[str],
     refresh_url: RefreshUrl,
     refresh_on_403: bool,
     max_attempts: int,
@@ -184,7 +184,7 @@ def _write_failed_files(output_folder: Path, failures: List[PDCDownloadFailure])
     return failed_log
 
 
-def _failure_from_result(pdc_file: PDCFile, result: PDCTransferResult, file_type: str) -> PDCDownloadFailure:
+def _failure_from_result(pdc_file: PDCFile, result: PDCTransferResult, file_type: Optional[str]) -> PDCDownloadFailure:
     return PDCDownloadFailure(
         study_id=pdc_file.study_id,
         file_name=pdc_file.file_name,
@@ -197,7 +197,7 @@ def _failure_from_result(pdc_file: PDCFile, result: PDCTransferResult, file_type
 
 def _fetch_study_file_list(
     study_id: str,
-    file_type: str,
+    file_type: Optional[str],
     fetch_files: FetchFiles,
 ) -> Tuple[List[PDCFile], Optional[PDCDownloadFailure]]:
     try:
@@ -243,7 +243,7 @@ def _download_study_files(
 
 @dataclass(frozen=True)
 class PDCDownloadOptions:
-    file_type: str
+    file_type: Optional[str]
     skip_existing: bool
     checksum_check: bool
     download_threads: int
@@ -343,12 +343,13 @@ def download_pdc_files(
 
         stats.total_files += len(study_files)
         if not study_files:
-            message = f"No PDC files matched file_type={request.file_type}"
+            file_type_label = request.file_type or "all"
+            message = f"No PDC files matched file_type={file_type_label}"
             LOGGER.warning("%s for %s", message, request.study_id)
             empty_match_failures.append(
                 PDCDownloadFailure(
                     request.study_id,
-                    f"<{request.file_type}>",
+                    f"<{file_type_label}>",
                     message,
                     file_type=request.file_type,
                 )

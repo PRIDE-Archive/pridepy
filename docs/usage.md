@@ -15,6 +15,7 @@ downloaded files (non-empty, and checksum validation when enabled).
 - [PRIDE file downloads](#pride-file-downloads)
 - [Metadata and search](#metadata-and-search)
 - [Download from ProteomeXchange and other repositories](#download-from-proteomexchange-and-other-repositories)
+- [Download CPTAC/PDC files](#download-cptacpdc-files)
 - [Python API examples](#python-api-examples)
 
 ## Command overview
@@ -31,6 +32,7 @@ pridepy --help
 | `download-files-by-list` | Download a named subset of files from a manifest/CSV |
 | `download-files-by-url` | Download files from raw `http`/`https`/`ftp` URLs |
 | `download-px-raw-files` | Download RAW files resolved from a ProteomeXchange accession |
+| `download-pdc-files` | Download PDC/CPTAC files via PDC GraphQL signed HTTPS URLs |
 | `list-private-files` | List files of a private project (needs credentials) |
 | `stream-files-metadata` | Stream file metadata (one project or all) to JSON |
 | `stream-projects-metadata` | Stream all project metadata to JSON |
@@ -284,6 +286,147 @@ pridepy download-all-public-category-files \
   -o ./downloads/MSV000082297-results \
   -c RESULT
 ```
+
+## Download CPTAC/PDC files
+
+The [Proteomic Data Commons (PDC)](https://pdc.cancer.gov/) hosts CPTAC (Clinical
+Proteomic Tumor Analysis Consortium) mass-spectrometry datasets. `pridepy` can
+enumerate and download PDC files via the PDC GraphQL API, which issues short-lived
+signed HTTPS URLs for each file. Files are organised by **PDC study ID**
+(e.g. `PDC000109`).
+
+### Download all files for a study
+
+Omit `--file-type` to download every file available in the study:
+
+```bash
+pridepy download-pdc-files \
+  -a PDC000109 \
+  -o ./downloads/PDC000109
+```
+
+Files are placed under `<output-folder>/<PDC study ID>/<file name>`.
+
+### Download a specific file type
+
+Pass `--file-type` to restrict the download to one category:
+
+```bash
+# mzIdentML peptide-spectral-match files
+pridepy download-pdc-files \
+  -a PDC000109 \
+  --file-type mzid \
+  -o ./downloads/PDC000109
+
+# PSM TSV files
+pridepy download-pdc-files \
+  -a PDC000109 \
+  --file-type psm \
+  -o ./downloads/PDC000109
+
+# Vendor RAW files
+pridepy download-pdc-files \
+  -a PDC000109 \
+  --file-type raw \
+  -o ./downloads/PDC000109
+
+# Processed mzML files
+pridepy download-pdc-files \
+  -a PDC000109 \
+  --file-type mzml \
+  -o ./downloads/PDC000109
+```
+
+### Download multiple studies at once
+
+Pass a comma-separated list of study IDs or a CSV file:
+
+```bash
+# Comma-separated list — downloads all files for each study
+pridepy download-pdc-files \
+  -a PDC000109,PDC000110,PDC000111 \
+  -o ./downloads/pdc-batch
+
+# CSV with a pdc_id column — downloads all files for each row
+# studies.csv:  pdc_id
+#               PDC000109
+#               PDC000110
+pridepy download-pdc-files \
+  -a studies.csv \
+  -o ./downloads/pdc-batch
+```
+
+When the CSV includes a `file-type` (or `filetype`) column, each row's file type
+is used independently, allowing mixed-type batch downloads in a single command:
+
+```csv
+pdc_id,file-type
+PDC000109,raw
+PDC000110,mzml
+PDC000111,psm
+```
+
+```bash
+pridepy download-pdc-files \
+  -a studies.csv \
+  -o ./downloads/pdc-batch
+```
+
+### Resume an interrupted download
+
+```bash
+pridepy download-pdc-files \
+  -a PDC000109 \
+  -o ./downloads/PDC000109 \
+  --skip-if-downloaded-already
+```
+
+### Validate checksums
+
+PDC-provided `md5sum` values are checked automatically. To disable:
+
+```bash
+pridepy download-pdc-files \
+  -a PDC000109 \
+  -o ./downloads/PDC000109 \
+  --no-checksum-check
+```
+
+### Speed up large files with parallel HTTP Range threads
+
+Use `-t / --threads` (1–32) to split each file into parallel byte-range requests:
+
+```bash
+pridepy download-pdc-files \
+  -a PDC000109 \
+  --file-type raw \
+  -o ./downloads/PDC000109 \
+  --threads 8
+```
+
+### Retry failed files (including 403 signed-URL refresh)
+
+Signed URLs expire after a short time. `--retry` re-fetches a fresh URL before
+each retry attempt when a `403 Forbidden` is received:
+
+```bash
+pridepy download-pdc-files \
+  -a PDC000109 \
+  -o ./downloads/PDC000109 \
+  --retry
+```
+
+### Full option reference
+
+| Option | Description | Default |
+| --- | --- | --- |
+| `-a, --accession` | PDC study ID, comma-separated IDs, or a CSV with `pdc_id`/`pdc_study_id` and optional `file-type`/`filetype` column | required |
+| `--file-type` | Restrict to one type: `mzid`, `psm`, `raw`, or `mzml`. Omit to download all file types. Overrides the CSV `file-type` column. | all types |
+| `-o, --output-folder` | Destination directory; files are written as `<output>/<study ID>/<file name>` | required |
+| `--skip-if-downloaded-already` | Skip files that already exist locally and match PDC size/checksum | off |
+| `--checksum-check / --no-checksum-check` | Validate downloads against PDC `md5sum` values | on |
+| `-t, --threads` | Parallel HTTP Range threads per file (1–32) | `1` |
+| `--retry` | Retry failed files; HTTP 403 retries refresh the PDC signed URL first | off |
 
 ## Python API examples
 

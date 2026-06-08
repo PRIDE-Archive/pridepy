@@ -44,7 +44,7 @@ class PDCFile:
 @dataclass(frozen=True)
 class PDCDownloadRequest:
     study_id: str
-    file_type: str
+    file_type: Optional[str]
 
 
 PDC_FILE_TYPE_FILTERS: Dict[str, PDCFileTypeFilter] = {
@@ -182,19 +182,12 @@ def parse_download_requests(accession: str, file_type: Optional[str] = None) -> 
         requests = []
         for study_id, csv_file_type in rows:
             request_file_type = command_file_type
-            if request_file_type is None:
-                if csv_file_type is None:
-                    raise ValueError(
-                        "CSV rows must contain file-type/filetype when --file-type is not set: "
-                        f"{study_id}"
-                    )
+            if request_file_type is None and csv_file_type is not None:
                 request_file_type = normalize_file_type(csv_file_type)
             requests.append(PDCDownloadRequest(study_id, request_file_type))
         return list(dict.fromkeys(requests))
 
     study_ids = parse_accessions(accession)
-    if command_file_type is None:
-        raise ValueError("--file-type is required unless --accession is a CSV with file-type/filetype column")
     return [PDCDownloadRequest(study_id, command_file_type) for study_id in study_ids]
 
 
@@ -258,12 +251,12 @@ def post_graphql(query: str, variables: Dict, session=None) -> Dict:
     return payload
 
 
-def fetch_study_files(study_id: str, file_type: str, session=None) -> List[PDCFile]:
+def fetch_study_files(study_id: str, file_type: Optional[str], session=None) -> List[PDCFile]:
     payload = post_graphql(FILES_PER_STUDY_QUERY, {"studyId": study_id}, session=session)
     raw_files = payload.get("data", {}).get("filesPerStudy", []) or []
     files: List[PDCFile] = []
     for entry in raw_files:
-        if not entry_matches_file_type(entry, file_type):
+        if file_type is not None and not entry_matches_file_type(entry, file_type):
             continue
         pdc_file = normalize_pdc_file(entry, study_id)
         if pdc_file is None:
@@ -273,7 +266,7 @@ def fetch_study_files(study_id: str, file_type: str, session=None) -> List[PDCFi
     return files
 
 
-def refresh_signed_url(study_id: str, file_name: str, file_type: str, session=None) -> Optional[str]:
+def refresh_signed_url(study_id: str, file_name: str, file_type: Optional[str], session=None) -> Optional[str]:
     with _refresh_lock:
         for pdc_file in fetch_study_files(study_id, file_type, session=session):
             if pdc_file.file_name == file_name:

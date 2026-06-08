@@ -120,7 +120,8 @@ pridepy download-px-raw-files -a PXD039236 -o ./downloads/PXD039236
 # Download a native MassIVE / JPOST / iProX dataset
 pridepy download-all-public-raw-files -a MSV000082297 -o ./downloads/MSV000082297
 
-# Download PDC/CPTAC files for a study (single type, or per-row types via CSV)
+# Download PDC/CPTAC files for a study (all types, or restrict with --file-type)
+pridepy download-pdc-files -a PDC000109 -o ./downloads/pdc
 pridepy download-pdc-files -a PDC000109 --file-type psm -o ./downloads/pdc
 ```
 
