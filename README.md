@@ -101,6 +101,7 @@ pridepy --help
 | `download-file-by-name` | Download a single file (public or private) |
 | `download-files-by-list` | Download a named subset of files from a manifest/CSV |
 | `download-files-by-url` | Download files from raw `http`/`https`/`ftp` URLs |
+| `download-pdc-files` | Download PDC/CPTAC files via PDC signed HTTPS URLs |
 | `download-px-raw-files` | Download RAW files resolved from a ProteomeXchange accession |
 | `list-private-files` | List files of a private project (needs credentials) |
 | `stream-files-metadata` | Stream file metadata (one project or all) to JSON |
@@ -118,6 +119,9 @@ pridepy download-px-raw-files -a PXD039236 -o ./downloads/PXD039236
 
 # Download a native MassIVE / JPOST / iProX dataset
 pridepy download-all-public-raw-files -a MSV000082297 -o ./downloads/MSV000082297
+
+# Download PDC/CPTAC files for a study (single type, or per-row types via CSV)
+pridepy download-pdc-files -a PDC000109 --file-type psm -o ./downloads/pdc
 ```
 
 Full option tables and more examples are in [docs/usage.md](docs/usage.md).

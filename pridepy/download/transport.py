@@ -83,22 +83,59 @@ def _open_ftp_connection(host: str, use_tls: bool, timeout: int = 30) -> FTP:
     return ftp
 
 
-def _walk_ftp_tree(ftp: FTP, remote_dir: str) -> List[str]:
+# Emit a progress line every this many directories while walking a remote
+# tree. Large deposits (e.g. a MassIVE timsTOF dataset with thousands of .d
+# directories, each needing its own TLS data connection to list) can take
+# many minutes to enumerate; without progress the caller looks hung.
+_WALK_PROGRESS_EVERY_DIRS = 100
+
+
+def _walk_ftp_tree(
+    ftp: FTP, remote_dir: str, _progress: Optional[dict] = None
+) -> List[str]:
     """
     Recursively list files under a remote FTP directory.
+
+    Emits an INFO progress heartbeat every ``_WALK_PROGRESS_EVERY_DIRS``
+    directories, plus a final summary, so enumerating a large deposit does
+    not look like a hang. ``_progress`` is internal recursion state; callers
+    invoke this with ``(ftp, remote_dir)`` only.
     """
     import posixpath
+
+    top_level = _progress is None
+    if top_level:
+        _progress = {"dirs": 0, "files": 0}
+
+    def _note_dir_listed() -> None:
+        _progress["dirs"] += 1
+        if _progress["dirs"] % _WALK_PROGRESS_EVERY_DIRS == 0:
+            logging.info(
+                "Listing remote tree: %d directories scanned, "
+                "%d files found so far...",
+                _progress["dirs"],
+                _progress["files"],
+            )
+
     file_paths: List[str] = []
     try:
         entries = list(ftp.mlsd(remote_dir))
+        _note_dir_listed()
         for name, facts in entries:
             if name in {".", ".."}:
                 continue
             child_path = posixpath.join(remote_dir.rstrip("/"), name)
             if facts.get("type") == "dir":
-                file_paths.extend(_walk_ftp_tree(ftp, child_path))
+                file_paths.extend(_walk_ftp_tree(ftp, child_path, _progress))
             elif facts.get("type") == "file":
                 file_paths.append(child_path)
+                _progress["files"] += 1
+        if top_level:
+            logging.info(
+                "Listing remote tree complete: %d directories, %d files.",
+                _progress["dirs"],
+                _progress["files"],
+            )
         return file_paths
     except (AttributeError, ftplib.error_perm):
         pass
@@ -108,6 +145,7 @@ def _walk_ftp_tree(ftp: FTP, remote_dir: str) -> List[str]:
     try:
         ftp.cwd(remote_dir)
         ftp.retrlines("LIST", listing.append)
+        _note_dir_listed()
         for entry in listing:
             parts = entry.split(maxsplit=8)
             if len(parts) < 9:
@@ -117,11 +155,18 @@ def _walk_ftp_tree(ftp: FTP, remote_dir: str) -> List[str]:
                 continue
             child_path = posixpath.join(remote_dir.rstrip("/"), name)
             if entry.startswith("d"):
-                file_paths.extend(_walk_ftp_tree(ftp, child_path))
+                file_paths.extend(_walk_ftp_tree(ftp, child_path, _progress))
             else:
                 file_paths.append(child_path)
+                _progress["files"] += 1
     finally:
         ftp.cwd(current_dir)
+    if top_level:
+        logging.info(
+            "Listing remote tree complete: %d directories, %d files.",
+            _progress["dirs"],
+            _progress["files"],
+        )
     return file_paths
 
 
@@ -580,6 +625,142 @@ def _parallel_download(url, file_path, position=0):
             )
 
 
+def _download_range(url, file_path, start, end, pbar, max_retries=3):
+    """Download a byte range directly into the target file using seek.
+
+    On transient failures (e.g. ``IncompleteRead``) the segment resumes
+    from the last successfully written byte using a fresh Range request
+    for the remaining bytes, instead of restarting the whole segment.
+    ``pbar`` only accumulates bytes that were actually written, so the
+    progress bar stays in sync with on-disk state across retries.
+    """
+    cursor = start
+    for attempt in range(1, max_retries + 1):
+        try:
+            session = Util.create_session_with_retries()
+            headers = {"Range": f"bytes={cursor}-{end}"}
+            with session.get(url, headers=headers, stream=True, timeout=(15, 15)) as r:
+                r.raise_for_status()
+                if r.status_code != 206:
+                    raise RuntimeError(f"Server did not honor Range request: {r.status_code}")
+                content_range = r.headers.get("Content-Range", "")
+                if not content_range.lower().startswith(f"bytes {cursor}-{end}/"):
+                    raise RuntimeError(f"Unexpected Content-Range header: {content_range}")
+                with open(file_path, "r+b") as f:
+                    f.seek(cursor)
+                    for chunk in r.iter_content(chunk_size=8 * 1024 * 1024):
+                        if chunk:
+                            f.write(chunk)
+                            cursor += len(chunk)
+                            pbar.update(len(chunk))
+            return
+        except (requests.RequestException, RuntimeError, OSError) as exc:
+            logging.warning(
+                f"Range {start}-{end} attempt {attempt}/{max_retries} failed "
+                f"(resumed at {cursor}/{end + 1}): {exc}"
+            )
+            if attempt >= max_retries:
+                raise
+            time.sleep(2 * attempt)
+
+
+def _can_use_multipart(threads, accept_ranges, total_size, min_size_bytes):
+    return (
+        threads >= 2
+        and accept_ranges == "bytes"
+        and total_size > 0
+        and total_size >= min_size_bytes
+    )
+
+
+def _read_http_download_metadata(url):
+    session = Util.create_session_with_retries()
+    head = session.head(url, timeout=(30, 30), allow_redirects=True)
+    head.raise_for_status()
+    total_size = int(head.headers.get("content-length", 0))
+    accept_ranges = head.headers.get("accept-ranges", "none").strip().lower()
+    return total_size, accept_ranges
+
+
+def _prepare_multipart_target(file_path, total_size):
+    if os.path.exists(file_path) and os.path.getsize(file_path) == total_size:
+        logging.info("File already complete: %s", file_path)
+        return False
+
+    with open(file_path, "wb") as pre:
+        pre.truncate(total_size)
+    return True
+
+
+def _build_download_ranges(total_size, threads):
+    part_size = total_size // threads
+    ranges = []
+    for index in range(threads):
+        start = index * part_size
+        end = total_size - 1 if index == threads - 1 else (start + part_size - 1)
+        ranges.append((start, end))
+    return ranges
+
+
+def _download_multipart_ranges(url, file_path, ranges, total_size, position):
+    try:
+        with tqdm(
+            total=total_size,
+            unit="B",
+            unit_scale=True,
+            desc=file_path,
+            position=position,
+            leave=True,
+        ) as pbar:
+            with ThreadPoolExecutor(max_workers=len(ranges)) as executor:
+                futures = [
+                    executor.submit(_download_range, url, file_path, start, end, pbar)
+                    for start, end in ranges
+                ]
+                for future in as_completed(futures):
+                    future.result()
+    except (requests.RequestException, RuntimeError, OSError):
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        raise
+
+
+def _multipart_download(url, file_path, threads=8, position=0, min_size_bytes=10 * 1024 * 1024):
+    """Download a single file via parallel HTTP Range requests.
+
+    Falls back to :func:`_parallel_download` if the server does not advertise
+    ``Accept-Ranges: bytes``, the total size is unknown, or the file is
+    smaller than ``min_size_bytes`` (default 10 MB).
+
+    Threads are clamped to ``[1, 32]``. Resume is best-effort: if an existing
+    file matches the expected total size, it is treated as complete.
+    """
+    parent = os.path.dirname(file_path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+
+    threads = max(1, min(32, int(threads or 1)))
+    try:
+        total_size, accept_ranges = _read_http_download_metadata(url)
+    except (requests.RequestException, ValueError) as exc:
+        logging.info(
+            "HEAD failed for multipart, falling back to single stream: %s",
+            exc,
+        )
+        _parallel_download(url, file_path, position=position)
+        return
+
+    if not _can_use_multipart(threads, accept_ranges, total_size, min_size_bytes):
+        _parallel_download(url, file_path, position=position)
+        return
+
+    if not _prepare_multipart_target(file_path, total_size):
+        return
+
+    ranges = _build_download_ranges(total_size, threads)
+    _download_multipart_ranges(url, file_path, ranges, total_size, position)
+
+
 def _http_download_one(
     url: str,
     output_folder: str,
@@ -587,6 +768,7 @@ def _http_download_one(
     max_retries: int = 3,
     position: int = 0,
     relative_path: Optional[str] = None,
+    download_threads: int = 1,
 ) -> None:
     """
     Download a single HTTP(S) URL with HEAD-then-Range resume and retry.
@@ -597,6 +779,10 @@ def _http_download_one(
     ``relative_path`` (when given) is the dataset-relative destination, so
     files keep their collection layout instead of being flattened to the
     URL basename.
+
+    When ``download_threads`` > 1 a single file is split into parallel HTTP
+    Range segments via :func:`_multipart_download`; otherwise a single
+    connection stream is used.
     """
     local_path = _dest_path(output_folder, urlparse(url).path, relative_path)
     if skip_if_downloaded_already and os.path.exists(local_path):
@@ -605,7 +791,10 @@ def _http_download_one(
     last_error: Optional[Exception] = None
     for attempt in range(1, max_retries + 1):
         try:
-            _parallel_download(url, local_path, position=position)
+            if download_threads and download_threads > 1:
+                _multipart_download(url, local_path, threads=download_threads, position=position)
+            else:
+                _parallel_download(url, local_path, position=position)
             logging.info(f"Successfully downloaded {local_path}")
             return
         except Exception as e:
@@ -625,6 +814,7 @@ def download_http_urls(
     parallel_files: int = 1,
     max_retries: int = 3,
     relative_paths: Optional[List[str]] = None,
+    download_threads: int = 1,
 ) -> None:
     """
     Download a list of HTTP(S) URLs with HEAD-then-Range resume, per-file
@@ -634,6 +824,9 @@ def download_http_urls(
     :class:`ThreadPoolExecutor`. Each worker manages its own file (a new
     ``requests`` session is opened inside ``_parallel_download``) so the
     only shared resource is the output directory.
+
+    When ``download_threads`` > 1, each individual file is split into that
+    many parallel HTTP Range segments for higher single-file throughput.
 
     :param relative_paths: Optional per-URL dataset-relative destination
         paths (parallel to ``http_urls``); see :func:`download_ftp_urls`.
@@ -666,6 +859,7 @@ def download_http_urls(
                     max_retries,
                     idx,
                     _rel(idx),
+                    download_threads,
                 ): url
                 for idx, url in enumerate(http_urls)
             }
@@ -685,6 +879,7 @@ def download_http_urls(
                     skip_if_downloaded_already,
                     max_retries,
                     relative_path=_rel(idx),
+                    download_threads=download_threads,
                 )
             except Exception as e:
                 logging.error(f"HTTP download failed for {url}: {e}")

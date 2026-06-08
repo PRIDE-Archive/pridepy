@@ -22,6 +22,25 @@ class TestCliPreserveStructure(TestCase):
             )
         kwargs = files_cls.return_value.download_all_raw_files.call_args.kwargs
         assert kwargs["flatten"] is True
+        assert kwargs["download_threads"] == 1
+        assert "parallel_files" not in kwargs
+
+    def test_download_all_public_raw_files_threads(self):
+        with patch("pridepy.pridepy.Files") as files_cls:
+            self._invoke(
+                [
+                    "download-all-public-raw-files",
+                    "-a",
+                    "MSV000012345",
+                    "-o",
+                    "/tmp/x",
+                    "--threads",
+                    "4",
+                ]
+            )
+        kwargs = files_cls.return_value.download_all_raw_files.call_args.kwargs
+        assert kwargs["download_threads"] == 4
+        assert "parallel_files" not in kwargs
 
     def test_download_all_public_raw_files_preserve_structure(self):
         with patch("pridepy.pridepy.Files") as files_cls:
@@ -54,6 +73,8 @@ class TestCliPreserveStructure(TestCase):
             )
         kwargs = files_cls.return_value.download_all_category_files.call_args.kwargs
         assert kwargs["flatten"] is False
+        assert kwargs["download_threads"] == 1
+        assert "parallel_files" not in kwargs
 
     def test_download_files_by_list_preserve_structure(self):
         with patch("pridepy.pridepy.Files") as files_cls:
@@ -71,6 +92,25 @@ class TestCliPreserveStructure(TestCase):
             )
         kwargs = files_cls.return_value.download_files_by_list.call_args.kwargs
         assert kwargs["flatten"] is False
+        assert kwargs["download_threads"] == 1
+        assert "parallel_files" not in kwargs
+
+    def test_download_files_by_url_threads(self):
+        with patch("pridepy.pridepy.Files") as files_cls:
+            self._invoke(
+                [
+                    "download-files-by-url",
+                    "-u",
+                    "https://example.org/a.raw",
+                    "-o",
+                    "/tmp/x",
+                    "-t",
+                    "4",
+                ]
+            )
+        kwargs = files_cls.download_files_by_url.call_args.kwargs
+        assert kwargs["download_threads"] == 4
+        assert "parallel_files" not in kwargs
 
     def test_download_px_raw_files_preserve_structure(self):
         with patch("pridepy.pridepy.Files") as files_cls:
