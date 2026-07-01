@@ -245,7 +245,10 @@ pridepy download-px-raw-files \
 | `--skip-if-downloaded-already` | Skip files already present locally | off |
 | `--preserve-structure` | Recreate the dataset's subdirectory layout under the output folder | off |
 | `--iprox-user` | iProX account username (with `--protocol aspera`; env fallback: `IPROX_USER`) | — |
-| `--iprox-password` | iProX account password (with `--protocol aspera`; env fallback: `IPROX_ASPERA_PASSWORD`) | — |
+
+The iProX Aspera password is never accepted as a command-line flag. Set the
+`IPROX_ASPERA_PASSWORD` environment variable, or omit it and `pridepy` will
+prompt for it securely (hidden input) when `--protocol aspera` is used.
 
 ### Fast downloads: parallel files and per-file segments
 
@@ -275,9 +278,10 @@ pridepy download-px-raw-files \
 
 ### Fast downloads with iProX Aspera (account required)
 
-iProX offers Aspera (`faspe://`) for very large bulk transfers. Aspera is faster
-than HTTP on high-bandwidth connections but requires an iProX account. Combine
-`--protocol aspera` with `--iprox-user` and `--iprox-password`:
+iProX offers Aspera for very large bulk transfers. Aspera is faster than HTTP
+on high-bandwidth connections but requires an iProX account. Combine
+`--protocol aspera` with `--iprox-user`; the password is read from
+`IPROX_ASPERA_PASSWORD` or prompted for securely (never passed as a flag):
 
 ```bash
 # Download via iProX Aspera with 8-file parallelism
@@ -288,9 +292,6 @@ IPROX_ASPERA_PASSWORD=your_password pridepy download-px-raw-files \
   --iprox-user your_username \
   -w 8
 ```
-
-The password is best supplied via the `IPROX_ASPERA_PASSWORD` environment variable
-to avoid exposing it on the command line.
 
 ### Go directly to the hosting repository (native MassIVE / JPOST / iProX accessions)
 
@@ -319,7 +320,7 @@ How each repository is enumerated:
 
 - **MassIVE** walks the FTPS tree at `massive-ftp.ucsd.edu` (the server requires TLS). MassIVE distributes datasets across versioned root directories (`/v01`–`/vNN`); `pridepy` discovers the correct root automatically. If FTP/FTPS is blocked by the network, `pridepy` falls back to HTTPS: it lists the dataset from the GNPS2 file index (`datasetcache.gnps2.org`) and downloads each file from the ProteoSAFe endpoint at `massive.ucsd.edu` (byte-identical to the FTPS copy).
 - **JPOST** lists files through the JSON PROXI endpoint at `https://repository.jpostdb.org/proxi/datasets/<JPSTxxxxxx>` and downloads from `ftp.jpostdb.org` over plain FTP. The PROXI listing avoids the source-IP connection limit JPOST enforces on FTP.
-- **iProX** fetches the dataset's ProteomeXchange XML from `http://download.iprox.org/<accession>/PX_<accession>.xml`, then downloads each referenced file from the same host over anonymous HTTP (with `Range` support for resume). iProX also exposes Aspera (`faspe://`) with username/password for very large bulk transfers; `pridepy` uses the public HTTP endpoint so no iProX credentials are required.
+- **iProX** fetches the dataset's ProteomeXchange XML from `http://download.iprox.org/<accession>/PX_<accession>.xml`, then downloads each referenced file from the same host over anonymous HTTP (with `Range` support for resume). iProX also exposes Aspera with username/password for very large bulk transfers; `pridepy` uses the public HTTP endpoint so no iProX credentials are required.
 
 `download-all-public-raw-files` retrieves the files stored under the dataset's
 `raw/` collection. These direct downloads support resume (REST for FTP,

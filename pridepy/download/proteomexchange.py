@@ -201,12 +201,22 @@ class ProteomeXchangeProvider(Provider):
             iprox_urls, rels = [], []
             for r in records:
                 loc = self.get_download_url(r, protocol)
-                if "download.iprox.org" in loc:
+                host = (urlparse(loc).hostname or "").lower()
+                if host == "download.iprox.org":
                     iprox_urls.append(loc)
                     rels.append(r.get("relativePath"))
             if not iprox_urls:
                 raise ValueError(
                     "Aspera requested but no iProX-hosted files found in this dataset."
+                )
+            if len(iprox_urls) < len(records):
+                logging.warning(
+                    "%d of %d file(s) are NOT hosted on iProX and were NOT "
+                    "downloaded: --protocol aspera only handles iProX-hosted "
+                    "files. Use the default HTTP transport (omit --protocol, "
+                    "or pass --protocol ftp) to download the full set.",
+                    len(records) - len(iprox_urls),
+                    len(records),
                 )
             if flatten:
                 sources = [
@@ -223,6 +233,7 @@ class ProteomeXchangeProvider(Provider):
                 user=iprox_user,
                 password=iprox_password,
                 skip_if_downloaded_already=skip_if_downloaded_already,
+                parallel_files=parallel_files,
             )
             return
 

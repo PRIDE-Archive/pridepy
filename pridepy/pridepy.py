@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import asyncio
 import logging
+import os
 from typing import Optional
 
 import click
@@ -395,17 +396,10 @@ def download_file_by_name(
     envvar="IPROX_USER",
     default=None,
     type=str,
-    help="iProX account username. Only used with --protocol aspera.",
-)
-@click.option(
-    "--iprox-password",
-    "iprox_password",
-    envvar="IPROX_ASPERA_PASSWORD",
-    default=None,
-    type=str,
-    help="iProX account password. Only used with --protocol aspera. "
-    "Best supplied via the IPROX_ASPERA_PASSWORD environment variable "
-    "rather than on the command line.",
+    help="iProX account username. Only used with --protocol aspera. The "
+    "password is never accepted as a command-line flag: it is read from "
+    "the IPROX_ASPERA_PASSWORD environment variable, or prompted for "
+    "securely (hidden input) if not set.",
 )
 def download_px_raw_files(
     accession: str,
@@ -416,11 +410,15 @@ def download_px_raw_files(
     parallel_files: int = 1,
     preserve_structure: bool = False,
     iprox_user: Optional[str] = None,
-    iprox_password: Optional[str] = None,
 ):
     """CLI wrapper to download raw files via ProteomeXchange XML."""
     files = Files()
     logging.info(f"PX accession/URL: {accession}")
+
+    password = os.environ.get("IPROX_ASPERA_PASSWORD")
+    if protocol.lower() == "aspera" and not password:
+        password = click.prompt("iProX Aspera password", hide_input=True)
+
     files.download_px_raw_files(
         accession,
         output_folder,
@@ -430,7 +428,7 @@ def download_px_raw_files(
         download_threads=download_threads,
         parallel_files=parallel_files,
         iprox_user=iprox_user,
-        iprox_password=iprox_password,
+        iprox_password=password,
     )
 
 

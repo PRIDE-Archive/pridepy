@@ -19,6 +19,11 @@ from tqdm import tqdm
 
 from pridepy.util.api_handling import Util
 
+# Combined cap on parallel_files (-w) x download_threads (-t): each factor is
+# independently clamped to 32, but nested they can reach 1024 concurrent HTTP
+# connections. Clamp the product to keep peak connections reasonable.
+MAX_TOTAL_HTTP_CONNECTIONS = 64
+
 
 def _safe_join(output_folder: str, relative_path: str) -> str:
     """Join ``output_folder`` with a dataset-relative path.
@@ -845,6 +850,19 @@ def download_http_urls(
 
     failed: List[str] = []
     workers = max(1, min(parallel_files, len(http_urls)))
+    if workers * download_threads > MAX_TOTAL_HTTP_CONNECTIONS:
+        clamped_threads = max(1, MAX_TOTAL_HTTP_CONNECTIONS // workers)
+        logging.warning(
+            "parallel_files (%d) x download_threads (%d) = %d exceeds the "
+            "combined connection cap of %d; reducing download_threads to %d "
+            "to keep peak HTTP connections bounded.",
+            workers,
+            download_threads,
+            workers * download_threads,
+            MAX_TOTAL_HTTP_CONNECTIONS,
+            clamped_threads,
+        )
+        download_threads = clamped_threads
     if workers > 1:
         logging.info(
             f"Downloading {len(http_urls)} HTTP(S) file(s) with {workers} parallel workers"
