@@ -321,6 +321,8 @@ class Client:
         parallel_files: int = 1,
         download_threads: int = 1,
         protocol: str = "ftp",
+        iprox_user: Optional[str] = None,
+        iprox_password: Optional[str] = None,
     ) -> None:
         """Delegate to :meth:`ProteomeXchangeProvider.download_from_accession_or_url`."""
         return ProteomeXchangeProvider().download_from_accession_or_url(
@@ -331,4 +333,6 @@ class Client:
             parallel_files=parallel_files,
             download_threads=download_threads,
             protocol=protocol,
+            iprox_user=iprox_user,
+            iprox_password=iprox_password,
         )

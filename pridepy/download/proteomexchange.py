@@ -26,10 +26,11 @@ import os
 import posixpath
 import re
 import defusedxml.ElementTree as ET
-from typing import ClassVar, Dict, List
+from typing import ClassVar, Dict, List, Optional
 from urllib.parse import urlparse
 
 from pridepy.download.base import Provider
+from pridepy.download.util import flatten_relative_paths
 from pridepy.util.api_handling import Util
 
 
@@ -173,6 +174,8 @@ class ProteomeXchangeProvider(Provider):
         parallel_files: int = 1,
         download_threads: int = 1,
         protocol: str = "ftp",
+        iprox_user: Optional[str] = None,
+        iprox_password: Optional[str] = None,
     ) -> None:
         """End-to-end: resolve XML, list files, partition by scheme, download.
 
@@ -183,11 +186,46 @@ class ProteomeXchangeProvider(Provider):
         concurrency and ``download_threads`` controls per-file HTTP Range
         segments; ``protocol`` flows into :meth:`download_files` (ftp/http(s)
         are handled directly today).
+
+        When ``protocol == "aspera"``, iProX-hosted files are routed through
+        :meth:`IproxProvider.aspera_download` instead of the HTTP/FTP path
+        (opt-in, requires ``iprox_user``/``iprox_password``).
         """
         records = self.list_files(px_id_or_url)
         if not records:
             logging.info("No Associated raw file URIs found in PX XML")
             return
+
+        if protocol.lower() == "aspera":
+            from pridepy.download.iprox import IproxProvider
+            iprox_urls, rels = [], []
+            for r in records:
+                loc = self.get_download_url(r, protocol)
+                if "download.iprox.org" in loc:
+                    iprox_urls.append(loc)
+                    rels.append(r.get("relativePath"))
+            if not iprox_urls:
+                raise ValueError(
+                    "Aspera requested but no iProX-hosted files found in this dataset."
+                )
+            if flatten:
+                sources = [
+                    rel if rel else urlparse(url).path
+                    for url, rel in zip(iprox_urls, rels)
+                ]
+                dest_rels: List[Optional[str]] = flatten_relative_paths(sources)
+            else:
+                dest_rels = rels
+            IproxProvider.aspera_download(
+                urls=iprox_urls,
+                output_folder=output_folder,
+                relative_paths=dest_rels,
+                user=iprox_user,
+                password=iprox_password,
+                skip_if_downloaded_already=skip_if_downloaded_already,
+            )
+            return
+
         self.download_files(
             accession=px_id_or_url,
             records=records,

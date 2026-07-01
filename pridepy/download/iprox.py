@@ -14,6 +14,7 @@ themselves go through plain HTTP on the same host, which supports
 import logging
 import os
 import re
+import subprocess
 import defusedxml.ElementTree as ET
 from typing import ClassVar, Dict, List, Optional
 from urllib.parse import urlparse
@@ -34,6 +35,9 @@ class IproxProvider(Provider):
     PX_XML_URL_TEMPLATE: ClassVar[str] = (
         "http://download.iprox.org/{accession}/PX_{accession}.xml"
     )
+    ASPERA_HOST: ClassVar[str] = "download.iprox.org"
+    ASPERA_PORT: ClassVar[str] = "33001"
+    ASPERA_ROOT: ClassVar[str] = "/data/iprox"
     # iProX PX XML uses the same PSI-MS cvParam "name" values as JPOST PROXI,
     # so we reuse JpostProvider's category map.
     PX_CATEGORY_MAP: ClassVar[Dict[str, str]] = JpostProvider.PROXI_CATEGORY_MAP
@@ -44,6 +48,66 @@ class IproxProvider(Provider):
         if not accession:
             return False
         return bool(re.fullmatch(r"IPX\d{7,10}", accession.upper()))
+
+    @staticmethod
+    def _ascp_binary() -> str:
+        # Reuse PRIDE's bundled ascp binary resolution.
+        from pridepy.download.pride import PrideProvider
+        return PrideProvider.get_ascp_binary()
+
+    @classmethod
+    def aspera_download(
+        cls,
+        urls: List[str],
+        output_folder: str,
+        relative_paths: List[Optional[str]],
+        user: Optional[str],
+        password: Optional[str],
+        maximum_bandwidth: str = "100M",
+        skip_if_downloaded_already: bool = False,
+    ) -> None:
+        """Download iProX-hosted URLs via ascp on port 33001.
+
+        Requires iProX account credentials; the password is passed to the
+        subprocess through ASPERA_SCP_PASS (never argv).
+        """
+        if not user or not password:
+            raise ValueError(
+                "iProX Aspera requires credentials: pass --iprox-user and "
+                "--iprox-password (or IPROX_USER / IPROX_ASPERA_PASSWORD), or "
+                "use the default parallel HTTP transport instead."
+            )
+        ascp = cls._ascp_binary()
+        env = dict(os.environ)
+        env["ASPERA_SCP_PASS"] = password
+        os.makedirs(output_folder, exist_ok=True)
+        failed: List[str] = []
+        for idx, url in enumerate(urls):
+            path = urlparse(url).path.lstrip("/")  # e.g. IPX.../.../a.raw
+            source = f"{user}@{cls.ASPERA_HOST}:{cls.ASPERA_ROOT}/{path}"
+            relpath = relative_paths[idx] if idx < len(relative_paths) else None
+            dest = os.path.join(output_folder, relpath) if relpath else output_folder
+            dest_parent = os.path.dirname(dest) or output_folder
+            os.makedirs(dest_parent, exist_ok=True)
+            if skip_if_downloaded_already and os.path.exists(dest):
+                logging.info(f"Skipping download as file already exists: {dest}")
+                continue
+            argv = [
+                ascp, "-QT", "-P", cls.ASPERA_PORT, "-l", maximum_bandwidth,
+                "-k", "2", source, dest,
+            ]
+            logging.info(
+                "Aspera: %s -> %s", source.replace(password, "***"), dest
+            )
+            try:
+                subprocess.run(argv, check=True, env=env)
+            except subprocess.CalledProcessError as e:
+                logging.error(f"iProX Aspera failed for {url}: {e}")
+                failed.append(url)
+        if failed:
+            raise RuntimeError(
+                f"iProX Aspera download failed for {len(failed)} file(s): {failed}"
+            )
 
     @staticmethod
     def _get_public_root(accession: str) -> str:

@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import asyncio
 import logging
+from typing import Optional
+
 import click
 from pridepy.download.client import Client as Files
 from pridepy.pdc import download_pdc_files as run_pdc_download
@@ -387,6 +389,24 @@ def download_file_by_name(
     help="Recreate the dataset's subdirectory layout under the output folder. "
     "By default files are downloaded flat into the output folder.",
 )
+@click.option(
+    "--iprox-user",
+    "iprox_user",
+    envvar="IPROX_USER",
+    default=None,
+    type=str,
+    help="iProX account username. Only used with --protocol aspera.",
+)
+@click.option(
+    "--iprox-password",
+    "iprox_password",
+    envvar="IPROX_ASPERA_PASSWORD",
+    default=None,
+    type=str,
+    help="iProX account password. Only used with --protocol aspera. "
+    "Best supplied via the IPROX_ASPERA_PASSWORD environment variable "
+    "rather than on the command line.",
+)
 def download_px_raw_files(
     accession: str,
     output_folder: str,
@@ -395,6 +415,8 @@ def download_px_raw_files(
     download_threads: int = 1,
     parallel_files: int = 1,
     preserve_structure: bool = False,
+    iprox_user: Optional[str] = None,
+    iprox_password: Optional[str] = None,
 ):
     """CLI wrapper to download raw files via ProteomeXchange XML."""
     files = Files()
@@ -407,6 +429,8 @@ def download_px_raw_files(
         protocol=protocol,
         download_threads=download_threads,
         parallel_files=parallel_files,
+        iprox_user=iprox_user,
+        iprox_password=iprox_password,
     )
 
 
