@@ -170,13 +170,19 @@ class ProteomeXchangeProvider(Provider):
         output_folder: str,
         skip_if_downloaded_already: bool = True,
         flatten: bool = True,
+        parallel_files: int = 1,
+        download_threads: int = 1,
+        protocol: str = "ftp",
     ) -> None:
         """End-to-end: resolve XML, list files, partition by scheme, download.
 
         Convenience for the ``download-px-raw-files`` CLI command — combines
         :meth:`list_files` and :meth:`download_files` with the original
         ``download_px_raw_files`` defaults (skip-if-downloaded-already
-        defaults to ``True``, no parallel workers).
+        defaults to ``True``). ``parallel_files`` controls across-file
+        concurrency and ``download_threads`` controls per-file HTTP Range
+        segments; ``protocol`` flows into :meth:`download_files` (ftp/http(s)
+        are handled directly today).
         """
         records = self.list_files(px_id_or_url)
         if not records:
@@ -187,6 +193,8 @@ class ProteomeXchangeProvider(Provider):
             records=records,
             output_folder=output_folder,
             skip_if_downloaded_already=skip_if_downloaded_already,
-            protocol="ftp",
+            protocol=protocol,
             flatten=flatten,
+            parallel_files=parallel_files,
+            download_threads=download_threads,
         )
