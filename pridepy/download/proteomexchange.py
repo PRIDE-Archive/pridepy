@@ -26,10 +26,11 @@ import os
 import posixpath
 import re
 import defusedxml.ElementTree as ET
-from typing import ClassVar, Dict, List
+from typing import ClassVar, Dict, List, Optional
 from urllib.parse import urlparse
 
 from pridepy.download.base import Provider
+from pridepy.download.util import flatten_relative_paths
 from pridepy.util.api_handling import Util
 
 
@@ -170,23 +171,79 @@ class ProteomeXchangeProvider(Provider):
         output_folder: str,
         skip_if_downloaded_already: bool = True,
         flatten: bool = True,
+        parallel_files: int = 1,
+        download_threads: int = 1,
+        protocol: str = "ftp",
+        iprox_user: Optional[str] = None,
+        iprox_password: Optional[str] = None,
     ) -> None:
         """End-to-end: resolve XML, list files, partition by scheme, download.
 
         Convenience for the ``download-px-raw-files`` CLI command — combines
         :meth:`list_files` and :meth:`download_files` with the original
         ``download_px_raw_files`` defaults (skip-if-downloaded-already
-        defaults to ``True``, no parallel workers).
+        defaults to ``True``). ``parallel_files`` controls across-file
+        concurrency and ``download_threads`` controls per-file HTTP Range
+        segments; ``protocol`` flows into :meth:`download_files` (ftp/http(s)
+        are handled directly today).
+
+        When ``protocol == "aspera"``, iProX-hosted files are routed through
+        :meth:`IproxProvider.aspera_download` instead of the HTTP/FTP path
+        (opt-in, requires ``iprox_user``/``iprox_password``).
         """
         records = self.list_files(px_id_or_url)
         if not records:
             logging.info("No Associated raw file URIs found in PX XML")
             return
+
+        if protocol.lower() == "aspera":
+            from pridepy.download.iprox import IproxProvider
+            iprox_urls, rels = [], []
+            for r in records:
+                loc = self.get_download_url(r, protocol)
+                host = (urlparse(loc).hostname or "").lower()
+                if host == "download.iprox.org":
+                    iprox_urls.append(loc)
+                    rels.append(r.get("relativePath"))
+            if not iprox_urls:
+                raise ValueError(
+                    "Aspera requested but no iProX-hosted files found in this dataset."
+                )
+            if len(iprox_urls) < len(records):
+                logging.warning(
+                    "%d of %d file(s) are NOT hosted on iProX and were NOT "
+                    "downloaded: --protocol aspera only handles iProX-hosted "
+                    "files. Use the default HTTP transport (omit --protocol, "
+                    "or pass --protocol ftp) to download the full set.",
+                    len(records) - len(iprox_urls),
+                    len(records),
+                )
+            if flatten:
+                sources = [
+                    rel if rel else urlparse(url).path
+                    for url, rel in zip(iprox_urls, rels)
+                ]
+                dest_rels: List[Optional[str]] = flatten_relative_paths(sources)
+            else:
+                dest_rels = rels
+            IproxProvider.aspera_download(
+                urls=iprox_urls,
+                output_folder=output_folder,
+                relative_paths=dest_rels,
+                user=iprox_user,
+                password=iprox_password,
+                skip_if_downloaded_already=skip_if_downloaded_already,
+                parallel_files=parallel_files,
+            )
+            return
+
         self.download_files(
             accession=px_id_or_url,
             records=records,
             output_folder=output_folder,
             skip_if_downloaded_already=skip_if_downloaded_already,
-            protocol="ftp",
+            protocol=protocol,
             flatten=flatten,
+            parallel_files=parallel_files,
+            download_threads=download_threads,
         )
