@@ -239,7 +239,58 @@ pridepy download-px-raw-files \
 | --- | --- | --- |
 | `-a, --accession` | ProteomeXchange accession (e.g. `PXD039236`). `--px` is a deprecated alias | required |
 | `-o, --output-folder` | Destination directory | required |
+| `-p, --protocol` | Transfer protocol: `ftp`, `aspera`, `globus`, `s3` (FTP-first with fallback) | `ftp` |
+| `-w, --parallel-files` | Download 1–32 files concurrently (across-file concurrency) | `1` |
+| `-t, --threads` | Parallel HTTP Range threads per file (1–32) for fast per-file downloads | `1` |
 | `--skip-if-downloaded-already` | Skip files already present locally | off |
+| `--preserve-structure` | Recreate the dataset's subdirectory layout under the output folder | off |
+| `--iprox-user` | iProX account username (with `--protocol aspera`; env fallback: `IPROX_USER`) | — |
+| `--iprox-password` | iProX account password (with `--protocol aspera`; env fallback: `IPROX_ASPERA_PASSWORD`) | — |
+
+### Fast downloads: parallel files and per-file segments
+
+Combine `-w` (files in parallel) and `-t` (Range segments per file) for fast bulk downloads.
+The total concurrent connections is approximately `parallel_files × threads`.
+
+**Parallel across files (recommended for most users, no account required):**
+
+```bash
+# Download up to 8 files concurrently from ProteomeXchange
+pridepy download-px-raw-files \
+  -a PXD077178 \
+  -o ./PXD077178 \
+  -w 8
+```
+
+**Combine parallel files with per-file segments:**
+
+```bash
+# Download 8 files in parallel, each split into 4 Range segments
+pridepy download-px-raw-files \
+  -a PXD077178 \
+  -o ./out \
+  -w 8 \
+  -t 4
+```
+
+### Fast downloads with iProX Aspera (account required)
+
+iProX offers Aspera (`faspe://`) for very large bulk transfers. Aspera is faster
+than HTTP on high-bandwidth connections but requires an iProX account. Combine
+`--protocol aspera` with `--iprox-user` and `--iprox-password`:
+
+```bash
+# Download via iProX Aspera with 8-file parallelism
+IPROX_ASPERA_PASSWORD=your_password pridepy download-px-raw-files \
+  -a PXD077178 \
+  -o ./out \
+  --protocol aspera \
+  --iprox-user your_username \
+  -w 8
+```
+
+The password is best supplied via the `IPROX_ASPERA_PASSWORD` environment variable
+to avoid exposing it on the command line.
 
 ### Go directly to the hosting repository (native MassIVE / JPOST / iProX accessions)
 
