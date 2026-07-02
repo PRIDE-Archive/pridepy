@@ -102,14 +102,23 @@ class TestIproxAspera(TestCase):
                     key_path=key_path,
                 )
 
-    def test_missing_key_raises(self):
-        with pytest.raises(ValueError, match="--aspera-key"):
-            IproxProvider.aspera_download(
-                urls=["http://download.iprox.org/IPX1/a.raw"],
-                output_folder="/tmp/x",
-                user="daicx",
-                key_path=None,
-            )
+    def test_missing_key_defaults_to_bundled_key(self):
+        """key_path=None falls back to pridepy's bundled Aspera key, so
+        Aspera needs no key setup — only --iprox-user."""
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch("pridepy.download.iprox.subprocess.run") as run, \
+                 patch.object(IproxProvider, "_ascp_binary", return_value="/bin/ascp"):
+                run.return_value = MagicMock(returncode=0)
+                IproxProvider.aspera_download(
+                    urls=["http://download.iprox.org/IPX1/a.raw"],
+                    output_folder=tmp,
+                    user="daicx",
+                    key_path=None,
+                )
+            argv = run.call_args.args[0]
+            key_used = argv[argv.index("-i") + 1]
+            assert key_used.endswith("aspera/key/asperaweb_id_dsa.openssh")
+            assert os.path.isfile(key_used)
 
     def test_nonexistent_key_path_raises(self):
         with pytest.raises(ValueError, match="--aspera-key"):

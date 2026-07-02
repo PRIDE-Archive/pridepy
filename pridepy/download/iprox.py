@@ -55,6 +55,20 @@ class IproxProvider(Provider):
         from pridepy.download.pride import PrideProvider
         return PrideProvider.get_ascp_binary()
 
+    @staticmethod
+    def _default_aspera_key() -> str:
+        """Path to the public Aspera key bundled with pridepy.
+
+        iProX accepts the standard public Aspera key, so Aspera works with
+        no key setup: users only supply ``--iprox-user``. ``--aspera-key``
+        overrides this when a site requires a different registered key.
+        """
+        import importlib.resources
+        key = importlib.resources.files("pridepy").joinpath(
+            "aspera/key/asperaweb_id_dsa.openssh"
+        )
+        return os.path.abspath(key)
+
     @classmethod
     def aspera_download(
         cls,
@@ -77,11 +91,13 @@ class IproxProvider(Provider):
                 "iProX Aspera requires --iprox-user (your registered iProX "
                 "username)."
             )
-        if not key_path or not os.path.isfile(key_path):
+        if not key_path:
+            key_path = cls._default_aspera_key()
+        if not os.path.isfile(key_path):
             raise ValueError(
-                "iProX Aspera requires --aspera-key <path> (the path to your "
-                "registered Aspera private key). HTTP is the default "
-                "alternative if you don't have one."
+                f"iProX Aspera key not found: {key_path}. Pass --aspera-key "
+                "<path> to your registered Aspera private key, or use the "
+                "default HTTP transport."
             )
         ascp = cls._ascp_binary()
         remote_paths = [urlparse(u).path for u in urls]

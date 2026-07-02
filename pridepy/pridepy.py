@@ -403,9 +403,10 @@ def download_file_by_name(
     envvar="IPROX_ASPERA_KEY",
     default=None,
     type=str,
-    help="Path to your Aspera private key for iProX (required with "
-    "--protocol aspera; the key you registered when setting up your "
-    "Aspera client).",
+    help="Path to an Aspera private key for iProX (optional; only with "
+    "--protocol aspera). Defaults to the public Aspera key bundled with "
+    "pridepy, so normally you only need --iprox-user. Override this if your "
+    "site requires a specific registered key.",
 )
 def download_px_raw_files(
     accession: str,
