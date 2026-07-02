@@ -175,6 +175,7 @@ class ProteomeXchangeProvider(Provider):
         protocol: str = "ftp",
         iprox_user: Optional[str] = None,
         aspera_key: Optional[str] = None,
+        aspera_password: Optional[str] = None,
     ) -> None:
         """End-to-end: resolve XML, list files, partition by scheme, download.
 
@@ -188,8 +189,9 @@ class ProteomeXchangeProvider(Provider):
 
         When ``protocol == "aspera"``, iProX-hosted files are routed through
         :meth:`IproxProvider.aspera_download` instead of the HTTP/FTP path
-        (opt-in, requires ``iprox_user``/``aspera_key``; key-based auth only,
-        and the transfer always preserves the source directory tree).
+        (opt-in, requires ``iprox_user`` plus either ``aspera_key`` or
+        ``aspera_password``; the transfer always preserves the source
+        directory tree).
         """
         records = self.list_files(px_id_or_url)
         if not records:
@@ -222,6 +224,7 @@ class ProteomeXchangeProvider(Provider):
                 output_folder=output_folder,
                 user=iprox_user,
                 key_path=aspera_key,
+                password=aspera_password,
             )
             return
 

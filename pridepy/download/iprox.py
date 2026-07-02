@@ -55,33 +55,24 @@ class IproxProvider(Provider):
         from pridepy.download.pride import PrideProvider
         return PrideProvider.get_ascp_binary()
 
-    @staticmethod
-    def _default_aspera_key() -> str:
-        """Path to the public Aspera key bundled with pridepy.
-
-        iProX accepts the standard public Aspera key, so Aspera works with
-        no key setup: users only supply ``--iprox-user``. ``--aspera-key``
-        overrides this when a site requires a different registered key.
-        """
-        import importlib.resources
-        key = importlib.resources.files("pridepy").joinpath(
-            "aspera/key/asperaweb_id_dsa.openssh"
-        )
-        return os.path.abspath(key)
-
     @classmethod
     def aspera_download(
         cls,
         urls: List[str],
         output_folder: str,
         user: Optional[str],
-        key_path: Optional[str],
+        key_path: Optional[str] = None,
+        password: Optional[str] = None,
         maximum_bandwidth: str = "500M",
     ) -> None:
         """Download iProX-hosted URLs in one batched ``ascp --file-list`` session.
 
-        Uses key-based auth (``-i <key_path>``) against ``download.iprox.org``
-        on port 33001; password auth is not supported. ``ascp --mode recv
+        Auth resolution is fail-fast and never lets ``ascp`` fall back to an
+        interactive ``Password:`` prompt (which would hang a batch/sbatch
+        job): pass ``key_path`` for key-based auth (``-i <key_path>``), or
+        ``password`` for password auth (via the ``ASPERA_SCP_PASS``
+        env var — iProX's own account password, not a key). Exactly one of
+        the two must be supplied by the caller. ``ascp --mode recv
         --file-list`` always recreates the remote ``/IPX.../IPX.../`` source
         tree under ``output_folder`` — this transfer path does not support
         flattening.
@@ -91,13 +82,21 @@ class IproxProvider(Provider):
                 "iProX Aspera requires --iprox-user (your registered iProX "
                 "username)."
             )
-        if not key_path:
-            key_path = cls._default_aspera_key()
-        if not os.path.isfile(key_path):
+        env = dict(os.environ)
+        if key_path:
+            if not os.path.isfile(key_path):
+                raise ValueError(
+                    f"iProX Aspera key not found: {key_path}. Pass "
+                    "--aspera-key <path> to your registered Aspera private "
+                    "key, or use the default HTTP transport."
+                )
+        elif password:
+            env["ASPERA_SCP_PASS"] = password
+        else:
             raise ValueError(
-                f"iProX Aspera key not found: {key_path}. Pass --aspera-key "
-                "<path> to your registered Aspera private key, or use the "
-                "default HTTP transport."
+                "iProX Aspera needs a credential: set IPROX_ASPERA_PASSWORD "
+                "(your iProX account password) or pass --aspera-key <path>. "
+                "HTTP is the default alternative."
             )
         ascp = cls._ascp_binary()
         remote_paths = [urlparse(u).path for u in urls]
@@ -109,7 +108,9 @@ class IproxProvider(Provider):
                     fh.write(path + "\n")
             argv = [
                 ascp, "-T", "-l", maximum_bandwidth, "-P", cls.ASPERA_PORT,
-                "-k", "1", "-i", key_path, "--mode", "recv",
+                "-k", "1",
+            ] + (["-i", key_path] if key_path else []) + [
+                "--mode", "recv",
                 "--host", cls.ASPERA_HOST, "--file-list", list_path,
                 "--user", user, output_folder,
             ]
@@ -118,7 +119,7 @@ class IproxProvider(Provider):
                 len(remote_paths),
             )
             try:
-                subprocess.run(argv, check=True)
+                subprocess.run(argv, check=True, env=env, stdin=subprocess.DEVNULL)
             except subprocess.CalledProcessError as e:
                 raise RuntimeError(
                     f"iProX Aspera transfer failed (exit {e.returncode})"

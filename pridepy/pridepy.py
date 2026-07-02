@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import asyncio
 import logging
+import os
+import sys
 from typing import Optional
 
 import click
@@ -403,10 +405,9 @@ def download_file_by_name(
     envvar="IPROX_ASPERA_KEY",
     default=None,
     type=str,
-    help="Path to an Aspera private key for iProX (optional; only with "
-    "--protocol aspera). Defaults to the public Aspera key bundled with "
-    "pridepy, so normally you only need --iprox-user. Override this if your "
-    "site requires a specific registered key.",
+    help="Optional Aspera private key for iProX (only with --protocol "
+    "aspera). If omitted, password auth is used via the "
+    "IPROX_ASPERA_PASSWORD env var or a secure prompt.",
 )
 def download_px_raw_files(
     accession: str,
@@ -423,6 +424,10 @@ def download_px_raw_files(
     files = Files()
     logging.info(f"PX accession/URL: {accession}")
 
+    aspera_password = os.environ.get("IPROX_ASPERA_PASSWORD")
+    if protocol.lower() == "aspera" and not aspera_key and not aspera_password and sys.stdin.isatty():
+        aspera_password = click.prompt("iProX Aspera password", hide_input=True)
+
     files.download_px_raw_files(
         accession,
         output_folder,
@@ -433,6 +438,7 @@ def download_px_raw_files(
         parallel_files=parallel_files,
         iprox_user=iprox_user,
         aspera_key=aspera_key,
+        aspera_password=aspera_password,
     )
 
 
