@@ -9,7 +9,9 @@ from pridepy.download.client import Client as Files
 from pridepy.pdc import download_pdc_files as run_pdc_download
 from pridepy.project.project import Project
 
-PROTOCOL_CHOICES = click.Choice(["ftp", "aspera", "globus", "s3"], case_sensitive=False)
+PROTOCOL_CHOICES = click.Choice(
+    ["ftp", "aspera", "globus", "s3", "fire"], case_sensitive=False
+)
 
 
 @click.group()
@@ -28,7 +30,10 @@ def main():
     "--protocol",
     default="ftp",
     type=PROTOCOL_CHOICES,
-    help="Protocol to use for download: ftp, aspera, globus, s3. Default is ftp with fallback enabled.",
+    help="Protocol to use for download: ftp, aspera, globus, s3, fire. "
+    "'fire' uses the EBI-internal FIRE S3 endpoint (only reachable inside EBI "
+    "infrastructure; falls back to the public protocols elsewhere). "
+    "Default is ftp with fallback enabled.",
 )
 @click.option(
     "-o",
@@ -134,7 +139,10 @@ def download_all_public_raw_files(
     "--protocol",
     default="ftp",
     type=PROTOCOL_CHOICES,
-    help="Protocol to use for download: ftp, aspera, globus, s3. Default is ftp with fallback enabled.",
+    help="Protocol to use for download: ftp, aspera, globus, s3, fire. "
+    "'fire' uses the EBI-internal FIRE S3 endpoint (only reachable inside EBI "
+    "infrastructure; falls back to the public protocols elsewhere). "
+    "Default is ftp with fallback enabled.",
 )
 @click.option(
     "-o",
@@ -259,7 +267,10 @@ def download_all_public_category_files(
     "--protocol",
     default="ftp",
     type=PROTOCOL_CHOICES,
-    help="Protocol to use for download: ftp, aspera, globus, s3. Default is ftp with fallback enabled.",
+    help="Protocol to use for download: ftp, aspera, globus, s3, fire. "
+    "'fire' uses the EBI-internal FIRE S3 endpoint (only reachable inside EBI "
+    "infrastructure; falls back to the public protocols elsewhere). "
+    "Default is ftp with fallback enabled.",
 )
 @click.option("-f", "--file-name", required=True, help="fileName to be downloaded")
 @click.option(
@@ -629,7 +640,10 @@ def _read_url_arguments(url_list_path, urls_csv=None):
     "--protocol",
     default="ftp",
     type=PROTOCOL_CHOICES,
-    help="Protocol to use for download: ftp, aspera, globus, s3. Default is ftp with fallback enabled.",
+    help="Protocol to use for download: ftp, aspera, globus, s3, fire. "
+    "'fire' uses the EBI-internal FIRE S3 endpoint (only reachable inside EBI "
+    "infrastructure; falls back to the public protocols elsewhere). "
+    "Default is ftp with fallback enabled.",
 )
 @click.option(
     "-F",
