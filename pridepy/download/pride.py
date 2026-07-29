@@ -976,8 +976,13 @@ class PrideProvider(Provider):
 
         protocol_sequence = PrideProvider._protocol_sequence(protocol)
         primary_protocol = protocol_sequence[0]
-        # Retry with the primary protocol first, then fall back to others
-        fallback_sequence = protocol_sequence
+        # Retry with the primary protocol first, then fall back to others.
+        # ``fire`` is excluded from the per-file fallback: a FIRE failure is an
+        # endpoint-level condition (the EBI-internal host is unreachable), so it
+        # fails identically for every file. Re-attempting it per file in Phase 2
+        # would just burn retries on connections that cannot succeed — send those
+        # files straight to the public fallback protocols instead.
+        fallback_sequence = [p for p in protocol_sequence if p != "fire"]
 
         # Phase 1: batch download with the requested protocol. Reuses a single
         # FTP/S3 connection for all files (the previous behaviour) instead of

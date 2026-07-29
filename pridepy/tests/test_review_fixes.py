@@ -178,6 +178,32 @@ class TestReviewFixes(TestCase):
         assert "fire" not in PrideProvider._protocol_sequence("ftp")
         assert "fire" not in PrideProvider._protocol_sequence("s3")
 
+    def test_fire_not_retried_in_phase2_fallback(self):
+        """After a FIRE (endpoint-level) failure, the per-file Phase-2 fallback
+        must go straight to the public protocols and never re-attempt fire."""
+        record = _pride_record("a.raw", accession="PXD002137", date="2015/08")
+        captured = {}
+
+        def _fake_fallback(*, file_record, output_folder, protocol_sequence, **kw):
+            captured["seq"] = protocol_sequence
+            return True  # pretend a public protocol succeeded
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            with patch.object(PrideProvider, "_batch_download_by_protocol"), \
+                 patch("pridepy.download.pride._provider_util.validate_download",
+                       return_value=(False, "missing")), \
+                 patch.object(PrideProvider, "_download_with_fallback",
+                              side_effect=_fake_fallback):
+                PrideProvider._download_files_batch(
+                    file_list_json=[record],
+                    accession="PXD002137",
+                    output_folder=tmp_dir,
+                    skip_if_downloaded_already=False,
+                    protocol="fire",
+                )
+        assert captured["seq"] == ["aspera", "s3", "ftp", "globus"]
+        assert "fire" not in captured["seq"]
+
     def test_download_files_forwards_protocol_to_get_download_url(self):
         seen = []
 
