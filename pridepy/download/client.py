@@ -318,8 +318,23 @@ class Client:
         output_folder: str,
         skip_if_downloaded_already: bool = True,
         flatten: bool = True,
+        parallel_files: int = 1,
+        download_threads: int = 1,
+        protocol: str = "ftp",
+        iprox_user: Optional[str] = None,
+        aspera_key: Optional[str] = None,
+        aspera_password: Optional[str] = None,
     ) -> None:
         """Delegate to :meth:`ProteomeXchangeProvider.download_from_accession_or_url`."""
         return ProteomeXchangeProvider().download_from_accession_or_url(
-            px_id_or_url, output_folder, skip_if_downloaded_already, flatten=flatten
+            px_id_or_url,
+            output_folder,
+            skip_if_downloaded_already,
+            flatten=flatten,
+            parallel_files=parallel_files,
+            download_threads=download_threads,
+            protocol=protocol,
+            iprox_user=iprox_user,
+            aspera_key=aspera_key,
+            aspera_password=aspera_password,
         )
