@@ -53,6 +53,14 @@ class PrideProvider(Provider):
     ARCHIVE_FTP_URL_PREFIX: ClassVar[str] = "ftp://ftp.pride.ebi.ac.uk/"
     ARCHIVE_HTTPS_URL_PREFIX: ClassVar[str] = "https://ftp.pride.ebi.ac.uk/"
     S3_URL: ClassVar[str] = "https://hh.fire.sdo.ebi.ac.uk"
+    # EBI-internal FIRE S3 endpoint. Only reachable from within EBI
+    # infrastructure (compute/login nodes), where it is markedly faster and
+    # more reliable than the public FTP/HTTPS/Globus paths — which is the
+    # whole point of the ``fire`` protocol. Overridable via the
+    # ``PRIDEPY_FIRE_ENDPOINT`` env var for sites with a different host.
+    FIRE_S3_URL: ClassVar[str] = os.environ.get(
+        "PRIDEPY_FIRE_ENDPOINT", "https://hl.fire.sdo.ebi.ac.uk"
+    )
     S3_BUCKET: ClassVar[str] = "pride-public"
     PROTOCOL_ORDER: ClassVar[List[str]] = ["aspera", "s3", "ftp", "globus"]
 
@@ -138,7 +146,16 @@ class PrideProvider(Provider):
     def _protocol_sequence(protocol: str) -> List[str]:
         """
         Build the ordered list of protocols to try for a requested download mode.
+
+        ``fire`` (the EBI-internal FIRE S3 endpoint) is only ever tried when it
+        is explicitly requested — it is never folded into another protocol's
+        fallback chain, because it is unreachable outside EBI and would just
+        waste retries there. When requested, it is tried first and then falls
+        back to the public protocols so a run started outside EBI still
+        completes.
         """
+        if protocol == "fire":
+            return ["fire"] + PrideProvider.PROTOCOL_ORDER
         if protocol not in PrideProvider.PROTOCOL_ORDER:
             return []
         return [protocol] + [p for p in PrideProvider.PROTOCOL_ORDER if p != protocol]
@@ -218,7 +235,9 @@ class PrideProvider(Provider):
                 PrideProvider.ARCHIVE_HTTPS_URL_PREFIX,
                 1,
             )
-        if protocol == "s3":
+        if protocol in ("s3", "fire"):
+            # Both S3 modes derive the object key from the FTP path; they
+            # differ only in the FIRE endpoint host (external vs EBI-internal).
             return ftp_url
         raise ValueError(f"Unsupported protocol: {protocol}")
 
@@ -511,16 +530,25 @@ class PrideProvider(Provider):
 
     @staticmethod
     def download_files_from_s3(
-        file_list_json: List[Dict], output_folder: str, skip_if_downloaded_already
+        file_list_json: List[Dict],
+        output_folder: str,
+        skip_if_downloaded_already,
+        endpoint_url: Optional[str] = None,
     ):
         """
-        Download files using S3 transfer URL with a progress bar and retry logic.
+        Download files from a FIRE S3 endpoint with a progress bar and retry logic.
+
         :param file_list_json: file list in JSON format
         :param output_folder: folder to download the files
         :param skip_if_downloaded_already: Boolean value to skip the download if the file has already been downloaded.
+        :param endpoint_url: FIRE S3 endpoint. Defaults to the public
+            :attr:`S3_URL` (``hh.fire``); pass :attr:`FIRE_S3_URL` (``hl.fire``)
+            for the EBI-internal ``fire`` protocol.
         """
         if not os.path.isdir(output_folder):
             os.makedirs(output_folder, exist_ok=True)
+
+        endpoint_url = endpoint_url or PrideProvider.S3_URL
 
         # Retry and timeout config
         retry_config = Config(
@@ -533,19 +561,21 @@ class PrideProvider(Provider):
         s3_resource = boto3.resource(
             "s3",
             config=retry_config,
-            endpoint_url=PrideProvider.S3_URL,
+            endpoint_url=endpoint_url,
         )
         bucket = s3_resource.Bucket(PrideProvider.S3_BUCKET)
+        logging.info(
+            "Downloading %d file(s) from FIRE S3 endpoint %s (bucket %s)",
+            len(file_list_json), endpoint_url, PrideProvider.S3_BUCKET,
+        )
 
         failed: List[str] = []
         for file in file_list_json:
             try:
-                # Determine S3 or FTP path
-                download_url = (
-                    file["publicFileLocations"][0]["value"]
-                    if file["publicFileLocations"][0]["name"] == "FTP Protocol"
-                    else file["publicFileLocations"][1]["value"]
-                )
+                # Resolve the canonical FTP URL, then map it to the S3 object
+                # key: pride-public mirrors the archive layout, so the key is
+                # the archive-relative path (YYYY/MM/ACCESSION/filename).
+                download_url = PrideProvider._get_download_url(file, "ftp")
 
                 ftp_base_url = "ftp://ftp.pride.ebi.ac.uk/pride/data/archive/"
                 s3_path = download_url.replace(ftp_base_url, "")
@@ -731,11 +761,14 @@ class PrideProvider(Provider):
                 download_threads=download_threads,
             )
             return
-        if protocol == "s3":
+        if protocol in ("s3", "fire"):
             PrideProvider.download_files_from_s3(
                 file_list,
                 output_folder,
                 skip_if_downloaded_already=skip_if_downloaded_already,
+                endpoint_url=(
+                    PrideProvider.FIRE_S3_URL if protocol == "fire" else PrideProvider.S3_URL
+                ),
             )
             return
         raise ValueError(f"Unsupported protocol: {protocol}")
@@ -925,9 +958,9 @@ class PrideProvider(Provider):
         :param aspera_maximum_bandwidth: parameter in Aspera sets the maximum bandwidth for the transfer.
         :param skip_if_downloaded_already: Boolean value to skip the download if the file has already been downloaded.
         """
-        protocols_supported = ["ftp", "aspera", "globus", "s3"]
+        protocols_supported = ["ftp", "aspera", "globus", "s3", "fire"]
         if protocol not in protocols_supported:
-            logging.error("Protocol should be one of ftp, aspera, globus, s3")
+            logging.error("Protocol should be one of ftp, aspera, globus, s3, fire")
             return
 
         os.makedirs(output_folder, exist_ok=True)

@@ -142,6 +142,42 @@ class TestReviewFixes(TestCase):
                         records, tmp_dir, skip_if_downloaded_already=False
                     )
 
+    def test_fire_protocol_uses_internal_endpoint_and_derives_key(self):
+        """`fire` must hit the EBI-internal FIRE endpoint and map the FTP path
+        to the correct pride-public S3 object key."""
+        records = [_pride_record("a.raw", accession="PXD002137", date="2015/08")]
+        mock_obj = Mock()
+        mock_obj.content_length = 10
+        mock_bucket = Mock()
+        mock_bucket.Object.return_value = mock_obj
+        mock_resource = Mock()
+        mock_resource.Bucket.return_value = mock_bucket
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            with patch(
+                "pridepy.download.pride.boto3.resource", return_value=mock_resource
+            ) as mock_boto:
+                PrideProvider._batch_download_by_protocol(
+                    records,
+                    tmp_dir,
+                    protocol="fire",
+                    skip_if_downloaded_already=False,
+                    aspera_maximum_bandwidth="100M",
+                )
+        # boto3.resource was created against the internal hl.fire endpoint.
+        assert mock_boto.call_args.kwargs["endpoint_url"] == PrideProvider.FIRE_S3_URL
+        assert "hl.fire.sdo.ebi.ac.uk" in PrideProvider.FIRE_S3_URL
+        # The object key is the archive-relative path, no ftp:// prefix.
+        mock_bucket.Object.assert_called_once_with("2015/08/PXD002137/a.raw")
+
+    def test_fire_protocol_sequence_requested_only(self):
+        """`fire` is tried first when requested, then the public protocols;
+        it is never folded into another protocol's fallback chain."""
+        assert PrideProvider._protocol_sequence("fire") == [
+            "fire", "aspera", "s3", "ftp", "globus",
+        ]
+        assert "fire" not in PrideProvider._protocol_sequence("ftp")
+        assert "fire" not in PrideProvider._protocol_sequence("s3")
+
     def test_download_files_forwards_protocol_to_get_download_url(self):
         seen = []
 
