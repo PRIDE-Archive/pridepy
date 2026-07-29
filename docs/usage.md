@@ -244,11 +244,16 @@ pridepy download-px-raw-files \
 | `-t, --threads` | Parallel HTTP Range threads per file (1–32) for fast per-file downloads | `1` |
 | `--skip-if-downloaded-already` | Skip files already present locally | off |
 | `--preserve-structure` | Recreate the dataset's subdirectory layout under the output folder | off |
-| `--iprox-user` | iProX account username (with `--protocol aspera`; env fallback: `IPROX_USER`) | — |
+| `--iprox-user` | Your registered iProX username (required with `--protocol aspera`; env fallback: `IPROX_USER`) | — |
+| `--aspera-key` | Path to an Aspera private key for iProX (optional with `--protocol aspera`; env fallback: `IPROX_ASPERA_KEY`) | — |
 
-The iProX Aspera password is never accepted as a command-line flag. Set the
-`IPROX_ASPERA_PASSWORD` environment variable, or omit it and `pridepy` will
-prompt for it securely (hidden input) when `--protocol aspera` is used.
+iProX Aspera defaults to password authentication (your iProX account
+password), supplied via the `IPROX_ASPERA_PASSWORD` env var or an
+interactive hidden prompt. Pass `--aspera-key` instead if you have a
+registered Aspera private key. Exactly one credential is required —
+`pridepy` fails fast rather than letting `ascp` block on an interactive
+prompt, so batch/sbatch jobs must set `IPROX_ASPERA_PASSWORD` (or
+`--aspera-key`) up front.
 
 ### Fast downloads: parallel files and per-file segments
 
@@ -280,18 +285,28 @@ pridepy download-px-raw-files \
 
 iProX offers Aspera for very large bulk transfers. Aspera is faster than HTTP
 on high-bandwidth connections but requires an iProX account. Combine
-`--protocol aspera` with `--iprox-user`; the password is read from
-`IPROX_ASPERA_PASSWORD` or prompted for securely (never passed as a flag):
+`--protocol aspera` with `--iprox-user` and a credential — either the
+`IPROX_ASPERA_PASSWORD` env var (password auth, the default) or
+`--aspera-key` (a registered Aspera private key):
 
 ```bash
-# Download via iProX Aspera with 8-file parallelism
-IPROX_ASPERA_PASSWORD=your_password pridepy download-px-raw-files \
-  -a PXD077178 \
-  -o ./out \
-  --protocol aspera \
-  --iprox-user your_username \
-  -w 8
+# password auth (env var — safe for sbatch; no prompt/hang)
+IPROX_ASPERA_PASSWORD=... pridepy download-px-raw-files -a PXD077178 -o ./out --protocol aspera --iprox-user <user>
+
+# or with a registered key
+pridepy download-px-raw-files -a PXD077178 -o ./out --protocol aspera --iprox-user <user> --aspera-key /path/to/key
 ```
+
+If run interactively without `IPROX_ASPERA_PASSWORD` or `--aspera-key`,
+`pridepy` prompts for the password (hidden input). In non-interactive/batch
+contexts (e.g. `sbatch`) you must set `IPROX_ASPERA_PASSWORD` or pass
+`--aspera-key` up front — otherwise the command errors immediately instead
+of hanging on a prompt.
+
+Aspera transfers a single batched session per dataset (`ascp --file-list`)
+and always preserves the iProX `IPX.../IPX.../` source directory tree under
+the output folder — `--preserve-structure` / flattening does not apply to
+the Aspera path.
 
 ### Go directly to the hosting repository (native MassIVE / JPOST / iProX accessions)
 

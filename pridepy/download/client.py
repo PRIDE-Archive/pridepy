@@ -322,7 +322,8 @@ class Client:
         download_threads: int = 1,
         protocol: str = "ftp",
         iprox_user: Optional[str] = None,
-        iprox_password: Optional[str] = None,
+        aspera_key: Optional[str] = None,
+        aspera_password: Optional[str] = None,
     ) -> None:
         """Delegate to :meth:`ProteomeXchangeProvider.download_from_accession_or_url`."""
         return ProteomeXchangeProvider().download_from_accession_or_url(
@@ -334,5 +335,6 @@ class Client:
             download_threads=download_threads,
             protocol=protocol,
             iprox_user=iprox_user,
-            iprox_password=iprox_password,
+            aspera_key=aspera_key,
+            aspera_password=aspera_password,
         )

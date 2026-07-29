@@ -15,7 +15,7 @@ import logging
 import os
 import re
 import subprocess
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import tempfile
 import defusedxml.ElementTree as ET
 from typing import ClassVar, Dict, List, Optional
 from urllib.parse import urlparse
@@ -25,7 +25,6 @@ import requests
 from pridepy.download import registry
 from pridepy.download.base import Provider
 from pridepy.download.jpost import JpostProvider
-from pridepy.download.transport import _safe_join
 
 
 @registry.register
@@ -39,7 +38,6 @@ class IproxProvider(Provider):
     )
     ASPERA_HOST: ClassVar[str] = "download.iprox.org"
     ASPERA_PORT: ClassVar[str] = "33001"
-    ASPERA_ROOT: ClassVar[str] = "/data/iprox"
     # iProX PX XML uses the same PSI-MS cvParam "name" values as JPOST PROXI,
     # so we reuse JpostProvider's category map.
     PX_CATEGORY_MAP: ClassVar[Dict[str, str]] = JpostProvider.PROXI_CATEGORY_MAP
@@ -58,126 +56,76 @@ class IproxProvider(Provider):
         return PrideProvider.get_ascp_binary()
 
     @classmethod
-    def _aspera_download_one(
-        cls,
-        ascp: str,
-        url: str,
-        relpath: Optional[str],
-        output_folder: str,
-        user: str,
-        password: str,
-        maximum_bandwidth: str,
-        skip_if_downloaded_already: bool,
-        env: Dict[str, str],
-    ) -> Optional[str]:
-        """Download a single URL via ascp. Returns ``url`` on failure, else None."""
-        path = urlparse(url).path.lstrip("/")  # e.g. IPX.../.../a.raw
-        source = f"{user}@{cls.ASPERA_HOST}:{cls.ASPERA_ROOT}/{path}"
-        if relpath:
-            dest = _safe_join(output_folder, relpath)
-        else:
-            dest = os.path.join(output_folder, os.path.basename(urlparse(url).path))
-        dest_parent = os.path.dirname(dest) or output_folder
-        os.makedirs(dest_parent, exist_ok=True)
-        if (
-            skip_if_downloaded_already
-            and os.path.isfile(dest)
-            and os.path.getsize(dest) > 0
-        ):
-            logging.info(f"Skipping download as file already exists: {dest}")
-            return None
-        argv = [
-            ascp, "-QT", "-P", cls.ASPERA_PORT, "-l", maximum_bandwidth,
-            "-k", "2", source, dest,
-        ]
-        logging.info(
-            "Aspera: %s -> %s", source.replace(password, "***"), dest
-        )
-        try:
-            subprocess.run(argv, check=True, env=env)
-            return None
-        except subprocess.CalledProcessError as e:
-            logging.error(f"iProX Aspera failed for {url}: {e}")
-            return url
-
-    @classmethod
     def aspera_download(
         cls,
         urls: List[str],
         output_folder: str,
-        relative_paths: List[Optional[str]],
         user: Optional[str],
-        password: Optional[str],
-        maximum_bandwidth: str = "100M",
-        skip_if_downloaded_already: bool = False,
-        parallel_files: int = 1,
+        key_path: Optional[str] = None,
+        password: Optional[str] = None,
+        maximum_bandwidth: str = "500M",
     ) -> None:
-        """Download iProX-hosted URLs via ascp on port 33001.
+        """Download iProX-hosted URLs in one batched ``ascp --file-list`` session.
 
-        Requires iProX account credentials; the password is passed to the
-        subprocess through ASPERA_SCP_PASS (never argv). When
-        ``parallel_files`` > 1, transfers run concurrently: each ``ascp``
-        invocation is its own subprocess writing its own destination file, so
-        this is safe.
+        Auth resolution is fail-fast and never lets ``ascp`` fall back to an
+        interactive ``Password:`` prompt (which would hang a batch/sbatch
+        job): pass ``key_path`` for key-based auth (``-i <key_path>``), or
+        ``password`` for password auth (via the ``ASPERA_SCP_PASS``
+        env var — iProX's own account password, not a key). Exactly one of
+        the two must be supplied by the caller. ``ascp --mode recv
+        --file-list`` always recreates the remote ``/IPX.../IPX.../`` source
+        tree under ``output_folder`` — this transfer path does not support
+        flattening.
         """
-        if not user or not password:
+        if not user:
             raise ValueError(
-                "iProX Aspera requires credentials: pass --iprox-user and set "
-                "IPROX_ASPERA_PASSWORD (or answer the password prompt), or use "
-                "the default parallel HTTP transport instead."
+                "iProX Aspera requires --iprox-user (your registered iProX "
+                "username)."
+            )
+        env = dict(os.environ)
+        if key_path:
+            if not os.path.isfile(key_path):
+                raise ValueError(
+                    f"iProX Aspera key not found: {key_path}. Pass "
+                    "--aspera-key <path> to your registered Aspera private "
+                    "key, or use the default HTTP transport."
+                )
+        elif password:
+            env["ASPERA_SCP_PASS"] = password
+        else:
+            raise ValueError(
+                "iProX Aspera needs a credential: set IPROX_ASPERA_PASSWORD "
+                "(your iProX account password) or pass --aspera-key <path>. "
+                "HTTP is the default alternative."
             )
         ascp = cls._ascp_binary()
-        env = dict(os.environ)
-        env["ASPERA_SCP_PASS"] = password
+        remote_paths = [urlparse(u).path for u in urls]
         os.makedirs(output_folder, exist_ok=True)
-        failed: List[str] = []
-        workers = max(1, min(parallel_files, len(urls)))
-        if workers > 1:
-            with ThreadPoolExecutor(max_workers=workers) as executor:
-                future_to_url = {
-                    executor.submit(
-                        cls._aspera_download_one,
-                        ascp,
-                        url,
-                        relative_paths[idx] if idx < len(relative_paths) else None,
-                        output_folder,
-                        user,
-                        password,
-                        maximum_bandwidth,
-                        skip_if_downloaded_already,
-                        env,
-                    ): url
-                    for idx, url in enumerate(urls)
-                }
-                for future in as_completed(future_to_url):
-                    url = future_to_url[future]
-                    try:
-                        result = future.result()
-                        if result is not None:
-                            failed.append(result)
-                    except Exception as e:
-                        logging.error(f"iProX Aspera failed for {url}: {e}")
-                        failed.append(url)
-        else:
-            for idx, url in enumerate(urls):
-                relpath = relative_paths[idx] if idx < len(relative_paths) else None
-                result = cls._aspera_download_one(
-                    ascp,
-                    url,
-                    relpath,
-                    output_folder,
-                    user,
-                    password,
-                    maximum_bandwidth,
-                    skip_if_downloaded_already,
-                    env,
-                )
-                if result is not None:
-                    failed.append(result)
-        if failed:
-            raise RuntimeError(
-                f"iProX Aspera download failed for {len(failed)} file(s): {failed}"
+        fd, list_path = tempfile.mkstemp(prefix="iprox_aspera_", suffix=".txt", text=True)
+        try:
+            with os.fdopen(fd, "w") as fh:
+                for path in remote_paths:
+                    fh.write(path + "\n")
+            argv = [
+                ascp, "-T", "-l", maximum_bandwidth, "-P", cls.ASPERA_PORT,
+                "-k", "1",
+            ] + (["-i", key_path] if key_path else []) + [
+                "--mode", "recv",
+                "--host", cls.ASPERA_HOST, "--file-list", list_path,
+                "--user", user, output_folder,
+            ]
+            logging.info(
+                "iProX Aspera: transferring %d file(s) via ascp --file-list",
+                len(remote_paths),
             )
+            try:
+                subprocess.run(argv, check=True, env=env, stdin=subprocess.DEVNULL)
+            except subprocess.CalledProcessError as e:
+                raise RuntimeError(
+                    f"iProX Aspera transfer failed (exit {e.returncode})"
+                ) from e
+        finally:
+            os.remove(list_path)
 
     @staticmethod
     def _get_public_root(accession: str) -> str:
