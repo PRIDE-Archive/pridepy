@@ -3,6 +3,7 @@
 EBI's Aspera server no longer accepts the bundled DSA key, so the RSA key is
 the default. ``PRIDEPY_ASPERA_KEY`` / ``PRIDEPY_ASCP`` let users supply their own.
 """
+
 import os
 from unittest.mock import patch
 
@@ -44,8 +45,9 @@ def test_ascp_defaults_to_bundled_binary(monkeypatch):
 )
 def test_bundled_ascp_4x_layout(monkeypatch, system, expected):
     monkeypatch.delenv("PRIDEPY_ASCP", raising=False)
-    with patch("pridepy.download.pride.platform.system", return_value=system), patch(
-        "pridepy.download.pride.platform.architecture", return_value=("64bit", "")
+    with (
+        patch("pridepy.download.pride.platform.system", return_value=system),
+        patch("pridepy.download.pride.platform.architecture", return_value=("64bit", "")),
     ):
         path = PrideProvider.get_ascp_binary()
     assert path.endswith(expected)
