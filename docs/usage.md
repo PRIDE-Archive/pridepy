@@ -71,6 +71,14 @@ By default, files are downloaded **flat** into the output folder (no
 later ones get a numeric suffix (`run.raw`, `run_1.raw`). Pass
 `--preserve-structure` to keep the dataset's original directory layout.
 
+PRIDE Aspera downloads use the IBM `ascp` and RSA key bundled with pridepy
+(macOS and Linux x86_64). To use your own instead, set:
+
+| Env var | Description |
+| --- | --- |
+| `PRIDEPY_ASCP` | Path to an `ascp` binary |
+| `PRIDEPY_ASPERA_KEY` | Path to an Aspera private key |
+
 ### Download all raw files (robust mode)
 
 ```bash

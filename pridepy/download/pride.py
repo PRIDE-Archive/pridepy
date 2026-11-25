@@ -161,13 +161,31 @@ class PrideProvider(Provider):
         return [protocol] + [p for p in PrideProvider.PROTOCOL_ORDER if p != protocol]
 
     @staticmethod
+    def get_aspera_key() -> str:
+        """Return the private key for PRIDE Aspera downloads.
+
+        ``PRIDEPY_ASPERA_KEY`` overrides the bundled RSA key. (EBI's Aspera
+        server no longer accepts the bundled DSA key.)
+        """
+        override = os.environ.get("PRIDEPY_ASPERA_KEY")
+        if override:
+            return os.path.abspath(override)
+        return os.path.abspath(
+            importlib.resources.files("pridepy").joinpath("aspera/key/aspera_tokenauth_id_rsa")
+        )
+
+    @staticmethod
     def get_ascp_binary():
         """
-        Detect the OS and architecture, and return the appropriate ascp binary path.
+        Return the ascp binary path: ``PRIDEPY_ASCP`` if set, otherwise the
+        bundled binary for the detected OS and architecture.
 
         Returns:
             str: Path to the correct ascp binary.
         """
+        override = os.environ.get("PRIDEPY_ASCP")
+        if override:
+            return override
         os_type = platform.system().lower()
         arch, _ = platform.architecture()
         aspera_dir = importlib.resources.files("pridepy").joinpath("aspera/")
@@ -176,9 +194,10 @@ class PrideProvider(Provider):
             if arch == "32bit":
                 return os.path.join(aspera_dir, "linux-32", "ascp")
             elif arch == "64bit":
-                return os.path.join(aspera_dir, "linux-64", "ascp")
-        elif os_type == "darwin":  # macOS (intel-based)
-            return os.path.join(aspera_dir, "mac-intel", "ascp")
+                # ascp 4.x reads its license from ../etc relative to the binary.
+                return os.path.join(aspera_dir, "linux-x86_64", "bin", "ascp")
+        elif os_type == "darwin":  # universal binary: Intel and Apple Silicon
+            return os.path.join(aspera_dir, "macos-universal", "bin", "ascp")
         elif os_type == "windows":
             if arch == "32bit":
                 return os.path.join(aspera_dir, "windows-32", "ascp.exe")
@@ -390,10 +409,7 @@ class PrideProvider(Provider):
         :param skip_if_downloaded_already: Boolean value to skip the download if the file has already been downloaded.
         """
         ascp_path = PrideProvider.get_ascp_binary()
-        key_full_path = importlib.resources.files("pridepy").joinpath(
-            "aspera/key/asperaweb_id_dsa.openssh"
-        )
-        key_path = os.path.abspath(key_full_path)
+        key_path = PrideProvider.get_aspera_key()
         failed: List[str] = []
         for file in file_list_json:
             if file["publicFileLocations"][0]["name"] == "Aspera Protocol":
