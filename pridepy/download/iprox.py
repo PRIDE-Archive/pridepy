@@ -14,6 +14,8 @@ themselves go through plain HTTP on the same host, which supports
 import logging
 import os
 import re
+import subprocess
+import tempfile
 import defusedxml.ElementTree as ET
 from typing import ClassVar, Dict, List, Optional
 from urllib.parse import urlparse
@@ -34,6 +36,8 @@ class IproxProvider(Provider):
     PX_XML_URL_TEMPLATE: ClassVar[str] = (
         "http://download.iprox.org/{accession}/PX_{accession}.xml"
     )
+    ASPERA_HOST: ClassVar[str] = "download.iprox.org"
+    ASPERA_PORT: ClassVar[str] = "33001"
     # iProX PX XML uses the same PSI-MS cvParam "name" values as JPOST PROXI,
     # so we reuse JpostProvider's category map.
     PX_CATEGORY_MAP: ClassVar[Dict[str, str]] = JpostProvider.PROXI_CATEGORY_MAP
@@ -44,6 +48,84 @@ class IproxProvider(Provider):
         if not accession:
             return False
         return bool(re.fullmatch(r"IPX\d{7,10}", accession.upper()))
+
+    @staticmethod
+    def _ascp_binary() -> str:
+        # Reuse PRIDE's bundled ascp binary resolution.
+        from pridepy.download.pride import PrideProvider
+        return PrideProvider.get_ascp_binary()
+
+    @classmethod
+    def aspera_download(
+        cls,
+        urls: List[str],
+        output_folder: str,
+        user: Optional[str],
+        key_path: Optional[str] = None,
+        password: Optional[str] = None,
+        maximum_bandwidth: str = "500M",
+    ) -> None:
+        """Download iProX-hosted URLs in one batched ``ascp --file-list`` session.
+
+        Auth resolution is fail-fast and never lets ``ascp`` fall back to an
+        interactive ``Password:`` prompt (which would hang a batch/sbatch
+        job): pass ``key_path`` for key-based auth (``-i <key_path>``), or
+        ``password`` for password auth (via the ``ASPERA_SCP_PASS``
+        env var — iProX's own account password, not a key). Exactly one of
+        the two must be supplied by the caller. ``ascp --mode recv
+        --file-list`` always recreates the remote ``/IPX.../IPX.../`` source
+        tree under ``output_folder`` — this transfer path does not support
+        flattening.
+        """
+        if not user:
+            raise ValueError(
+                "iProX Aspera requires --iprox-user (your registered iProX "
+                "username)."
+            )
+        env = dict(os.environ)
+        if key_path:
+            if not os.path.isfile(key_path):
+                raise ValueError(
+                    f"iProX Aspera key not found: {key_path}. Pass "
+                    "--aspera-key <path> to your registered Aspera private "
+                    "key, or use the default HTTP transport."
+                )
+        elif password:
+            env["ASPERA_SCP_PASS"] = password
+        else:
+            raise ValueError(
+                "iProX Aspera needs a credential: set IPROX_ASPERA_PASSWORD "
+                "(your iProX account password) or pass --aspera-key <path>. "
+                "HTTP is the default alternative."
+            )
+        ascp = cls._ascp_binary()
+        remote_paths = [urlparse(u).path for u in urls]
+        os.makedirs(output_folder, exist_ok=True)
+        fd, list_path = tempfile.mkstemp(prefix="iprox_aspera_", suffix=".txt", text=True)
+        try:
+            with os.fdopen(fd, "w") as fh:
+                for path in remote_paths:
+                    fh.write(path + "\n")
+            argv = [
+                ascp, "-T", "-l", maximum_bandwidth, "-P", cls.ASPERA_PORT,
+                "-k", "1",
+            ] + (["-i", key_path] if key_path else []) + [
+                "--mode", "recv",
+                "--host", cls.ASPERA_HOST, "--file-list", list_path,
+                "--user", user, output_folder,
+            ]
+            logging.info(
+                "iProX Aspera: transferring %d file(s) via ascp --file-list",
+                len(remote_paths),
+            )
+            try:
+                subprocess.run(argv, check=True, env=env, stdin=subprocess.DEVNULL)
+            except subprocess.CalledProcessError as e:
+                raise RuntimeError(
+                    f"iProX Aspera transfer failed (exit {e.returncode})"
+                ) from e
+        finally:
+            os.remove(list_path)
 
     @staticmethod
     def _get_public_root(accession: str) -> str:

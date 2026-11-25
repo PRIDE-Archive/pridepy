@@ -75,8 +75,8 @@ pridepy = [
     "aspera/etc/*",
     "aspera/key/*",
     "aspera/linux-32/*",
-    "aspera/linux-64/*",
-    "aspera/mac-intel/*",
+    "aspera/linux-x86_64/*/*",
+    "aspera/macos-universal/*/*",
     "aspera/windows-32/*",
     "aspera/windows-64/*",
 ]

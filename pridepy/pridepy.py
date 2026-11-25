@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
 import asyncio
 import logging
+import os
+import sys
+from typing import Optional
+
 import click
 from pridepy.download.client import Client as Files
 from pridepy.pdc import download_pdc_files as run_pdc_download
 from pridepy.project.project import Project
 
-PROTOCOL_CHOICES = click.Choice(["ftp", "aspera", "globus", "s3"], case_sensitive=False)
+PROTOCOL_CHOICES = click.Choice(
+    ["ftp", "aspera", "globus", "s3", "fire"], case_sensitive=False
+)
 
 
 @click.group()
@@ -25,7 +31,10 @@ def main():
     "--protocol",
     default="ftp",
     type=PROTOCOL_CHOICES,
-    help="Protocol to use for download: ftp, aspera, globus, s3. Default is ftp with fallback enabled.",
+    help="Protocol to use for download: ftp, aspera, globus, s3, fire. "
+    "'fire' uses the EBI-internal FIRE S3 endpoint (only reachable inside EBI "
+    "infrastructure; falls back to the public protocols elsewhere). "
+    "Default is ftp with fallback enabled.",
 )
 @click.option(
     "-o",
@@ -61,6 +70,15 @@ def main():
     help="Number of threads for each file download. Default is 1.",
 )
 @click.option(
+    "-w",
+    "--parallel-files",
+    "parallel_files",
+    default=1,
+    type=click.IntRange(1, 32),
+    help="Number of files to download in parallel (across-file concurrency). "
+    "Combine with -t/--threads (per-file segments). Default is 1.",
+)
+@click.option(
     "--preserve-structure",
     is_flag=True,
     default=False,
@@ -75,6 +93,7 @@ def download_all_public_raw_files(
     aspera_maximum_bandwidth: str = "50M",
     checksum_check: bool = False,
     download_threads: int = 1,
+    parallel_files: int = 1,
     preserve_structure: bool = False,
 ):
     """
@@ -88,6 +107,7 @@ def download_all_public_raw_files(
         aspera_maximum_bandwidth (str): Maximum bandwidth for Aspera protocol. Default is 100M.
         checksum_check (bool): Flag to download checksum file for the project. Default is False.
         download_threads (int): Number of threads for each file download. Default is 1.
+        parallel_files (int): Number of files to download in parallel. Default is 1.
     """
 
     raw_files = Files()
@@ -105,6 +125,7 @@ def download_all_public_raw_files(
         aspera_maximum_bandwidth=aspera_maximum_bandwidth,
         checksum_check=checksum_check,
         download_threads=download_threads,
+        parallel_files=parallel_files,
         flatten=not preserve_structure,
     )
 
@@ -119,7 +140,10 @@ def download_all_public_raw_files(
     "--protocol",
     default="ftp",
     type=PROTOCOL_CHOICES,
-    help="Protocol to use for download: ftp, aspera, globus, s3. Default is ftp with fallback enabled.",
+    help="Protocol to use for download: ftp, aspera, globus, s3, fire. "
+    "'fire' uses the EBI-internal FIRE S3 endpoint (only reachable inside EBI "
+    "infrastructure; falls back to the public protocols elsewhere). "
+    "Default is ftp with fallback enabled.",
 )
 @click.option(
     "-o",
@@ -162,6 +186,15 @@ def download_all_public_raw_files(
     help="Number of threads for each file download. Default is 1.",
 )
 @click.option(
+    "-w",
+    "--parallel-files",
+    "parallel_files",
+    default=1,
+    type=click.IntRange(1, 32),
+    help="Number of files to download in parallel (across-file concurrency). "
+    "Combine with -t/--threads (per-file segments). Default is 1.",
+)
+@click.option(
     "--preserve-structure",
     is_flag=True,
     default=False,
@@ -177,6 +210,7 @@ def download_all_public_category_files(
     checksum_check: bool = False,
     category: str = "RAW",
     download_threads: int = 1,
+    parallel_files: int = 1,
     preserve_structure: bool = False,
 ):
     """
@@ -191,6 +225,7 @@ def download_all_public_category_files(
         checksum_check (bool): If True, downloads the checksum file for the project.
         category (str): Comma-separated categories of files to download (e.g. RAW or RAW,SEARCH).
         download_threads (int): Number of threads for each file download. Default is 1.
+        parallel_files (int): Number of files to download in parallel. Default is 1.
     """
 
     valid_categories = {"RAW", "PEAK", "SEARCH", "RESULT", "SPECTRUM_LIBRARY", "OTHER", "FASTA"}
@@ -218,6 +253,7 @@ def download_all_public_category_files(
         checksum_check=checksum_check,
         categories=categories,
         download_threads=download_threads,
+        parallel_files=parallel_files,
         flatten=not preserve_structure,
     )
 
@@ -232,7 +268,10 @@ def download_all_public_category_files(
     "--protocol",
     default="ftp",
     type=PROTOCOL_CHOICES,
-    help="Protocol to use for download: ftp, aspera, globus, s3. Default is ftp with fallback enabled.",
+    help="Protocol to use for download: ftp, aspera, globus, s3, fire. "
+    "'fire' uses the EBI-internal FIRE S3 endpoint (only reachable inside EBI "
+    "infrastructure; falls back to the public protocols elsewhere). "
+    "Default is ftp with fallback enabled.",
 )
 @click.option("-f", "--file-name", required=True, help="fileName to be downloaded")
 @click.option(
@@ -333,26 +372,84 @@ def download_file_by_name(
     help="Skip the download if the file has already been downloaded.",
 )
 @click.option(
+    "-p",
+    "--protocol",
+    default="ftp",
+    type=PROTOCOL_CHOICES,
+    help="Protocol to use for download: ftp, aspera, globus, s3. Default is ftp with fallback enabled.",
+)
+@click.option(
+    "-t",
+    "--threads",
+    "download_threads",
+    default=1,
+    type=click.IntRange(1, 32),
+    help="Number of threads for each file download. Default is 1.",
+)
+@click.option(
+    "-w",
+    "--parallel-files",
+    "parallel_files",
+    default=1,
+    type=click.IntRange(1, 32),
+    help="Number of files to download in parallel (across-file concurrency). "
+    "Combine with -t/--threads (per-file segments). Default is 1.",
+)
+@click.option(
     "--preserve-structure",
     is_flag=True,
     default=False,
     help="Recreate the dataset's subdirectory layout under the output folder. "
     "By default files are downloaded flat into the output folder.",
 )
+@click.option(
+    "--iprox-user",
+    "iprox_user",
+    envvar="IPROX_USER",
+    default=None,
+    type=str,
+    help="Your registered iProX username. Required with --protocol aspera.",
+)
+@click.option(
+    "--aspera-key",
+    "aspera_key",
+    envvar="IPROX_ASPERA_KEY",
+    default=None,
+    type=str,
+    help="Optional Aspera private key for iProX (only with --protocol "
+    "aspera). If omitted, password auth is used via the "
+    "IPROX_ASPERA_PASSWORD env var or a secure prompt.",
+)
 def download_px_raw_files(
     accession: str,
     output_folder: str,
     skip_if_downloaded_already: bool,
+    protocol: str = "ftp",
+    download_threads: int = 1,
+    parallel_files: int = 1,
     preserve_structure: bool = False,
+    iprox_user: Optional[str] = None,
+    aspera_key: Optional[str] = None,
 ):
     """CLI wrapper to download raw files via ProteomeXchange XML."""
     files = Files()
     logging.info(f"PX accession/URL: {accession}")
+
+    aspera_password = os.environ.get("IPROX_ASPERA_PASSWORD")
+    if protocol.lower() == "aspera" and not aspera_key and not aspera_password and sys.stdin.isatty():
+        aspera_password = click.prompt("iProX Aspera password", hide_input=True)
+
     files.download_px_raw_files(
         accession,
         output_folder,
         skip_if_downloaded_already,
         flatten=not preserve_structure,
+        protocol=protocol,
+        download_threads=download_threads,
+        parallel_files=parallel_files,
+        iprox_user=iprox_user,
+        aspera_key=aspera_key,
+        aspera_password=aspera_password,
     )
 
 
@@ -553,7 +650,10 @@ def _read_url_arguments(url_list_path, urls_csv=None):
     "--protocol",
     default="ftp",
     type=PROTOCOL_CHOICES,
-    help="Protocol to use for download: ftp, aspera, globus, s3. Default is ftp with fallback enabled.",
+    help="Protocol to use for download: ftp, aspera, globus, s3, fire. "
+    "'fire' uses the EBI-internal FIRE S3 endpoint (only reachable inside EBI "
+    "infrastructure; falls back to the public protocols elsewhere). "
+    "Default is ftp with fallback enabled.",
 )
 @click.option(
     "-F",
@@ -603,6 +703,15 @@ def _read_url_arguments(url_list_path, urls_csv=None):
     help="Number of threads for each file download. Default is 1.",
 )
 @click.option(
+    "-w",
+    "--parallel-files",
+    "parallel_files",
+    default=1,
+    type=click.IntRange(1, 32),
+    help="Number of files to download in parallel (across-file concurrency). "
+    "Combine with -t/--threads (per-file segments). Default is 1.",
+)
+@click.option(
     "--preserve-structure",
     is_flag=True,
     default=False,
@@ -619,6 +728,7 @@ def download_files_by_list(
     aspera_maximum_bandwidth,
     checksum_check,
     download_threads,
+    parallel_files: int = 1,
     preserve_structure: bool = False,
 ):
     """Download a named subset of files from a PRIDE project."""
@@ -635,6 +745,7 @@ def download_files_by_list(
         aspera_maximum_bandwidth=aspera_maximum_bandwidth,
         checksum_check=checksum_check,
         download_threads=download_threads,
+        parallel_files=parallel_files,
         flatten=not preserve_structure,
     )
 
@@ -693,6 +804,15 @@ def download_files_by_list(
     type=click.IntRange(1, 32),
     help="Number of threads for each file download. Default is 1.",
 )
+@click.option(
+    "-w",
+    "--parallel-files",
+    "parallel_files",
+    default=1,
+    type=click.IntRange(1, 32),
+    help="Number of files to download in parallel (across-file concurrency). "
+    "Combine with -t/--threads (per-file segments). Default is 1.",
+)
 def download_files_by_url(
     url_list_path,
     urls_csv,
@@ -701,6 +821,7 @@ def download_files_by_url(
     protocol,
     checksum_check,
     download_threads,
+    parallel_files: int = 1,
 ):
     """Download files from raw URLs (http/https/ftp), dispatched by scheme."""
     urls = _read_url_arguments(url_list_path, urls_csv)
@@ -711,6 +832,7 @@ def download_files_by_url(
         skip_if_downloaded_already=skip_if_downloaded_already,
         protocol=protocol,
         download_threads=download_threads,
+        parallel_files=parallel_files,
         checksum_check=checksum_check,
     )
 

@@ -247,6 +247,39 @@ class TestDownloadResilience(TestCase):
                         max_retries=1,
                     )
 
+    def test_download_http_urls_clamps_combined_connection_cap(self):
+        """parallel_files x download_threads must be clamped to
+        transport.MAX_TOTAL_HTTP_CONNECTIONS, with a warning explaining why,
+        so e.g. -w 32 -t 32 doesn't open 1024 connections."""
+        seen_threads = []
+
+        def fake_http_download_one(url, output_folder, skip_if_downloaded_already,
+                                    max_retries=3, position=0, relative_path=None,
+                                    download_threads=1):
+            seen_threads.append(download_threads)
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            with patch.object(
+                transport, "_http_download_one", side_effect=fake_http_download_one
+            ):
+                with self.assertLogs(level="WARNING") as log_ctx:
+                    transport.download_http_urls(
+                        http_urls=[
+                            "https://example.org/a.raw",
+                            "https://example.org/b.raw",
+                            "https://example.org/c.raw",
+                        ],
+                        output_folder=tmp_dir,
+                        skip_if_downloaded_already=False,
+                        parallel_files=32,
+                        download_threads=32,
+                    )
+        assert any("connection cap" in m.lower() for m in log_ctx.output)
+        workers = min(32, 3)
+        expected_threads = max(1, transport.MAX_TOTAL_HTTP_CONNECTIONS // workers)
+        assert workers * expected_threads <= transport.MAX_TOTAL_HTTP_CONNECTIONS
+        assert all(t == expected_threads for t in seen_threads)
+
     def test_download_ftp_urls_raises_when_a_file_fails(self):
         """A failed FTP transfer must surface as an exception."""
         with tempfile.TemporaryDirectory() as tmp_dir:
