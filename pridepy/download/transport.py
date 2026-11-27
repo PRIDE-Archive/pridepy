@@ -653,11 +653,20 @@ def _download_range(url, file_path, start, end, pbar, max_retries=3):
                     raise RuntimeError(f"Unexpected Content-Range header: {content_range}")
                 with open(file_path, "r+b") as f:
                     f.seek(cursor)
-                    for chunk in r.iter_content(chunk_size=8 * 1024 * 1024):
-                        if chunk:
-                            f.write(chunk)
-                            cursor += len(chunk)
-                            pbar.update(len(chunk))
+                    for chunk in filter(None, r.iter_content(chunk_size=8 * 1024 * 1024)):
+                        if cursor + len(chunk) > end + 1:
+                            raise RuntimeError(
+                                f"Range {start}-{end} exceeded expected length: "
+                                f"got {cursor + len(chunk) - start} bytes, expected {end - start + 1}"
+                            )
+                        f.write(chunk)
+                        cursor += len(chunk)
+                        pbar.update(len(chunk))
+            if cursor != end + 1:
+                raise RuntimeError(
+                    f"Incomplete range {start}-{end}: got {cursor - start} bytes, "
+                    f"expected {end - start + 1}"
+                )
             return
         except (requests.RequestException, RuntimeError, OSError) as exc:
             logging.warning(
