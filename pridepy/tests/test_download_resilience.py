@@ -162,6 +162,132 @@ class TestDownloadResilience(TestCase):
                         output_file,
                     )
 
+    def test_multipart_download_retries_and_resumes_truncated_range(self):
+        """A range stream that closes early must retry from cursor instead of leaving NUL holes."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            output_file = os.path.join(tmp_dir, "file.raw")
+            session = Mock()
+            head = Mock()
+            head.headers = {"content-length": "10", "accept-ranges": "bytes"}
+            head.raise_for_status.return_value = None
+            session.head.return_value = head
+
+            range_requests = []
+
+            def fake_get(url, headers=None, stream=True, timeout=None):
+                rng = headers["Range"]
+                range_requests.append(rng)
+                resp = Mock()
+                resp.status_code = 206
+                resp.raise_for_status.return_value = None
+                if rng == "bytes=0-4":
+                    resp.headers = {"Content-Range": "bytes 0-4/10"}
+                    resp.iter_content.return_value = [b"AB"]
+                elif rng == "bytes=2-4":
+                    resp.headers = {"Content-Range": "bytes 2-4/10"}
+                    resp.iter_content.return_value = [b"CDE"]
+                elif rng == "bytes=5-9":
+                    resp.headers = {"Content-Range": "bytes 5-9/10"}
+                    resp.iter_content.return_value = [b"FGHIJ"]
+                else:
+                    raise AssertionError(f"Unexpected Range header: {rng}")
+                resp.__enter__ = Mock(return_value=resp)
+                resp.__exit__ = Mock(return_value=None)
+                return resp
+
+            session.get.side_effect = fake_get
+
+            with patch(
+                "pridepy.download.transport.Util.create_session_with_retries",
+                return_value=session,
+            ), patch("pridepy.download.transport.time.sleep"):
+                transport._multipart_download(
+                    "https://example.org/file.raw",
+                    output_file,
+                    threads=2,
+                    min_size_bytes=1,
+                )
+
+            with open(output_file, "rb") as handle:
+                assert handle.read() == b"ABCDEFGHIJ"
+            assert "bytes=2-4" in range_requests
+
+    def test_multipart_download_raises_and_cleans_up_on_truncated_range(self):
+        """A persistently truncated range must raise and delete the preallocated file."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            output_file = os.path.join(tmp_dir, "file.raw")
+            session = Mock()
+            head = Mock()
+            head.headers = {"content-length": "10", "accept-ranges": "bytes"}
+            head.raise_for_status.return_value = None
+            session.head.return_value = head
+
+            def fake_get(url, headers=None, stream=True, timeout=None):
+                rng = headers["Range"]
+                resp = Mock()
+                resp.status_code = 206
+                resp.raise_for_status.return_value = None
+                if rng.startswith("bytes=0-4") or rng.startswith("bytes=2-4"):
+                    start = rng.split("=")[1].split("-")[0]
+                    resp.headers = {"Content-Range": f"bytes {start}-4/10"}
+                    resp.iter_content.return_value = [b"AB"] if start == "0" else [b""]
+                else:
+                    resp.headers = {"Content-Range": "bytes 5-9/10"}
+                    resp.iter_content.return_value = [b"FGHIJ"]
+                resp.__enter__ = Mock(return_value=resp)
+                resp.__exit__ = Mock(return_value=None)
+                return resp
+
+            session.get.side_effect = fake_get
+
+            with patch(
+                "pridepy.download.transport.Util.create_session_with_retries",
+                return_value=session,
+            ), patch("pridepy.download.transport.time.sleep"):
+                with self.assertRaisesRegex(RuntimeError, "Incomplete range"):
+                    transport._multipart_download(
+                        "https://example.org/file.raw",
+                        output_file,
+                        threads=2,
+                        min_size_bytes=1,
+                    )
+
+            assert not os.path.exists(output_file)
+
+    def test_download_range_rejects_oversized_chunk(self):
+        """A range response larger than end - start + 1 must not overwrite adjacent ranges."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            output_file = os.path.join(tmp_dir, "file.raw")
+            with open(output_file, "wb") as handle:
+                handle.write(b"0123456789")
+
+            session = Mock()
+            resp = Mock()
+            resp.status_code = 206
+            resp.raise_for_status.return_value = None
+            resp.headers = {"Content-Range": "bytes 0-4/10"}
+            resp.iter_content.return_value = [b"ABCDEF"]
+            resp.__enter__ = Mock(return_value=resp)
+            resp.__exit__ = Mock(return_value=None)
+            session.get.return_value = resp
+
+            with patch(
+                "pridepy.download.transport.Util.create_session_with_retries",
+                return_value=session,
+            ), patch("pridepy.download.transport.time.sleep"):
+                with self.assertRaisesRegex(RuntimeError, "exceeded expected length"):
+                    transport._download_range(
+                        "https://example.org/file.raw",
+                        output_file,
+                        start=0,
+                        end=4,
+                        pbar=Mock(),
+                        max_retries=1,
+                    )
+
+            with open(output_file, "rb") as handle:
+                assert handle.read() == b"0123456789"
+
     def test_safe_join_preserves_subdirs_and_blocks_escape(self):
         out = os.path.join("/tmp", "out")
         # Nested dataset-relative path is preserved under output_folder.
